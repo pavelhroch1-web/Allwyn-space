@@ -76,6 +76,7 @@ function showAdmPage(p,btn){
   if(p==='live'&&!adminMap) setTimeout(initAdminMap,100);
   if(p==='casy') renderAdminCasy();
   if(p==='dashboard') renderAdminDashboard();
+  if(p==='posnet') renderAdminPosNet();
 }
 
 // ══════════════════════════════════════════════════════
@@ -1027,6 +1028,131 @@ function renderFleetRouteAnalytics() {
     <div class="kpi-card"><div class="kpi-icon"><svg class="ic ic-lg"><use href="#ic-target"/></svg></div><div class="kpi-val">${fleet.efficiencyScore}%</div><div class="kpi-lbl">Efficiency score</div></div>
     <div class="kpi-card"><div class="kpi-icon"><svg class="ic ic-lg"><use href="#ic-intel"/></svg></div><div class="kpi-val">${fleet.optimizationPotentialPct}%</div><div class="kpi-lbl">Potenciál optimalizace</div></div>
   `;
+  renderPerTechnicianSavings(fleet);
+}
+
+// ── Per-technik framing nad stejnou kalkulací (žádná samostatná čísla) ─────
+// "Technik XY by dnes mohl ušetřit: 34 km / 42 minut." Pomáhá, nekontroluje.
+function renderPerTechnicianSavings(fleet) {
+  let el = document.getElementById('dash-tech-savings');
+  if (!el) {
+    const block = document.createElement('div');
+    block.className = 'dash-block';
+    block.innerHTML = `<div class="dash-block-t"><svg class="ic"><use href="#ic-target"/></svg> Úspora podle technika — pomáháme, nekontrolujeme</div><div class="cw" id="dash-tech-savings"></div>`;
+    const anchor = document.getElementById('dash-route-kpis')?.closest('.dash-block');
+    if (anchor) anchor.after(block);
+    el = document.getElementById('dash-tech-savings');
+  }
+  if (!el) return;
+  const routes = buildAllDailyRoutes();
+  const entries = Object.entries(fleet.perTechnician || {})
+    .filter(([, cmp]) => cmp.savedKm > 0.5)
+    .sort((a, b) => b[1].savedKm - a[1].savedKm);
+  if (!entries.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-t">Všechny trasy jsou už optimální</div></div>';
+    return;
+  }
+  el.innerHTML = entries.map(([routeKey, cmp]) => {
+    const dayPos = routes[routeKey] || [];
+    const techName = dayPos[0]?.assignedTechnician || 'Neznámý technik';
+    const [week, dayLbl] = routeKey.split('_');
+    return `<div class="tr" style="cursor:default">
+      <div class="tn">${techName}</div>
+      <div style="flex:1;font-size:12px;color:var(--muted)">W${week} · ${dayLbl} · ${cmp.before.posCount} POS</div>
+      <div style="font-size:13px;font-weight:700;color:var(--teal)">Mohl by ušetřit ${RouteEngine.formatKm(cmp.savedKm)} · ${RouteEngine.formatHM(cmp.savedMin)}</div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════
+// ADMIN — POS MANAGEMENT (POS Síť) — kompletní reálná POS síť
+// ══════════════════════════════════════════════════════
+let posNetFilters = { tech: 'all', region: 'all', channel: 'all', status: 'all' };
+
+function getAllPosFlat() {
+  const out = [];
+  for (const [week, list] of Object.entries(posData)) {
+    list.forEach(p => out.push({ p, week }));
+  }
+  // De-dup by POS id — keep first occurrence (POS je v reálných datech jen v 1 týdnu)
+  const seen = new Set();
+  return out.filter(({ p }) => { if (seen.has(p.id)) return false; seen.add(p.id); return true; });
+}
+
+function buildPosNetRows() {
+  return getAllPosFlat().map(({ p, week }) => {
+    const history = getVisitHistory(p.id);
+    const isOverdue = getOverduePOS(week).some(op => op.id === p.id);
+    return { p, week, model: PosModel.toPosModel(p, { history, isOverdue }) };
+  });
+}
+
+function renderAdminPosNet() {
+  const rows = buildPosNetRows();
+  const techs = [...new Set(rows.map(r => r.model.assignedTechnician))];
+  const regions = [...new Set(rows.map(r => r.model.region))];
+  const channels = [...new Set(rows.map(r => r.model.channel))];
+
+  const techRow = document.getElementById('posnet-tech-row');
+  if (techRow) techRow.innerHTML = ['all', ...techs].map(t =>
+    `<button class="rfb ${posNetFilters.tech===t?'active':''}" onclick="setPosNetFilter('tech','${t}')">${t==='all'?'Všichni':t}</button>`).join('');
+  const regionRow = document.getElementById('posnet-region-row');
+  if (regionRow) regionRow.innerHTML = ['all', ...regions].map(r =>
+    `<button class="rfb ${posNetFilters.region===r?'active':''}" onclick="setPosNetFilter('region','${r}')">${r==='all'?'Vše':r}</button>`).join('');
+  const channelRow = document.getElementById('posnet-channel-row');
+  if (channelRow) channelRow.innerHTML = ['all', ...channels].map(c =>
+    `<button class="rfb ${posNetFilters.channel===c?'active':''}" onclick="setPosNetFilter('channel','${c}')">${c==='all'?'Vše':c}</button>`).join('');
+  const statusRow = document.getElementById('posnet-status-row');
+  const statusOpts = [
+    ['all', 'Vše'], ['overdue', 'Po termínu'], ['notvisited30', `Nenavštíveno 30+ dní`],
+    ['priority', 'Priorita (servis/urgentní)'], ['planned', 'Naplánováno'], ['unplanned', 'Bez plánu'], ['visited', 'Hotovo'],
+  ];
+  if (statusRow) statusRow.innerHTML = statusOpts.map(([code, lbl]) =>
+    `<button class="rfb ${posNetFilters.status===code?'active':''}" onclick="setPosNetFilter('status','${code}')">${lbl}</button>`).join('');
+
+  const filtered = rows.filter(({ model }) => {
+    if (posNetFilters.tech !== 'all' && model.assignedTechnician !== posNetFilters.tech) return false;
+    if (posNetFilters.region !== 'all' && model.region !== posNetFilters.region) return false;
+    if (posNetFilters.channel !== 'all' && model.channel !== posNetFilters.channel) return false;
+    if (posNetFilters.status === 'overdue' && model.visitStatus !== 'overdue') return false;
+    if (posNetFilters.status === 'notvisited30' && !(model.daysSinceLastVisit === null || model.daysSinceLastVisit > 30)) return false;
+    if (posNetFilters.status === 'priority' && !(model.priority === 'service' || model.priority === 'priorityIssue')) return false;
+    if (posNetFilters.status === 'planned' && model.visitStatus !== 'planned') return false;
+    if (posNetFilters.status === 'unplanned' && model.visitStatus !== 'unplanned') return false;
+    if (posNetFilters.status === 'visited' && model.visitStatus !== 'visited') return false;
+    return true;
+  });
+
+  document.getElementById('posnet-count').textContent = `${filtered.length} / ${rows.length} POS`;
+
+  const statusBadge = {
+    visited: '<span class="tag t-done">✓ Hotovo</span>',
+    overdue: '<span class="tag" style="background:var(--rl);color:var(--red)">Po termínu</span>',
+    planned: '<span class="tag t-task">Naplánováno</span>',
+    unplanned: '<span class="tag" style="background:var(--bg);color:var(--muted)">Bez plánu</span>',
+  };
+
+  const list = document.getElementById('adm-posnet-list');
+  if (!list) return;
+  if (!filtered.length) {
+    list.innerHTML = '<div class="empty"><div class="empty-t">Žádné POS pro tento filtr</div></div>';
+    return;
+  }
+  list.innerHTML = filtered.map(({ p, model }) => `
+    <div class="tr" style="cursor:pointer" onclick="showAdminPOSDetail('${p.id}')">
+      <div class="tn">${model.posName}</div>
+      <div style="flex:1;min-width:0;font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${model.address}</div>
+      <div style="font-size:11px;font-weight:700;color:var(--td);flex-shrink:0">${model.channel}</div>
+      <div style="font-size:11px;color:var(--muted);flex-shrink:0">${model.region}</div>
+      <div style="font-size:11px;color:var(--muted);flex-shrink:0">${model.assignedTechnician}</div>
+      <div style="font-size:11px;color:var(--muted);flex-shrink:0">${model.lastVisitDate ? model.daysSinceLastVisit + 'd zpět' : 'Nikdy'}</div>
+      <div style="flex-shrink:0">${statusBadge[model.visitStatus] || ''}</div>
+    </div>`).join('');
+}
+
+function setPosNetFilter(key, val) {
+  posNetFilters[key] = val;
+  renderAdminPosNet();
 }
 
 // ══════════════════════════════════════════════════════
