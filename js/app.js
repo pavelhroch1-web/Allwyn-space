@@ -203,8 +203,9 @@ function typTag(p){
 }
 function priChip(p){
   if(p.taskState.some(t=>t.src==='servis'&&!t.done))return`<span class="tag t-svc">🔧 Servis</span>`;
-  const inv=p.inventory||[];
-  if(inv.some(i=>i.s==='miss'))return`<span class="tag" style="background:var(--ol);color:var(--orange)">📦 Chybí</span>`;
+  const inv=p.inventory||{vnitrni:[],venkovni:[]};
+  const invItems=[...(inv.vnitrni||[]),...(inv.venkovni||[])];
+  if(invItems.some(i=>i.s==='miss'))return`<span class="tag" style="background:var(--ol);color:var(--orange)">📦 Chybí</span>`;
   return'';
 }
 function makePosCard(p,ri,showAssign){
@@ -931,6 +932,28 @@ function renderAdminLive() {
       <div class="tinf">
         <div class="tn">${t.name}${isLT ? ' <span style="font-size:9px;background:var(--teal);color:var(--navy);padding:1px 5px;border-radius:10px;font-weight:800">LIVE</span>' : ''}</div>
         <div class="ts">${t.activity} · ${t.last_visit}${currentPos}</div>
+      </div>
+      <div class="tr-right">
+        <div class="mp"><div class="mpbg"><div class="mpf ${t.done === t.total ? 'gn' : t.overdue ? 'rd' : ''}" style="width:${pct}%"></div></div><div class="mpp">${pct}%</div></div>
+        ${badge}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderAdminTechnici() {
+  document.getElementById('adm-all-list').innerHTML = REAL_DATA.techs.map(t => {
+    const pct = t.total ? Math.round(t.done / t.total * 100) : 0;
+    const isLT = t.name === 'Lán Tomáš';
+    const badge = t.done === t.total ? '<span class="badge b-done">✓ Hotovo</span>'
+      : t.overdue ? '<span class="badge b-beh">⚠ Pozadu</span>'
+      : t.done > 0 ? '<span class="badge b-act">● Aktivní</span>'
+      : '<span class="badge b-wait">○ Nezačal</span>';
+    return `<div class="tr" onclick="showTechDetail('${t.name}')">
+      <div class="tav ${t.overdue ? 'ov' : ''}" style="${isLT ? 'background:var(--teal);color:var(--navy)' : ''}">${t.initials}</div>
+      <div class="tinf">
+        <div class="tn">${t.name}</div>
+        <div class="ts">${t.activity} · ${t.last_visit}</div>
       </div>
       <div class="tr-right">
         <div class="mp"><div class="mpbg"><div class="mpf ${t.done === t.total ? 'gn' : t.overdue ? 'rd' : ''}" style="width:${pct}%"></div></div><div class="mpp">${pct}%</div></div>
