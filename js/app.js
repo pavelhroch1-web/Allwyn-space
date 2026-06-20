@@ -22,6 +22,10 @@ for(const [w,list] of Object.entries(REAL_DATA.weeks)){
     return {
       ...withCoords,
       typ,
+      // Jediný reálný technik v datasetu — žádné vymyšlené rozdělení území.
+      assignedTechnician: PosModel.SOLE_REAL_TECHNICIAN,
+      area: withCoords.area || PosModel.DEFAULT_REGION,
+      region: withCoords.area || PosModel.DEFAULT_REGION,
       photos:[],notes:'',
       taskState:[...((TASK_TMPL[typ]||TASK_TMPL[rawTyp]||TASK_TMPL.IDT)).map(t=>({text:t,src:'template',done:p.v}))],
       refs:(REFS[typ]||REFS[rawTyp]||REFS.IDT),
