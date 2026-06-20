@@ -21,72 +21,53 @@
   </div>
 
   <div class="rs-content">
-    <div class="rs-top">
-      <div class="rs-logo"><div class="rs-a">a</div><div class="rs-name">allwyn <span>space</span></div></div>
+
+    <div class="rs-hero">
+      <div class="rs-hero-top">
+        <div class="rs-logo"><div class="rs-a">a</div><div class="rs-name">allwyn <span>space</span></div></div>
+        <div class="rs-live-pill"><span class="rs-live-dot"></span>LIVE</div>
+      </div>
       <div class="rs-sub">Field Operations Intelligence Platform</div>
-      <div class="rs-tagline">Connecting field execution with real-time operational control.</div>
-      <div class="rs-status">
-        <span class="rs-live-dot"></span>
-        <span class="rs-status-text">LIVE NETWORK</span>
-        <span class="rs-status-sep">·</span>
-        <span class="rs-status-text" id="rs-stat-techs">27 technicians online</span>
-        <span class="rs-status-sep">·</span>
-        <span class="rs-status-text" id="rs-stat-pos">945 POS monitored</span>
+
+      <div class="rs-stats">
+        <div class="rs-stat"><div class="rs-stat-v" id="rs-stat-pos-v">945</div><div class="rs-stat-l">POS monitored</div></div>
+        <div class="rs-stat"><div class="rs-stat-v" id="rs-stat-tech-v">27</div><div class="rs-stat-l">technicians</div></div>
+        <div class="rs-stat"><div class="rs-stat-v">98%</div><div class="rs-stat-l">coverage forecast</div></div>
+        <div class="rs-stat"><div class="rs-stat-v">37h</div><div class="rs-stat-l">route time saved</div></div>
       </div>
     </div>
 
-    <div class="rs-cards">
-      <div class="rs-card rs-card-field" onclick="enterRole('technik')">
-        <div class="rs-card-top">
-          <div class="rs-card-eyebrow">Field Technician</div>
-          <svg class="rs-card-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5" stroke="currentColor" stroke-width="1.6"/><line x1="10" y1="18.3" x2="14" y2="18.3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-        </div>
-        <div class="rs-preview rs-preview-phone">
-          <div class="rs-pv-row"><span class="rs-pv-dot rs-pv-dot-g"></span>Dnešní trasa optimalizována</div>
-          <div class="rs-pv-row"><span class="rs-pv-dot rs-pv-dot-t"></span>POS checklist · 5/7 hotovo</div>
-          <div class="rs-pv-row"><span class="rs-pv-dot rs-pv-dot-o"></span>Materiál · doplnit 2 položky</div>
-        </div>
-        <div class="rs-card-desc">Plan visits. Optimize routes. Execute POS operations.</div>
-        <div class="rs-chips">
-          <span class="rs-chip">Smart routes</span>
-          <span class="rs-chip">GPS check-in</span>
-          <span class="rs-chip">Inventory</span>
-          <span class="rs-chip">Tasks</span>
-        </div>
-        <div class="rs-card-enter">Vstoupit jako Technik <span class="rs-arrow">→</span></div>
+    <div class="rs-panel">
+      <div class="rs-panel-map">
+        <svg viewBox="0 0 220 110" class="rs-cc-svg" aria-hidden="true">
+          <g class="rs-cc-lines" id="rs-cc-lines"></g>
+          <g class="rs-cc-dots" id="rs-cc-dots"></g>
+        </svg>
       </div>
-
-      <div class="rs-card rs-card-ops" onclick="enterRole('admin')">
-        <div class="rs-card-top">
-          <div class="rs-card-eyebrow">Operations Command Center</div>
-          <svg class="rs-card-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="3.4" stroke="currentColor" stroke-width="1.6"/><circle cx="4" cy="6" r="1.6" stroke="currentColor" stroke-width="1.6"/><circle cx="20" cy="6" r="1.6" stroke="currentColor" stroke-width="1.6"/><circle cx="4" cy="18" r="1.6" stroke="currentColor" stroke-width="1.6"/><circle cx="20" cy="18" r="1.6" stroke="currentColor" stroke-width="1.6"/><line x1="9.6" y1="10.2" x2="5.2" y2="7" stroke="currentColor" stroke-width="1.2"/><line x1="14.4" y1="10.2" x2="18.8" y2="7" stroke="currentColor" stroke-width="1.2"/><line x1="9.6" y1="13.8" x2="5.2" y2="17" stroke="currentColor" stroke-width="1.2"/><line x1="14.4" y1="13.8" x2="18.8" y2="17" stroke="currentColor" stroke-width="1.2"/></svg>
-        </div>
-        <div class="rs-preview rs-preview-dash">
-          <div class="rs-pv-map">
-            <span class="rs-pv-node" style="left:18%;top:30%"></span>
-            <span class="rs-pv-node" style="left:42%;top:62%"></span>
-            <span class="rs-pv-node" style="left:66%;top:24%"></span>
-            <span class="rs-pv-node rs-pv-node-alert" style="left:80%;top:58%"></span>
-            <span class="rs-pv-node" style="left:30%;top:78%"></span>
-          </div>
-          <div class="rs-pv-row rs-pv-ai"><span class="rs-pv-dot rs-pv-dot-t"></span>AI insight · 2 regiony vyžadují pozornost</div>
-        </div>
-        <div class="rs-card-desc">Real-time visibility and intelligent control of field operations.</div>
-        <div class="rs-chips">
-          <span class="rs-chip">Live overview</span>
-          <span class="rs-chip">AI insights</span>
-          <span class="rs-chip">Performance</span>
-          <span class="rs-chip">Risk detection</span>
-        </div>
-        <div class="rs-card-enter">Vstoupit do Velínu <span class="rs-arrow">→</span></div>
+      <div class="rs-panel-intel">
+        <div class="rs-intel-row"><span class="rs-intel-dot rs-id-t"></span>Route optimization saved 37h this cycle</div>
+        <div class="rs-intel-row"><span class="rs-intel-dot rs-id-o"></span>12 visits require attention</div>
+        <div class="rs-intel-row"><span class="rs-intel-dot rs-id-g"></span>Coverage forecast: on track</div>
       </div>
     </div>
 
-    <div class="rs-ai-strip">
-      <span class="rs-ai-pulse"></span>
-      <span class="rs-ai-strip-title">AI Operations Intelligence active</span>
-      <span class="rs-ai-strip-sep">—</span>
-      <span class="rs-ai-strip-text">Tomorrow's field operation analyzed. 3 optimization opportunities detected.</span>
+    <div class="rs-roles">
+      <div class="rs-role-card" onclick="enterRole('technik')">
+        <svg class="rs-role-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5" stroke="currentColor" stroke-width="1.6"/><line x1="10" y1="18.3" x2="14" y2="18.3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <div class="rs-role-text">
+          <div class="rs-role-title">Technician Workspace</div>
+          <div class="rs-role-desc">Routes · checklists · inventory</div>
+        </div>
+        <span class="rs-role-arrow">→</span>
+      </div>
+      <div class="rs-role-card" onclick="enterRole('admin')">
+        <svg class="rs-role-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="3.4" stroke="currentColor" stroke-width="1.6"/><circle cx="4" cy="6" r="1.6" stroke="currentColor" stroke-width="1.6"/><circle cx="20" cy="6" r="1.6" stroke="currentColor" stroke-width="1.6"/><circle cx="4" cy="18" r="1.6" stroke="currentColor" stroke-width="1.6"/><circle cx="20" cy="18" r="1.6" stroke="currentColor" stroke-width="1.6"/><line x1="9.6" y1="10.2" x2="5.2" y2="7" stroke="currentColor" stroke-width="1.2"/><line x1="14.4" y1="10.2" x2="18.8" y2="7" stroke="currentColor" stroke-width="1.2"/><line x1="9.6" y1="13.8" x2="5.2" y2="17" stroke="currentColor" stroke-width="1.2"/><line x1="14.4" y1="13.8" x2="18.8" y2="17" stroke="currentColor" stroke-width="1.2"/></svg>
+        <div class="rs-role-text">
+          <div class="rs-role-title">Operations Control Center</div>
+          <div class="rs-role-desc">Live map · AI insights · risk</div>
+        </div>
+        <span class="rs-role-arrow">→</span>
+      </div>
     </div>
 
     <div class="rs-badge">Tourplan W23–W28 · 27 techniků · 945 POS</div>

@@ -2768,45 +2768,56 @@ showAdmPage = function(p, btn) {
   }
 };
 
-// ── Landing screen: live stats + ambient network visual ────────────────────
+// ── Landing screen: live stats + ambient background + mini control-center map ──
 (function initLandingScreen() {
   const techCount = REAL_DATA.techs.length;
   const totalPOS = REAL_DATA.techs.reduce((s, t) => s + (t.total || 0), 0);
-  const techEl = document.getElementById('rs-stat-techs');
-  const posEl = document.getElementById('rs-stat-pos');
-  if (techEl) techEl.textContent = techCount + ' technicians online';
-  if (posEl) posEl.textContent = totalPOS + ' POS monitored';
+  const techEl = document.getElementById('rs-stat-tech-v');
+  const posEl = document.getElementById('rs-stat-pos-v');
+  if (techEl) techEl.textContent = techCount;
+  if (posEl) posEl.textContent = totalPOS;
 
-  const dotsG = document.getElementById('rs-net-dots');
-  const linesG = document.getElementById('rs-net-lines');
-  if (!dotsG || !linesG) return;
-  const pts = [];
-  const cols = 12, rows = 8;
-  for (let i = 0; i < 26; i++) {
-    pts.push({ x: (Math.random() * cols + 0.5) * (1200 / cols), y: (Math.random() * rows + 0.5) * (800 / rows) });
-  }
-  pts.forEach(p => {
-    const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    c.setAttribute('cx', p.x.toFixed(1));
-    c.setAttribute('cy', p.y.toFixed(1));
-    c.setAttribute('r', 2.2);
-    dotsG.appendChild(c);
-  });
-  pts.forEach((p, i) => {
-    let nearest = null, nd = Infinity;
-    pts.forEach((q, j) => {
-      if (i === j) return;
-      const d = (p.x - q.x) ** 2 + (p.y - q.y) ** 2;
-      if (d < nd) { nd = d; nearest = q; }
+  function buildNetwork(dotsG, linesG, pts, alertIdx) {
+    if (!dotsG || !linesG) return;
+    pts.forEach((p, i) => {
+      const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      c.setAttribute('cx', p.x.toFixed(1));
+      c.setAttribute('cy', p.y.toFixed(1));
+      c.setAttribute('r', alertIdx && alertIdx.has(i) ? 2.6 : 2.2);
+      if (alertIdx && alertIdx.has(i)) c.setAttribute('class', 'alert');
+      dotsG.appendChild(c);
     });
-    if (nearest && nd < 280 * 280) {
-      const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      l.setAttribute('x1', p.x.toFixed(1));
-      l.setAttribute('y1', p.y.toFixed(1));
-      l.setAttribute('x2', nearest.x.toFixed(1));
-      l.setAttribute('y2', nearest.y.toFixed(1));
-      linesG.appendChild(l);
-    }
-  });
+    pts.forEach((p, i) => {
+      let nearest = null, nd = Infinity;
+      pts.forEach((q, j) => {
+        if (i === j) return;
+        const d = (p.x - q.x) ** 2 + (p.y - q.y) ** 2;
+        if (d < nd) { nd = d; nearest = q; }
+      });
+      if (nearest && nd < 280 * 280) {
+        const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        l.setAttribute('x1', p.x.toFixed(1));
+        l.setAttribute('y1', p.y.toFixed(1));
+        l.setAttribute('x2', nearest.x.toFixed(1));
+        l.setAttribute('y2', nearest.y.toFixed(1));
+        linesG.appendChild(l);
+      }
+    });
+  }
+
+  // ambient full-screen background network
+  const bgPts = [];
+  for (let i = 0; i < 26; i++) {
+    bgPts.push({ x: (Math.random() * 12 + 0.5) * (1200 / 12), y: (Math.random() * 8 + 0.5) * (800 / 8) });
+  }
+  buildNetwork(document.getElementById('rs-net-dots'), document.getElementById('rs-net-lines'), bgPts, null);
+
+  // mini control-center map, derived from real technician GPS spread
+  const ccPts = REAL_DATA.techs.map(t => ({
+    x: ((t.lng - 12.0) / (18.9 - 12.0)) * 220,
+    y: (1 - (t.lat - 48.5) / (51.1 - 48.5)) * 110,
+  }));
+  const ccAlert = new Set(REAL_DATA.techs.map((t, i) => t.overdue ? i : -1).filter(i => i >= 0));
+  buildNetwork(document.getElementById('rs-cc-dots'), document.getElementById('rs-cc-lines'), ccPts, ccAlert);
 })();
 
