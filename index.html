@@ -365,6 +365,7 @@
     <div class="adm-logo"><div class="adm-a">a</div><div class="adm-title">allwyn <span>space</span> · velín</div></div>
     <div class="adm-nav">
       <button class="adm-btn active" onclick="showAdmPage('dashboard',this)"><svg class="ic ic-sm"><use href="#ic-dashboard"/></svg> Dashboard</button>
+      <button class="adm-btn" onclick="showAdmPage('posnet',this)"><svg class="ic ic-sm"><use href="#ic-pin"/></svg> POS Síť</button>
       <button class="adm-btn" onclick="showAdmPage('live',this)"><svg class="ic ic-sm"><use href="#ic-live"/></svg> Live</button>
       <button class="adm-btn" onclick="showAdmPage('alerts',this)"><svg class="ic ic-sm"><use href="#ic-warning"/></svg> Flagy</button>
       <button class="adm-btn" onclick="showAdmPage('technici',this)"><svg class="ic ic-sm"><use href="#ic-team"/></svg> Technici</button>
@@ -407,6 +408,28 @@
         <div class="dash-block-t"><svg class="ic"><use href="#ic-warning"/></svg> Vyžaduje pozornost</div>
         <div class="cw" id="dash-attention"></div>
       </div>
+    </div>
+
+    <!-- POS SÍŤ — Admin POS Management -->
+    <div class="adm-page" id="adm-posnet">
+      <div class="adm-sh"><div class="adm-st">POS síť</div><div class="adm-sc" id="posnet-count">—</div></div>
+      <div class="rf-wrap">
+        <div class="rf-lbl">Technik</div>
+        <div class="rf-row" id="posnet-tech-row"></div>
+      </div>
+      <div class="rf-wrap">
+        <div class="rf-lbl">Region</div>
+        <div class="rf-row" id="posnet-region-row"></div>
+      </div>
+      <div class="rf-wrap">
+        <div class="rf-lbl">Kanál</div>
+        <div class="rf-row" id="posnet-channel-row"></div>
+      </div>
+      <div class="rf-wrap">
+        <div class="rf-lbl">Stav</div>
+        <div class="rf-row" id="posnet-status-row"></div>
+      </div>
+      <div class="cw" id="adm-posnet-list"></div>
     </div>
 
     <!-- LIVE -->
@@ -592,6 +615,7 @@
 <script src="js/data.js"></script>
 <script src="js/geo.js"></script>
 <script src="js/routeEngine.js"></script>
+<script src="js/posModel.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

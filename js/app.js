@@ -22,6 +22,10 @@ for(const [w,list] of Object.entries(REAL_DATA.weeks)){
     return {
       ...withCoords,
       typ,
+      // Jediný reálný technik v datasetu — žádné vymyšlené rozdělení území.
+      assignedTechnician: PosModel.SOLE_REAL_TECHNICIAN,
+      area: withCoords.area || PosModel.DEFAULT_REGION,
+      region: withCoords.area || PosModel.DEFAULT_REGION,
       photos:[],notes:'',
       taskState:[...((TASK_TMPL[typ]||TASK_TMPL[rawTyp]||TASK_TMPL.IDT)).map(t=>({text:t,src:'template',done:p.v}))],
       refs:(REFS[typ]||REFS[rawTyp]||REFS.IDT),
@@ -72,6 +76,7 @@ function showAdmPage(p,btn){
   if(p==='live'&&!adminMap) setTimeout(initAdminMap,100);
   if(p==='casy') renderAdminCasy();
   if(p==='dashboard') renderAdminDashboard();
+  if(p==='posnet') renderAdminPosNet();
 }
 
 // ══════════════════════════════════════════════════════
@@ -688,6 +693,9 @@ function pickInvItem(section, catalogIdx) {
   renderInventory();
 }
 
+function materialStatusCz(s){
+  return { ok: '✓ Přítomno', miss: '✕ Chybí', damaged: '⚠ Poškozeno', needs_replacement: '⟳ Nutná výměna' }[s] || s;
+}
 function renderInventory(){
   const p=posData[cWeek][cIdx];
   const inv=p.inventory||{vnitrni:[],venkovni:[]};
@@ -706,7 +714,7 @@ function renderInventory(){
           <div class="inv-n">${item.n}</div>
           <div class="inv-s" style="display:flex;gap:6px;align-items:center;margin-top:3px">
             ${item.typ?`<span style="font-size:10px;background:var(--tl);color:var(--tm);padding:1px 6px;border-radius:10px;font-weight:700">${item.typ}</span>`:''}
-            <span style="font-size:10px;color:var(--muted)">${item.s?('Stav: '+(item.s==='ok'?'✓ Přítomno':'✕ Chybí')):'nezkontrolováno'}</span>
+            <span style="font-size:10px;color:var(--muted)">${item.s?('Stav: '+materialStatusCz(item.s)):'nezkontrolováno'}</span>
           </div>
         </div>
         <div class="inv-btns">
@@ -1023,6 +1031,131 @@ function renderFleetRouteAnalytics() {
     <div class="kpi-card"><div class="kpi-icon"><svg class="ic ic-lg"><use href="#ic-target"/></svg></div><div class="kpi-val">${fleet.efficiencyScore}%</div><div class="kpi-lbl">Efficiency score</div></div>
     <div class="kpi-card"><div class="kpi-icon"><svg class="ic ic-lg"><use href="#ic-intel"/></svg></div><div class="kpi-val">${fleet.optimizationPotentialPct}%</div><div class="kpi-lbl">Potenciál optimalizace</div></div>
   `;
+  renderPerTechnicianSavings(fleet);
+}
+
+// ── Per-technik framing nad stejnou kalkulací (žádná samostatná čísla) ─────
+// "Technik XY by dnes mohl ušetřit: 34 km / 42 minut." Pomáhá, nekontroluje.
+function renderPerTechnicianSavings(fleet) {
+  let el = document.getElementById('dash-tech-savings');
+  if (!el) {
+    const block = document.createElement('div');
+    block.className = 'dash-block';
+    block.innerHTML = `<div class="dash-block-t"><svg class="ic"><use href="#ic-target"/></svg> Úspora podle technika — pomáháme, nekontrolujeme</div><div class="cw" id="dash-tech-savings"></div>`;
+    const anchor = document.getElementById('dash-route-kpis')?.closest('.dash-block');
+    if (anchor) anchor.after(block);
+    el = document.getElementById('dash-tech-savings');
+  }
+  if (!el) return;
+  const routes = buildAllDailyRoutes();
+  const entries = Object.entries(fleet.perTechnician || {})
+    .filter(([, cmp]) => cmp.savedKm > 0.5)
+    .sort((a, b) => b[1].savedKm - a[1].savedKm);
+  if (!entries.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-t">Všechny trasy jsou už optimální</div></div>';
+    return;
+  }
+  el.innerHTML = entries.map(([routeKey, cmp]) => {
+    const dayPos = routes[routeKey] || [];
+    const techName = dayPos[0]?.assignedTechnician || 'Neznámý technik';
+    const [week, dayLbl] = routeKey.split('_');
+    return `<div class="tr" style="cursor:default">
+      <div class="tn">${techName}</div>
+      <div style="flex:1;font-size:12px;color:var(--muted)">W${week} · ${dayLbl} · ${cmp.before.posCount} POS</div>
+      <div style="font-size:13px;font-weight:700;color:var(--teal)">Mohl by ušetřit ${RouteEngine.formatKm(cmp.savedKm)} · ${RouteEngine.formatHM(cmp.savedMin)}</div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════
+// ADMIN — POS MANAGEMENT (POS Síť) — kompletní reálná POS síť
+// ══════════════════════════════════════════════════════
+let posNetFilters = { tech: 'all', region: 'all', channel: 'all', status: 'all' };
+
+function getAllPosFlat() {
+  const out = [];
+  for (const [week, list] of Object.entries(posData)) {
+    list.forEach(p => out.push({ p, week }));
+  }
+  // De-dup by POS id — keep first occurrence (POS je v reálných datech jen v 1 týdnu)
+  const seen = new Set();
+  return out.filter(({ p }) => { if (seen.has(p.id)) return false; seen.add(p.id); return true; });
+}
+
+function buildPosNetRows() {
+  return getAllPosFlat().map(({ p, week }) => {
+    const history = getVisitHistory(p.id);
+    const isOverdue = getOverduePOS(week).some(op => op.id === p.id);
+    return { p, week, model: PosModel.toPosModel(p, { history, isOverdue }) };
+  });
+}
+
+function renderAdminPosNet() {
+  const rows = buildPosNetRows();
+  const techs = [...new Set(rows.map(r => r.model.assignedTechnician))];
+  const regions = [...new Set(rows.map(r => r.model.region))];
+  const channels = [...new Set(rows.map(r => r.model.channel))];
+
+  const techRow = document.getElementById('posnet-tech-row');
+  if (techRow) techRow.innerHTML = ['all', ...techs].map(t =>
+    `<button class="rfb ${posNetFilters.tech===t?'active':''}" onclick="setPosNetFilter('tech','${t}')">${t==='all'?'Všichni':t}</button>`).join('');
+  const regionRow = document.getElementById('posnet-region-row');
+  if (regionRow) regionRow.innerHTML = ['all', ...regions].map(r =>
+    `<button class="rfb ${posNetFilters.region===r?'active':''}" onclick="setPosNetFilter('region','${r}')">${r==='all'?'Vše':r}</button>`).join('');
+  const channelRow = document.getElementById('posnet-channel-row');
+  if (channelRow) channelRow.innerHTML = ['all', ...channels].map(c =>
+    `<button class="rfb ${posNetFilters.channel===c?'active':''}" onclick="setPosNetFilter('channel','${c}')">${c==='all'?'Vše':c}</button>`).join('');
+  const statusRow = document.getElementById('posnet-status-row');
+  const statusOpts = [
+    ['all', 'Vše'], ['overdue', 'Po termínu'], ['notvisited30', `Nenavštíveno 30+ dní`],
+    ['priority', 'Priorita (servis/urgentní)'], ['planned', 'Naplánováno'], ['unplanned', 'Bez plánu'], ['visited', 'Hotovo'],
+  ];
+  if (statusRow) statusRow.innerHTML = statusOpts.map(([code, lbl]) =>
+    `<button class="rfb ${posNetFilters.status===code?'active':''}" onclick="setPosNetFilter('status','${code}')">${lbl}</button>`).join('');
+
+  const filtered = rows.filter(({ model }) => {
+    if (posNetFilters.tech !== 'all' && model.assignedTechnician !== posNetFilters.tech) return false;
+    if (posNetFilters.region !== 'all' && model.region !== posNetFilters.region) return false;
+    if (posNetFilters.channel !== 'all' && model.channel !== posNetFilters.channel) return false;
+    if (posNetFilters.status === 'overdue' && model.visitStatus !== 'overdue') return false;
+    if (posNetFilters.status === 'notvisited30' && !(model.daysSinceLastVisit === null || model.daysSinceLastVisit > 30)) return false;
+    if (posNetFilters.status === 'priority' && !(model.priority === 'service' || model.priority === 'priorityIssue')) return false;
+    if (posNetFilters.status === 'planned' && model.visitStatus !== 'planned') return false;
+    if (posNetFilters.status === 'unplanned' && model.visitStatus !== 'unplanned') return false;
+    if (posNetFilters.status === 'visited' && model.visitStatus !== 'visited') return false;
+    return true;
+  });
+
+  document.getElementById('posnet-count').textContent = `${filtered.length} / ${rows.length} POS`;
+
+  const statusBadge = {
+    visited: '<span class="tag t-done">✓ Hotovo</span>',
+    overdue: '<span class="tag" style="background:var(--rl);color:var(--red)">Po termínu</span>',
+    planned: '<span class="tag t-task">Naplánováno</span>',
+    unplanned: '<span class="tag" style="background:var(--bg);color:var(--muted)">Bez plánu</span>',
+  };
+
+  const list = document.getElementById('adm-posnet-list');
+  if (!list) return;
+  if (!filtered.length) {
+    list.innerHTML = '<div class="empty"><div class="empty-t">Žádné POS pro tento filtr</div></div>';
+    return;
+  }
+  list.innerHTML = filtered.map(({ p, model }) => `
+    <div class="tr" style="cursor:pointer" onclick="showAdminPOSDetail('${p.id}')">
+      <div class="tn">${model.posName}</div>
+      <div style="flex:1;min-width:0;font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${model.address}</div>
+      <div style="font-size:11px;font-weight:700;color:var(--td);flex-shrink:0">${model.channel}</div>
+      <div style="font-size:11px;color:var(--muted);flex-shrink:0">${model.region}</div>
+      <div style="font-size:11px;color:var(--muted);flex-shrink:0">${model.assignedTechnician}</div>
+      <div style="font-size:11px;color:var(--muted);flex-shrink:0">${model.lastVisitDate ? model.daysSinceLastVisit + 'd zpět' : 'Nikdy'}</div>
+      <div style="flex-shrink:0">${statusBadge[model.visitStatus] || ''}</div>
+    </div>`).join('');
+}
+
+function setPosNetFilter(key, val) {
+  posNetFilters[key] = val;
+  renderAdminPosNet();
 }
 
 // ══════════════════════════════════════════════════════
@@ -2458,6 +2591,20 @@ function showAdminPOSDetail(posId) {
       </div>
     </div>`;
 
+  // Frekvence návštěv — odvozeno z reálných dat, ne vymyšlené
+  const isOverdueNow = getOverduePOS(foundWeek).some(op => op.id === p.id);
+  const posModel = PosModel.toPosModel(p, { history, isOverdue: isOverdueNow });
+  if (posModel.daysSinceLastVisit !== null) {
+    const freqColors = { 'on-track': 'var(--green)', 'due-soon': 'var(--orange)', overdue: 'var(--red)' };
+    const freqBg = { 'on-track': 'var(--gl)', 'due-soon': 'var(--ol)', overdue: 'var(--rl)' };
+    let msg = `Tato POS nebyla navštívena ${posModel.daysSinceLastVisit} dní.`;
+    if (posModel.frequencyCompliance === 'overdue') msg += ' Měla by být prioritizována co nejdříve.';
+    else if (posModel.frequencyCompliance === 'due-soon') msg += ' Měla by být prioritizována příští týden.';
+    html += `<div style="background:${freqBg[posModel.frequencyCompliance]||'var(--bg)'};border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:${freqColors[posModel.frequencyCompliance]||'var(--muted)'};font-weight:600">${msg}</div>`;
+  } else {
+    html += `<div style="background:var(--rl);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:var(--red);font-weight:600">Tato POS ještě nebyla nikdy navštívena.</div>`;
+  }
+
   // Visit history
   if (history.length) {
     html += `<div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Historie návštěv</div>
@@ -2485,6 +2632,27 @@ function showAdminPOSDetail(posId) {
   if (supply && supply.confirmed) {
     html += `<div style="background:var(--gl);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:var(--green);display:flex;align-items:center;gap:6px">
       <svg class="ic ic-sm"><use href="#ic-edit"/></svg> Zásobování potvrzeno · ${supply.at} · Přijal: ${supply.receiver}
+    </div>`;
+  }
+
+  // Materiál (dlouhodobý majetek — Inventory) — struktura: SAP kód, množství,
+  // datum instalace, stav. Bez SAP integrace, jen příprava na ni.
+  const materials = posModel.materials;
+  if (materials.length) {
+    const matStatusColor = { ok: 'var(--green)', miss: 'var(--orange)', damaged: 'var(--red)', needs_replacement: 'var(--red)' };
+    html += `<div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Materiál (dlouhodobý majetek)</div>
+    <div style="background:white;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:14px">
+    ${materials.map(m => `<div style="padding:10px 14px;border-bottom:1px solid var(--bg)">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="flex:1;font-size:13px;font-weight:700">${m.name}</div>
+        <span style="font-size:10px;font-weight:700;color:${matStatusColor[m.status]||'var(--muted)'}">${m.status?materialStatusCz(m.status):'Nezkontrolováno'}</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">${m.location} · ${m.sapCode||'bez SAP kódu'} · ks: ${m.quantity}${m.installationDate?' · instalováno: '+m.installationDate:''}</div>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <button onclick="setAdminMaterialStatus('${posId}','${foundWeek}','${m.location==='vnitřní'?'vnitrni':'venkovni'}','${m.id}','damaged')" style="font-size:10px;font-weight:700;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:${m.status==='damaged'?'var(--rl)':'transparent'};color:var(--red);cursor:pointer">⚠ Poškozeno</button>
+        <button onclick="setAdminMaterialStatus('${posId}','${foundWeek}','${m.location==='vnitřní'?'vnitrni':'venkovni'}','${m.id}','needs_replacement')" style="font-size:10px;font-weight:700;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:${m.status==='needs_replacement'?'var(--rl)':'transparent'};color:var(--red);cursor:pointer">⟳ Nutná výměna</button>
+      </div>
+    </div>`).join('')}
     </div>`;
   }
 
@@ -2529,6 +2697,15 @@ function addAdminPosTask(posId, weekKey) {
   const btn = document.querySelector('#admin-pos-sheet button[onclick^="addAdmin"]');
   if (btn) { btn.textContent='✓ Přidáno!'; setTimeout(()=>btn.textContent='Přidat úkol technikovi ✓',2000); }
   document.getElementById('admin-pos-task-input').value = '';
+}
+
+function setAdminMaterialStatus(posId, weekKey, section, itemId, status) {
+  const p = (posData[weekKey]||[]).find(x=>x.id===posId);
+  if (!p || !p.inventory) return;
+  const item = (p.inventory[section]||[]).find(x=>x.id===itemId);
+  if (!item) return;
+  item.s = item.s === status ? null : status;
+  showAdminPOSDetail(posId);
 }
 
 // ── Make admin live list rows clickable ────────────────────────────────────
@@ -2635,6 +2812,27 @@ function applyAssignments() {
 // ══════════════════════════════════════════════════════════════════════════
 // REBUILT: PLANNING VIEW — technik picks from week list + overdue
 // ══════════════════════════════════════════════════════════════════════════
+// Multi-select state pro hromadné přiřazení dne (PART 5) — drží se mimo
+// showPlanningView, aby přežilo re-render při zaškrtávání checkboxů.
+let planSelection = new Set();
+
+function togglePlanSelect(id) {
+  if (planSelection.has(id)) planSelection.delete(id); else planSelection.add(id);
+  showPlanningView();
+}
+
+function bulkAssignSelected(day) {
+  if (!planSelection.size) return;
+  const all = posData[cWeek] || [];
+  planSelection.forEach(id => {
+    const p = all.find(x => x.id === id);
+    if (p) { p.d = day; setAssignment(p.id, day); }
+  });
+  planSelection.clear();
+  updateSummary(); renderChips(); renderDayTabs();
+  showPlanningView();
+}
+
 function showPlanningView() {
   const wrap = document.getElementById('pos-list-wrap');
   wrap.innerHTML = '';
@@ -2645,15 +2843,25 @@ function showPlanningView() {
   // Back button
   const back = document.createElement('div');
   back.style.cssText = 'padding:10px 12px 4px';
-  back.innerHTML = `<button onclick="renderList()" style="background:none;border:none;color:var(--td);font-size:13px;font-weight:700;cursor:pointer">← Zpět na denní plán</button>`;
+  back.innerHTML = `<button onclick="planSelection.clear();renderList()" style="background:none;border:none;color:var(--td);font-size:13px;font-weight:700;cursor:pointer">← Zpět na denní plán</button>`;
   wrap.appendChild(back);
 
   // Header
   const hdr = document.createElement('div');
   hdr.style.cssText = 'padding:8px 16px 4px';
   hdr.innerHTML = `<div style="font-size:16px;font-weight:800;color:var(--navy)">Naplánovat POS</div>
-    <div style="font-size:12px;color:var(--muted);margin-top:2px">Vyber které POS pojedeš a přiřaď je ke dnům</div>`;
+    <div style="font-size:12px;color:var(--muted);margin-top:2px">Zaškrtni POS, vyber den a přiřaď je všechny najednou</div>`;
   wrap.appendChild(hdr);
+
+  // Bulk action bar — viditelná jen pokud je něco vybráno
+  if (planSelection.size > 0) {
+    const bar = document.createElement('div');
+    bar.style.cssText = 'position:sticky;top:0;z-index:10;margin:8px 12px;padding:10px 12px;background:var(--navy);border-radius:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap';
+    bar.innerHTML = `<span style="color:#fff;font-size:12px;font-weight:700;margin-right:4px">${planSelection.size} vybráno</span>
+      ${DAYS.map((d, i) => `<button onclick="bulkAssignSelected(${i})" style="font-size:11px;font-weight:700;color:var(--navy);background:var(--teal);border:none;border-radius:7px;padding:6px 10px;cursor:pointer">${d}</button>`).join('')}
+      <button onclick="planSelection.clear();showPlanningView()" style="margin-left:auto;font-size:11px;color:#fff;background:none;border:1px solid rgba(255,255,255,.3);border-radius:7px;padding:6px 10px;cursor:pointer">Zrušit výběr</button>`;
+    wrap.appendChild(bar);
+  }
 
   // Overdue section (current week only)
   const overdue = isCurrentWeek ? getOverduePOS(cWeek) : [];
@@ -2663,14 +2871,17 @@ function showPlanningView() {
     lbl.style.color = 'var(--red)';
     lbl.textContent = `Nesplněné z minulých dní (${overdue.length})`;
     wrap.appendChild(lbl);
-    overdue.forEach(p => wrap.appendChild(makePlanCard(p, all.indexOf(p))));
+    overdue.forEach(p => wrap.appendChild(makePlanCard(p, all.indexOf(p), true)));
   }
 
   // Unplanned section
   const unpl = all.filter(p => (p.d === null || p.d === undefined) && !p.v);
   const lbl2 = document.createElement('div');
   lbl2.className = 'sec-lbl';
-  lbl2.textContent = `Nepřiřazené POS (${unpl.length})`;
+  lbl2.style.display = 'flex';
+  lbl2.style.justifyContent = 'space-between';
+  lbl2.style.paddingRight = '18px';
+  lbl2.innerHTML = `<span>Nepřiřazené POS (${unpl.length})</span>${unpl.length ? `<a href="#" onclick="event.preventDefault();selectAllUnplanned()" style="color:var(--teal);font-weight:700;font-size:11px">Vybrat vše</a>` : ''}`;
   wrap.appendChild(lbl2);
 
   if (!unpl.length) {
@@ -2679,7 +2890,7 @@ function showPlanningView() {
     e.innerHTML = '<svg class="ic ic-sm" style="color:var(--green);vertical-align:-2px;margin-right:3px"><use href="#ic-check-circle"/></svg>Všechny POS jsou přiřazené ke dnům.';
     wrap.appendChild(e);
   } else {
-    unpl.forEach(p => wrap.appendChild(makePlanCard(p, all.indexOf(p))));
+    unpl.forEach(p => wrap.appendChild(makePlanCard(p, all.indexOf(p), true)));
   }
 
   // Already planned section (grouped by day)
@@ -2696,20 +2907,31 @@ function showPlanningView() {
       dlbl.style.cssText = 'padding:6px 16px 2px;font-size:11px;font-weight:700;color:var(--td)';
       dlbl.textContent = `${dname} ${WEEKS_META[cWeek].dd[di]}${di===todayIdx&&isCurrentWeek?' · DNES':''} (${dayPos.length})`;
       wrap.appendChild(dlbl);
-      dayPos.forEach(p => wrap.appendChild(makePlanCard(p, all.indexOf(p))));
+      dayPos.forEach(p => wrap.appendChild(makePlanCard(p, all.indexOf(p), true)));
     });
   }
 }
 
-function makePlanCard(p, ri) {
+function selectAllUnplanned() {
+  const all = posData[cWeek] || [];
+  all.filter(p => (p.d === null || p.d === undefined) && !p.v).forEach(p => planSelection.add(p.id));
+  showPlanningView();
+}
+
+function makePlanCard(p, ri, selectable) {
   const card = document.createElement('div');
   card.className = 'pos-card';
   card.style.cursor = 'default';
   const dayBadge = (p.d !== null && p.d !== undefined)
     ? `<span style="font-size:11px;font-weight:700;color:var(--td);background:var(--tl);padding:3px 9px;border-radius:20px">${DAYS[p.d]} ${WEEKS_META[cWeek].dd[p.d]}</span>`
     : `<span style="font-size:11px;font-weight:700;color:var(--muted);background:var(--bg);padding:3px 9px;border-radius:20px">Nepřiřazeno</span>`;
+  const checked = planSelection.has(p.id);
+  const checkbox = selectable
+    ? `<input type="checkbox" ${checked?'checked':''} onclick="event.stopPropagation();togglePlanSelect('${p.id}')" style="width:20px;height:20px;flex-shrink:0;accent-color:var(--teal);cursor:pointer"/>`
+    : '';
   card.innerHTML = `
     <div class="pci">
+      ${checkbox}
       <div class="pinfo">
         <div class="pname">${p.n}</div>
         <div class="paddr">${p.a}</div>
