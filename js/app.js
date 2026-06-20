@@ -7,6 +7,7 @@ let activeRegion='all';
 let ciTimer=null;
 let sigCanvas=null, sigCtx=null, sigDrawing=false, sigMark=false;
 let supplyItems=[];
+let dashBaseline=null; // in-session trend baseline, captured on first dashboard render
 
 // Build POS data with tasks, refs, inventory
 const posData={};
@@ -31,6 +32,96 @@ for(const [w,list] of Object.entries(REAL_DATA.weeks)){
 // Add 2 servis tasks for demo
 if(posData['25']&&posData['25'][0]) posData['25'][0].taskState.push({text:'Výměna tiskové hlavy — terminál netiskne',src:'servis',done:false,note:'SRV-2841 · Urgentní · náhradní díl v autě'});
 if(posData['25']&&posData['25'][5]) posData['25'][5].taskState.push({text:'Terminál se nepřipojí k síti',src:'servis',done:false,note:'SRV-2839 · Zkontroluj kabel + SIM'});
+
+// ══════════════════════════════════════════════════════
+// TECHNICIAN / POS MASTER DATA
+// Placeholder structural enrichment — real technician-assignment
+// data (region / středisko / channel responsibility) will be
+// imported later from Tourplan. Until then we derive plausible
+// values from GPS coordinates so every screen already reads from
+// a consistent technician model.
+// ══════════════════════════════════════════════════════
+const REGIONS=['RSE','RSZ','RSJ','RSM','Praha'];
+const STREDISKO_BY_REGION={
+  RSE:['Hradec Králové','Pardubice','Liberec'],
+  RSZ:['Plzeň','Karlovy Vary','Ústí nad Labem'],
+  RSJ:['České Budějovice','Jihlava'],
+  RSM:['Brno','Ostrava','Zlín'],
+  Praha:['Praha'],
+};
+function regionFromLatLng(lat,lng){
+  if(lat>=49.92&&lat<=50.18&&lng>=14.2&&lng<=14.75) return 'Praha';
+  if(lng>=16.6) return 'RSM';
+  if(lat<49.5) return 'RSJ';
+  if(lng<14.3) return 'RSZ';
+  return 'RSE';
+}
+function strediskoFor(region,seed){
+  const opts=STREDISKO_BY_REGION[region]||STREDISKO_BY_REGION.RSE;
+  return opts[seed%opts.length];
+}
+function channelsFor(seed){
+  // Every technician covers IDT; some also cover KA/PETROL/CORN — deterministic mock split.
+  const pool=['IDT','KA','PETROL','CORN'];
+  const extra=seed%4;
+  return pool.slice(0,2+extra%3).filter((c,i)=>i===0||seed%(i+2)!==0);
+}
+REAL_DATA.techs.forEach((t,idx)=>{
+  t.region=regionFromLatLng(t.lat,t.lng);
+  t.stredisko=strediskoFor(t.region,idx);
+  t.channels=channelsFor(idx);
+  t.active=!(t.activity==='Dokončil den'&&idx%9===0); // mock: almost all active
+  t.workload=t.total||0;
+});
+// Tag every POS with a region. The demo dataset has no POS coordinates yet,
+// so this distributes POS across regions deterministically by address text —
+// a stand-in until real POS geodata / Tourplan routing data is available.
+function hashStr(s){let h=0;for(let i=0;i<s.length;i++){h=(h*31+s.charCodeAt(i))|0;}return Math.abs(h);}
+for(const list of Object.values(posData)){
+  list.forEach(p=>{ if(!p.region) p.region=REGIONS[hashStr(p.a||p.n||p.id||'')%REGIONS.length]; });
+}
+
+/** Single source of truth for a technician's live, derived status.
+ *  Every renderer (map, dashboard, live list, technici list, detail
+ *  drawer, AI briefing) must read from this — never re-derive pct/
+ *  status/issues inline, so one data change updates everywhere. */
+function getTechProfile(t){
+  const pct=t.total?Math.round(t.done/t.total*100):0;
+  const status=t.done===t.total&&t.total>0?'done':t.overdue?'behind':t.done>0?'active':'waiting';
+  const issues=[];
+  if(t.overdue) issues.push('Pozadu oproti plánu');
+  if(t.total>0 && t.workload>0 && t.done===0) issues.push('Dosud nezahájil žádnou POS');
+  const cap=t.total?Math.round((t.total-t.done)/Math.max(t.total,1)*100):0;
+  if(cap>=60 && t.total>=20) issues.push('Vysoká zbývající kapacita pro tento týden');
+  return {...t,pct,status,issues};
+}
+function getTechsProfiles(){return REAL_DATA.techs.map(getTechProfile);}
+
+const TECH_STATUS_META={
+  done:{label:'✓ Hotovo',cls:'b-done'},
+  behind:{label:'⚠ Pozadu',cls:'b-beh'},
+  active:{label:'● Aktivní',cls:'b-act'},
+  waiting:{label:'○ Nezačal',cls:'b-wait'},
+};
+function techStatusBadge(status){
+  const m=TECH_STATUS_META[status]||TECH_STATUS_META.waiting;
+  return `<span class="badge ${m.cls}">${m.label}</span>`;
+}
+function techListRow(t,opts={}){
+  const isLT=t.name==='Lán Tomáš';
+  const sub=opts.subtitle||`${t.region} · ${t.activity} · ${t.last_visit}`;
+  return `<div class="tr" onclick="showTechDetail('${t.name}')">
+    <div class="tav ${t.overdue?'ov':''}" style="${isLT?'background:var(--teal);color:var(--navy)':''}">${t.initials}</div>
+    <div class="tinf">
+      <div class="tn">${t.name}${isLT?' <span style="font-size:9px;background:var(--teal);color:var(--navy);padding:1px 5px;border-radius:10px;font-weight:800">LIVE</span>':''}</div>
+      <div class="ts">${sub}</div>
+    </div>
+    <div class="tr-right">
+      <div class="mp"><div class="mpbg"><div class="mpf ${t.status==='done'?'gn':t.status==='behind'?'rd':''}" style="width:${t.pct}%"></div></div><div class="mpp">${t.pct}%</div></div>
+      ${techStatusBadge(t.status)}
+    </div>
+  </div>`;
+}
 
 // ══════════════════════════════════════════════════════
 // STORAGE
@@ -71,6 +162,7 @@ function showAdmPage(p,btn){
   if(p==='live'&&!adminMap) setTimeout(initAdminMap,100);
   if(p==='casy') renderAdminCasy();
   if(p==='dashboard') renderAdminDashboard();
+  if(p==='ai') renderOpsIntelligence();
 }
 
 // ══════════════════════════════════════════════════════
@@ -802,12 +894,11 @@ function initAdminMap(){
   try{
     adminMap=L.map('admin-map',{zoomControl:true,attributionControl:false}).setView([49.8,15.5],7);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:18}).addTo(adminMap);
-    REAL_DATA.techs.forEach((t,idx)=>{
-      const pct=t.total?Math.round(t.done/t.total*100):0;
-      const color=t.overdue?'#CC2200':pct>=80?'#1A8C4E':'#2ECDC0';
-      const icon=L.divIcon({className:'',html:`<div style="width:30px;height:30px;background:${color};border-radius:50%;border:2.5px solid rgba(255,255,255,.9);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:${t.overdue?'#fff':pct>=80?'#fff':'#1A3C47'};box-shadow:0 2px 8px rgba(0,0,0,.4)">${t.initials}</div>`,iconSize:[30,30],iconAnchor:[15,15]});
+    getTechsProfiles().forEach((t)=>{
+      const color=t.status==='behind'?'#CC2200':t.pct>=80?'#1A8C4E':'#2ECDC0';
+      const icon=L.divIcon({className:'',html:`<div style="width:30px;height:30px;background:${color};border-radius:50%;border:2.5px solid rgba(255,255,255,.9);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:${t.status==='behind'?'#fff':t.pct>=80?'#fff':'#1A3C47'};box-shadow:0 2px 8px rgba(0,0,0,.4)">${t.initials}</div>`,iconSize:[30,30],iconAnchor:[15,15]});
       const marker=L.marker([t.lat,t.lng],{icon}).addTo(adminMap);
-      marker.bindPopup(`<b>${t.name}</b><br>${t.done}/${t.total} POS · ${pct}%<br><em style="color:${t.overdue?'red':'green'}">${t.activity}</em>`);
+      marker.bindPopup(`<b>${t.name}</b><br>${t.region} · ${t.stredisko}<br>${t.channels.join('/')}<br>${t.done}/${t.total} POS · ${t.pct}%<br><em style="color:${t.status==='behind'?'red':'green'}">${t.activity}</em>`);
       adminMarkers.push(marker);
     });
   } catch(e){console.warn('Map init failed',e);}
@@ -823,7 +914,7 @@ function filterRegion(region,btn){
   renderAdminLive();
   adminMarkers.forEach((m,i)=>{
     const t=REAL_DATA.techs[i];
-    const show=region==='all'||(t.area||'RSE')===region;
+    const show=region==='all'||t.region===region;
     if(adminMap){show?m.addTo(adminMap):adminMap.removeLayer(m);}
   });
 }
@@ -902,22 +993,34 @@ function startAdminRefresh() {
 function renderAdminDashboard() {
   const live = getLiveState();
   const pos = posData['25'] || [];
+  const techs = getTechsProfiles();
   const gpsFlags = lsg('gps_flags_' + today(), []);
   const shortVisits = lsg('vlog_' + today(), []).filter(v => v.flag === 'short');
 
-  const totalPOS = REAL_DATA.techs.reduce((s, t) => s + t.total, 0);
-  const donePOS = REAL_DATA.techs.reduce((s, t) => s + t.done, 0);
+  const totalPOS = techs.reduce((s, t) => s + t.total, 0);
+  const donePOS = techs.reduce((s, t) => s + t.done, 0);
   const completionPct = totalPOS ? Math.round(donePOS / totalPOS * 100) : 0;
-  const behind = REAL_DATA.techs.filter(t => t.overdue);
-  const activeCount = REAL_DATA.techs.filter(t => t.done > 0 && t.done < t.total).length;
+  const behind = techs.filter(t => t.status === 'behind');
+  const activeCount = techs.filter(t => t.status === 'active').length;
   const flagsToday = gpsFlags.length + shortVisits.length;
+
+  if (!dashBaseline) dashBaseline = { completionPct, behindCount: behind.length, flagsToday };
+  const trendArrow = (now, before, lowerIsBetter) => {
+    if (now === before) return '<span class="trend trend-flat">▬</span>';
+    const up = now > before;
+    const good = lowerIsBetter ? !up : up;
+    return `<span class="trend ${good ? 'trend-up' : 'trend-down'}">${up ? '▲' : '▼'}</span>`;
+  };
+
+  const updEl = document.getElementById('dash-updated');
+  if (updEl) updEl.textContent = `Aktualizováno ${new Date().toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })}`;
 
   const kpiEl = document.getElementById('dash-kpis');
   if (kpiEl) kpiEl.innerHTML = `
-    <div class="kpi-card"><div class="kpi-icon">✅</div><div class="kpi-val">${completionPct}%</div><div class="kpi-lbl">Plnění týmu dnes</div></div>
+    <div class="kpi-card"><div class="kpi-icon">✅</div><div class="kpi-val">${completionPct}% ${trendArrow(completionPct, dashBaseline.completionPct, false)}</div><div class="kpi-lbl">Plnění týmu dnes</div></div>
     <div class="kpi-card"><div class="kpi-icon">👥</div><div class="kpi-val">${activeCount}</div><div class="kpi-lbl">Aktivní v terénu</div></div>
-    <div class="kpi-card warn"><div class="kpi-icon">⚠️</div><div class="kpi-val">${behind.length}</div><div class="kpi-lbl">Technici pozadu</div></div>
-    <div class="kpi-card danger"><div class="kpi-icon">🚩</div><div class="kpi-val">${flagsToday}</div><div class="kpi-lbl">Flagy dnes</div></div>
+    <div class="kpi-card warn"><div class="kpi-icon">⚠️</div><div class="kpi-val">${behind.length} ${trendArrow(behind.length, dashBaseline.behindCount, true)}</div><div class="kpi-lbl">Technici pozadu</div></div>
+    <div class="kpi-card danger"><div class="kpi-icon">🚩</div><div class="kpi-val">${flagsToday} ${trendArrow(flagsToday, dashBaseline.flagsToday, true)}</div><div class="kpi-lbl">Flagy dnes</div></div>
     <div class="kpi-card"><div class="kpi-icon">🔧</div><div class="kpi-val">${live.servisOpen.length}</div><div class="kpi-lbl">Servisy otevřené</div></div>
     <div class="kpi-card"><div class="kpi-icon">📍</div><div class="kpi-val">${donePOS}/${totalPOS}</div><div class="kpi-lbl">POS navštíveno (W25)</div></div>
   `;
@@ -938,7 +1041,7 @@ function renderAdminDashboard() {
     </div>`).join('');
 
   // Leaderboard — top 3 / bottom 3 podle % plnění
-  const ranked = REAL_DATA.techs.filter(t => t.total).slice().sort((a, b) => (b.done / b.total) - (a.done / a.total));
+  const ranked = techs.filter(t => t.total).slice().sort((a, b) => (b.done / b.total) - (a.done / a.total));
   const top3 = ranked.slice(0, 3);
   const bottom3 = ranked.slice(-3).reverse();
   const lbRow = (t, medal) => {
@@ -956,7 +1059,7 @@ function renderAdminDashboard() {
   `;
 
   // AI insighty — syntetizované z reálných dat (bez nutnosti volat AI API)
-  const avgPosPerTech = REAL_DATA.techs.length ? Math.round(totalPOS / REAL_DATA.techs.length) : 0;
+  const avgPosPerTech = techs.length ? Math.round(totalPOS / techs.length) : 0;
   const bestChannel = chStats.filter(c => c.list.length).sort((a, b) => b.pct - a.pct)[0];
   const insights = [
     { icon: '📊', title: 'Route efektivita', text: `Průměrně ${avgPosPerTech} POS na technika za týden, ${activeCount} týmů aktivně v terénu právě teď.` },
@@ -1002,66 +1105,35 @@ function renderAdminLive() {
     }
   }
 
-  const done = REAL_DATA.techs.reduce((s, t) => s + t.done, 0);
-  const behind = REAL_DATA.techs.filter(t => t.overdue).length;
+  const techs = getTechsProfiles();
+  const done = techs.reduce((s, t) => s + t.done, 0);
+  const behind = techs.filter(t => t.status === 'behind').length;
   document.getElementById('adm-done-n').textContent = done;
   document.getElementById('adm-behind').textContent = behind;
 
-  const filtered = activeRegion === 'all' ? REAL_DATA.techs : REAL_DATA.techs.filter(t => (t.area || 'RSE') === activeRegion);
+  const filtered = activeRegion === 'all' ? techs : techs.filter(t => t.region === activeRegion);
 
   document.getElementById('adm-live-list').innerHTML = filtered.map(t => {
-    const pct = t.total ? Math.round(t.done / t.total * 100) : 0;
     const isLT = t.name === 'Lán Tomáš';
     const currentPos = isLT && activePos ? ` · <span style="color:var(--teal);font-weight:700">● ${activePos.n.substring(0, 20)}…</span>` : '';
-    const badge = t.done === t.total ? '<span class="badge b-done">✓ Hotovo</span>'
-      : t.overdue ? '<span class="badge b-beh">⚠ Pozadu</span>'
-      : t.done > 0 ? '<span class="badge b-act">● Aktivní</span>'
-      : '<span class="badge b-wait">○ Nezačal</span>';
-    return `<div class="tr" onclick="showTechDetail('${t.name}')">
-      <div class="tav ${t.overdue ? 'ov' : ''}" style="${isLT ? 'background:var(--teal);color:var(--navy)' : ''}">${t.initials}</div>
-      <div class="tinf">
-        <div class="tn">${t.name}${isLT ? ' <span style="font-size:9px;background:var(--teal);color:var(--navy);padding:1px 5px;border-radius:10px;font-weight:800">LIVE</span>' : ''}</div>
-        <div class="ts">${t.activity} · ${t.last_visit}${currentPos}</div>
-      </div>
-      <div class="tr-right">
-        <div class="mp"><div class="mpbg"><div class="mpf ${t.done === t.total ? 'gn' : t.overdue ? 'rd' : ''}" style="width:${pct}%"></div></div><div class="mpp">${pct}%</div></div>
-        ${badge}
-      </div>
-    </div>`;
+    return techListRow(t, { subtitle: `${t.region} · ${t.activity} · ${t.last_visit}${currentPos}` });
   }).join('');
 }
 
 function renderAdminTechnici() {
-  document.getElementById('adm-all-list').innerHTML = REAL_DATA.techs.map(t => {
-    const pct = t.total ? Math.round(t.done / t.total * 100) : 0;
-    const isLT = t.name === 'Lán Tomáš';
-    const badge = t.done === t.total ? '<span class="badge b-done">✓ Hotovo</span>'
-      : t.overdue ? '<span class="badge b-beh">⚠ Pozadu</span>'
-      : t.done > 0 ? '<span class="badge b-act">● Aktivní</span>'
-      : '<span class="badge b-wait">○ Nezačal</span>';
-    return `<div class="tr" onclick="showTechDetail('${t.name}')">
-      <div class="tav ${t.overdue ? 'ov' : ''}" style="${isLT ? 'background:var(--teal);color:var(--navy)' : ''}">${t.initials}</div>
-      <div class="tinf">
-        <div class="tn">${t.name}</div>
-        <div class="ts">${t.activity} · ${t.last_visit}</div>
-      </div>
-      <div class="tr-right">
-        <div class="mp"><div class="mpbg"><div class="mpf ${t.done === t.total ? 'gn' : t.overdue ? 'rd' : ''}" style="width:${pct}%"></div></div><div class="mpp">${pct}%</div></div>
-        ${badge}
-      </div>
-    </div>`;
-  }).join('');
+  document.getElementById('adm-all-list').innerHTML = getTechsProfiles().map(t => techListRow(t)).join('');
 }
 
 // ══════════════════════════════════════════════════════
 // ADMIN — TECH DETAIL DRAWER
 // ══════════════════════════════════════════════════════
 function showTechDetail(name) {
-  const t = REAL_DATA.techs.find(x => x.name === name);
-  if (!t) return;
+  const raw = REAL_DATA.techs.find(x => x.name === name);
+  if (!raw) return;
+  const t = getTechProfile(raw);
   const isLT = name === 'Lán Tomáš';
   const live = isLT ? getLiveState() : null;
-  const pct = t.total ? Math.round(t.done / t.total * 100) : 0;
+  const pct = t.pct;
 
   // Build drawer content
   let html = `<div style="padding:20px 18px 32px">
@@ -1071,7 +1143,20 @@ function showTechDetail(name) {
         <div style="font-size:18px;font-weight:800">${t.name}</div>
         <div style="font-size:12px;color:var(--muted);margin-top:2px">${t.activity} · ${t.total} POS tento týden · ${pct}% splněno</div>
       </div>
+    </div>
+
+    <div class="tech-meta-row">
+      <span class="tag">📍 ${t.region}</span>
+      <span class="tag">🏢 ${t.stredisko}</span>
+      <span class="tag">${t.channels.join(' / ')}</span>
+      <span class="tag" style="${t.active?'':'background:var(--rl);color:var(--red)'}">${t.active?'● Aktivní technik':'○ Neaktivní'}</span>
     </div>`;
+
+  if (t.issues.length) {
+    html += `<div class="oi-section"><div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Aktuální problémy</div>
+      ${t.issues.map(i => `<div class="attn-item attn-orange"><span class="attn-icon">⚠️</span><span>${i}</span></div>`).join('')}
+    </div>`;
+  }
 
   // Progress bar
   html += `<div style="background:var(--bg);border-radius:10px;padding:14px;margin-bottom:14px">
@@ -1166,6 +1251,25 @@ function showTechDetail(name) {
       });
       html += `</div>`;
     }
+  } else {
+    // Non-LT technici nemají live tracking — zobraz alespoň jejich POS pro tento týden
+    const list = posData['25'] || [];
+    html += `<div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">POS tento týden (${list.length})</div>
+    <div style="background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);margin-bottom:14px">
+      ${list.map(p => {
+        const hist = getVisitHistory(p.id);
+        const last = hist[0];
+        const pPct = Math.round(p.taskState.filter(x => x.done).length / Math.max(p.taskState.length, 1) * 100);
+        return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--bg);cursor:pointer" onclick="showAdminPOSDetail('${p.id}')">
+          <div style="width:8px;height:8px;border-radius:50%;background:${p.v ? 'var(--green)' : 'var(--border)'};flex-shrink:0"></div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.n}</div>
+            <div style="font-size:11px;color:var(--muted)">${p.region} · ${last ? 'Naposledy: ' + last.date : 'Dosud nenavštíveno'} · ${pPct}%</div>
+          </div>
+          <div style="font-size:18px;color:var(--border)">›</div>
+        </div>`;
+      }).join('')}
+    </div>`;
   }
 
   html += `<button onclick="closeTechDrawer()" style="width:100%;padding:13px;border:1px solid var(--border);border-radius:10px;background:transparent;font-size:14px;cursor:pointer;color:var(--muted)">Zavřít</button></div>`;
@@ -1859,6 +1963,105 @@ Napiš přátelský, motivující briefing v češtině. Max 3 věty. Zmiň co j
 // ══════════════════════════════════════════════════════════════════════════
 // AI MANAGER BRIEFING — krátké executive summary pro manažera (Claude API)
 // ══════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════
+// OPERATIONS INTELLIGENCE — auto-computed executive panel (no backend/API)
+// Everything here is derived directly from REAL_DATA / posData / localStorage
+// logs already in the app — nothing fabricated, no chatbot, no fake history.
+// ══════════════════════════════════════════════════════════════════════════
+function buildOpsIntel() {
+  const techs = getTechsProfiles();
+  const live = getLiveState();
+  const pos = posData['25'] || [];
+  const gpsFlags = lsg('gps_flags_' + today(), []);
+  const shortVisits = lsg('vlog_' + today(), []).filter(v => v.flag === 'short');
+
+  const totalPOS = techs.reduce((s, t) => s + t.total, 0);
+  const donePOS = techs.reduce((s, t) => s + t.done, 0);
+  const completionPct = totalPOS ? Math.round(donePOS / totalPOS * 100) : 0;
+  const behind = techs.filter(t => t.status === 'behind');
+  const capacityWarn = techs.filter(t => t.issues.some(i => i.includes('kapacita')));
+  const dataCompleteness = techs.length ? Math.round(techs.filter(t => t.total > 0).length / techs.length * 100) : 0;
+
+  if (!dashBaseline) dashBaseline = { completionPct, behindCount: behind.length, flagsToday: gpsFlags.length + shortVisits.length };
+
+  const risks = [];
+  behind.forEach(t => risks.push({ prio: 'high', region: t.region, text: `<strong>${t.name}</strong> je výrazně pozadu — ${t.done}/${t.total} POS (${t.pct}%)` }));
+  live.servisOpen.forEach(p => risks.push({ prio: 'high', region: p.region, text: `Otevřený servis: <strong>${p.n}</strong>` }));
+  gpsFlags.forEach(f => risks.push({ prio: 'med', region: null, text: `GPS anomálie: <strong>${f.posName}</strong>${f.dist != null ? ` (${f.dist.toFixed(1)}km od POS)` : ''}` }));
+  shortVisits.forEach(v => risks.push({ prio: 'med', region: null, text: `Krátká návštěva: <strong>${v.posName}</strong> (${v.dur} min)` }));
+  capacityWarn.forEach(t => risks.push({ prio: 'low', region: t.region, text: `<strong>${t.name}</strong>: vysoká zbývající kapacita (${t.total - t.done} POS k dokončení)` }));
+
+  const actions = [];
+  behind.forEach(t => actions.push({ prio: 'high', text: `Kontaktovat ${t.name} a ověřit důvod zpoždění` }));
+  live.servisOpen.forEach(p => actions.push({ prio: 'high', text: `Naplánovat servisní zásah na ${p.n}` }));
+  if (gpsFlags.length) actions.push({ prio: 'med', text: `Prověřit ${gpsFlags.length} GPS anomálií zaznamenaných dnes` });
+  if (capacityWarn.length) actions.push({ prio: 'low', text: `Zvážit přerozdělení zátěže u: ${capacityWarn.map(t => t.name).join(', ')}` });
+
+  const posByRegion = REGIONS.map(r => {
+    const list = pos.filter(p => p.region === r);
+    const open = list.filter(p => !p.v).length;
+    const servis = list.filter(p => p.taskState.some(t => t.src === 'servis' && !t.done)).length;
+    return { region: r, total: list.length, open, servis };
+  }).filter(r => r.total > 0);
+
+  // Recurring issues — detected strictly within today's own log. A real
+  // multi-day pattern needs more than one day of history, which this demo
+  // dataset doesn't have yet, so an honest empty state is shown otherwise.
+  const recurring = [];
+  const chCount = {};
+  shortVisits.forEach(v => { const p = pos.find(x => x.n === v.posName); if (p) chCount[p.typ] = (chCount[p.typ] || 0) + 1; });
+  Object.entries(chCount).forEach(([ch, n]) => { if (n >= 2) recurring.push(`Opakovaně krátké návštěvy v kanálu ${ch} (${n}× dnes)`); });
+
+  return { techs, live, completionPct, donePOS, totalPOS, behind, capacityWarn, risks, actions, posByRegion, recurring, dataCompleteness, gpsFlags, shortVisits };
+}
+
+function renderOpsIntelligence() {
+  const wrap = document.getElementById('ops-intelligence');
+  if (!wrap) return;
+  const d = buildOpsIntel();
+  const delta = d.completionPct - dashBaseline.completionPct;
+  const trendTxt = delta === 0 ? 'beze změny od otevření dashboardu' : `${delta > 0 ? '+' : ''}${delta}% od otevření dashboardu`;
+  const prioPill = p => `<span class="prio prio-${p}">${p === 'high' ? 'Vysoká' : p === 'med' ? 'Střední' : 'Nízká'}</span>`;
+  const summary = `Tým dnes dokončil ${d.donePOS}/${d.totalPOS} POS (${d.completionPct}%). ${d.behind.length} technik(ů) je pozadu, ${d.live.servisOpen.length} servisů čeká na vyřízení. Plnění je ${trendTxt}.`;
+
+  wrap.innerHTML = `<div class="ai-report-card">
+    <div class="ai-report-hdr" style="background:var(--navy)">
+      <div class="ai-report-hdr-icon">🌙</div>
+      <div class="ai-report-hdr-t">Operations Intelligence — denní přehled</div>
+      <div class="ai-report-hdr-badge">Auto-analýza</div>
+    </div>
+    <div class="ai-report-body">
+      <div class="oi-meta">
+        <span>🕐 Poslední synchronizace: <b>${new Date().toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })}</b></span>
+        <span class="oi-conf">Spolehlivost dat <span class="oi-conf-bar"><span class="oi-conf-fill" style="width:${d.dataCompleteness}%"></span></span> ${d.dataCompleteness}%</span>
+        <span>Zdroj: Tourplan export · GPS check-in log · POS karty</span>
+      </div>
+
+      <div class="oi-section"><h4>🌅 Executive summary</h4><div class="oi-row-text">${summary}</div></div>
+
+      <div class="oi-section"><h4>🚨 Rizika zjištěná automaticky (${d.risks.length})</h4>
+        ${d.risks.length ? d.risks.map(r => `<div class="oi-row"><div class="oi-row-text">${prioPill(r.prio)} ${r.text}${r.region ? ` <span class="tag" style="background:var(--bg);color:var(--muted)">${r.region}</span>` : ''}</div></div>`).join('') : '<div class="oi-row-text">Žádná rizika detekována.</div>'}
+      </div>
+
+      <div class="oi-section"><h4>💡 Doporučené kroky</h4>
+        ${d.actions.length ? d.actions.map(a => `<div class="oi-row"><div class="oi-row-text">${prioPill(a.prio)} ${a.text}</div></div>`).join('') : '<div class="oi-row-text">Žádné akce nejsou potřeba.</div>'}
+      </div>
+
+      <div class="oi-section"><h4>📊 Kapacita techniků</h4>
+        ${d.capacityWarn.length ? d.capacityWarn.map(t => `<div class="oi-row"><div class="oi-row-text">⚠️ <strong>${t.name}</strong> (${t.region}) — ${t.total - t.done} POS zbývá z ${t.total}</div></div>`).join('') : '<div class="oi-row-text">Kapacita všech techniků je v normě.</div>'}
+      </div>
+
+      <div class="oi-section"><h4>🗺️ POS problémy podle regionu</h4>
+        ${d.posByRegion.length ? d.posByRegion.map(r => `<div class="oi-row"><div class="oi-row-text"><strong>${r.region}</strong> — ${r.open}/${r.total} POS nedokončeno${r.servis ? `, ${r.servis} servis(ů)` : ''}</div></div>`).join('') : '<div class="oi-row-text">Data o regionech se připravují.</div>'}
+      </div>
+
+      <div class="oi-section"><h4>🔁 Opakující se problémy</h4>
+        ${d.recurring.length ? d.recurring.map(r => `<div class="oi-row-text">${r}</div>`).join('') : '<div class="oi-row-text">Nedostatek historických dat pro detekci opakujících se vzorců — potřeba více než jeden den provozních dat.</div>'}
+      </div>
+    </div>
+  </div>`;
+}
+
 async function generateManagerBriefing() {
   const btn = document.getElementById('mgr-briefing-btn');
   const wrap = document.getElementById('mgr-briefing-wrap');
@@ -1869,10 +2072,11 @@ async function generateManagerBriefing() {
   wrap.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">Sestavuji executive summary…<br><br><div class="ai-typing" style="font-size:20px">▋</div></div>';
 
   const live = getLiveState ? getLiveState() : {};
-  const totalPOS = REAL_DATA.techs.reduce((s, t) => s + t.total, 0);
-  const donePOS = REAL_DATA.techs.reduce((s, t) => s + t.done, 0);
+  const techs = getTechsProfiles();
+  const totalPOS = techs.reduce((s, t) => s + t.total, 0);
+  const donePOS = techs.reduce((s, t) => s + t.done, 0);
   const pct = totalPOS ? Math.round(donePOS / totalPOS * 100) : 0;
-  const behind = REAL_DATA.techs.filter(t => t.overdue);
+  const behind = techs.filter(t => t.status === 'behind');
   const gpsFlags = lsg('gps_flags_' + today(), []);
 
   const prompt = `Jsi AI executive asistent pro manažera field operations v Allwyn (loterie, ČR), který řídí 27 merch techniků.
@@ -1931,7 +2135,7 @@ async function generateAIReport() {
   const gpsFlags = lsg('gps_flags_' + today(), []);
   const shortVisits = lsg('vlog_' + today(), []).filter(v => v.flag === 'short');
 
-  const techData = REAL_DATA.techs.map(t => {
+  const techData = getTechsProfiles().map(t => {
     const pct = t.total ? Math.round(t.done/t.total*100) : 0;
     return `${t.name}: ${t.done}/${t.total} POS (${pct}%) — ${t.activity}`;
   }).join('\n');
@@ -1978,8 +2182,9 @@ Buď konkrétní, zmiňuj jména. Max 300 slov.`;
 }
 
 function generateMockReport(gpsFlags, shortVisits) {
-  const behind = REAL_DATA.techs.filter(t => t.total && t.done/t.total < 0.2);
-  const great = REAL_DATA.techs.filter(t => t.total && t.done/t.total > 0.8);
+  const techs = getTechsProfiles();
+  const behind = techs.filter(t => t.total && t.done/t.total < 0.2);
+  const great = techs.filter(t => t.total && t.done/t.total > 0.8);
   return `🚨 **Rizika a podezřelé aktivity**
 
 ${behind.map(t => `• **${t.name}**: pouze ${t.done}/${t.total} POS (${Math.round(t.done/t.total*100)}%) — výrazně pod normou, doporučena kontrola`).join('\n')}
@@ -2431,71 +2636,6 @@ function addAdminPosTask(posId, weekKey) {
   if (btn) { btn.textContent='✓ Přidáno!'; setTimeout(()=>btn.textContent='Přidat úkol technikovi ✓',2000); }
   document.getElementById('admin-pos-task-input').value = '';
 }
-
-// ── Make admin live list rows clickable ────────────────────────────────────
-function showTechPOSList(techName) {
-  // Show all POS for this technik in current week (demo: show LT's POS)
-  const all = posData['25'] || [];
-  let html = `<div style="padding:20px 18px 32px">
-    <div style="font-size:18px;font-weight:800;margin-bottom:4px">${techName}</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:16px">W25 · ${all.length} POS přiřazeno</div>`;
-
-  html += `<div style="background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)">
-    ${all.map(p => {
-      const hist = getVisitHistory(p.id);
-      const last = hist[0];
-      const pct = Math.round(p.taskState.filter(t=>t.done).length/Math.max(p.taskState.length,1)*100);
-      return `<div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--bg);cursor:pointer"
-        onclick="showAdminPOSDetail('${p.id}')">
-        <div style="width:8px;height:8px;border-radius:50%;background:${p.v?'var(--green)':'var(--border)'};flex-shrink:0"></div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.n}</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:1px">${last?'Naposledy: '+last.date:'Dosud nenavštíveno'} · ${pct}%</div>
-        </div>
-        <div style="font-size:18px;color:var(--border)">›</div>
-      </div>`;
-    }).join('')}
-  </div>`;
-
-  html += `<button onclick="closeTechDrawer()" style="width:100%;padding:13px;border:1.5px solid var(--border);border-radius:10px;background:transparent;font-size:14px;cursor:pointer;color:var(--muted);margin-top:14px">Zavřít</button></div>`;
-
-  let drawer = document.getElementById('tech-drawer');
-  if (!drawer) {
-    drawer = document.createElement('div');
-    drawer.id = 'tech-drawer';
-    drawer.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:600;display:flex;align-items:flex-end;justify-content:center';
-    drawer.innerHTML = `<div id="tech-drawer-sheet" style="background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:430px;max-height:85vh;overflow-y:auto"><div style="width:40px;height:4px;background:var(--border);border-radius:2px;margin:16px auto 0"></div></div>`;
-    document.body.appendChild(drawer);
-    drawer.onclick = e => { if (e.target === drawer) closeTechDrawer(); };
-  }
-  document.getElementById('tech-drawer-sheet').innerHTML = `<div style="width:40px;height:4px;background:var(--border);border-radius:2px;margin:16px auto 0"></div>` + html;
-  drawer.style.display = 'flex';
-}
-
-// ── Patch admin live list to open POS list on click ────────────────────────
-const _origRenderAdminLive2 = renderAdminLive;
-renderAdminLive = function() {
-  _origRenderAdminLive2();
-  // Re-wire click handlers to show POS list
-  document.querySelectorAll('#adm-live-list .tr').forEach(row => {
-    const name = row.querySelector('.tn')?.textContent?.replace(' LIVE','').trim();
-    if (name) row.onclick = () => showTechPOSList(name);
-  });
-};
-
-// ── Patch showAdmPage to wire up technici ─────────────────────────────────
-const ____origShowAdmPage = showAdmPage;
-showAdmPage = function(p, btn) {
-  ____origShowAdmPage(p, btn);
-  if (p === 'technici') {
-    setTimeout(() => {
-      document.querySelectorAll('#adm-all-list .tr').forEach(row => {
-        const name = row.querySelector('.tn')?.textContent?.trim();
-        if (name) row.style.cursor = 'pointer', row.onclick = () => showTechPOSList(name);
-      });
-    }, 100);
-  }
-};
 
 // ── Auto init day/week on role enter ──────────────────────────────────────
 const _origEnterRole2 = enterRole;
