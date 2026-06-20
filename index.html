@@ -272,7 +272,8 @@
   <div class="adm-hdr">
     <div class="adm-logo"><div class="adm-a">a</div><div class="adm-title">allwyn <span>space</span> · velín</div></div>
     <div class="adm-nav">
-      <button class="adm-btn active" onclick="showAdmPage('live',this)">🔴 Live</button>
+      <button class="adm-btn active" onclick="showAdmPage('dashboard',this)">📊 Dashboard</button>
+      <button class="adm-btn" onclick="showAdmPage('live',this)">🔴 Live</button>
       <button class="adm-btn" onclick="showAdmPage('alerts',this)">⚠️ Flagy</button>
       <button class="adm-btn" onclick="showAdmPage('technici',this)">👥 Technici</button>
       <button class="adm-btn" onclick="showAdmPage('casy',this)">⏱ Časy</button>
@@ -285,8 +286,34 @@
   </div>
   <div class="adm-content">
 
+    <!-- EXECUTIVE DASHBOARD -->
+    <div class="adm-page active" id="adm-dashboard">
+      <div class="adm-sh"><div class="adm-st">Přehled výkonu — W25</div><div class="adm-sc" id="dash-updated">Dnes</div></div>
+      <div class="kpi-grid" id="dash-kpis"></div>
+
+      <div class="dash-block">
+        <div class="dash-block-t">📡 Plnění podle kanálu</div>
+        <div id="dash-channels"></div>
+      </div>
+
+      <div class="dash-block">
+        <div class="dash-block-t">🏆 Výkon techniků</div>
+        <div class="lb-grid" id="dash-leaderboard"></div>
+      </div>
+
+      <div class="dash-block">
+        <div class="dash-block-t">🧠 AI insighty</div>
+        <div class="insight-grid" id="dash-insights"></div>
+      </div>
+
+      <div class="dash-block">
+        <div class="dash-block-t">🚨 Vyžaduje pozornost</div>
+        <div class="cw" id="dash-attention"></div>
+      </div>
+    </div>
+
     <!-- LIVE -->
-    <div class="adm-page active" id="adm-live">
+    <div class="adm-page" id="adm-live">
       <div class="rf-wrap">
         <div class="rf-lbl">Filtr regionu</div>
         <div class="rf-row" id="rf-row">
@@ -376,6 +403,11 @@
 
     <!-- AI ANALÝZA -->
     <div class="adm-page" id="adm-ai">
+      <button class="ai-generate-btn" id="mgr-briefing-btn" onclick="generateManagerBriefing()" style="background:var(--teal);color:var(--navy)">
+        <span>🌅</span> Denní briefing pro manažera
+      </button>
+      <div id="mgr-briefing-wrap"></div>
+
       <button class="ai-generate-btn" id="ai-gen-btn" onclick="generateAIReport()">
         <span>🤖</span> Analyzovat výkon týmu — AI
       </button>
