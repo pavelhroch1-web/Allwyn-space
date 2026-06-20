@@ -62,6 +62,35 @@
     return { code: cls, label: PRIORITY_LABELS[cls] || cls };
   }
 
+  // ── MATERIAL TRACKING (dlouhodobý majetek — Inventory, NE Merch/Spotřební
+  // materiál, viz doménové pravidlo #1 v CLAUDE.md) ───────────────────────
+  // Struktura only — žádná reálná SAP integrace, jen pole připravená pro ni.
+  const MATERIAL_STATUS_LABELS = {
+    ok: 'OK',
+    miss: 'Missing',
+    damaged: 'Damaged',
+    needs_replacement: 'Needs replacement',
+  };
+  function getMaterialStatusLabel(s){
+    return MATERIAL_STATUS_LABELS[s] || 'Unchecked';
+  }
+  // getMaterials(p) -> sjednocený seznam materiálů (vnitřní + venkovní)
+  // s kanonickými poli name/sapCode/quantity/installationDate/status.
+  function getMaterials(p){
+    const inv = p.inventory || { vnitrni: [], venkovni: [] };
+    const flatten = (items, location) => (items || []).map(item => ({
+      id: item.id,
+      name: item.n,
+      location,
+      sapCode: item.sap || null,
+      quantity: typeof item.qty === 'number' ? item.qty : 1,
+      installationDate: item.installDate || null,
+      status: item.s || null,
+      statusLabel: getMaterialStatusLabel(item.s),
+    }));
+    return [...flatten(inv.vnitrni, 'vnitřní'), ...flatten(inv.venkovni, 'venkovní')];
+  }
+
   // visitStatus: odvozeno z reálných polí p.v (hotovo) a p.d (přiřazený den)
   // + getOverduePOS logiky (den < dnešní den a nehotovo).
   function getVisitStatus(p, isOverdue){
@@ -116,6 +145,7 @@
       nextPlannedVisit: (p.d !== null && p.d !== undefined && !p.v) ? p.d : null,
       frequencyCompliance: getFrequencyCompliance(daysSinceLastVisit).code,
       frequencyComplianceLabel: getFrequencyCompliance(daysSinceLastVisit).label,
+      materials: getMaterials(p),
     };
   }
 
@@ -124,11 +154,14 @@
     DEFAULT_REGION,
     EXPECTED_CYCLE_DAYS,
     IMPORT_COLUMN_MAP,
+    MATERIAL_STATUS_LABELS,
     parseCsDate,
     daysSinceDate,
     getPriority,
     getVisitStatus,
     getFrequencyCompliance,
+    getMaterialStatusLabel,
+    getMaterials,
     toPosModel,
   };
 

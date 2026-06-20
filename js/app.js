@@ -693,6 +693,9 @@ function pickInvItem(section, catalogIdx) {
   renderInventory();
 }
 
+function materialStatusCz(s){
+  return { ok: '✓ Přítomno', miss: '✕ Chybí', damaged: '⚠ Poškozeno', needs_replacement: '⟳ Nutná výměna' }[s] || s;
+}
 function renderInventory(){
   const p=posData[cWeek][cIdx];
   const inv=p.inventory||{vnitrni:[],venkovni:[]};
@@ -711,7 +714,7 @@ function renderInventory(){
           <div class="inv-n">${item.n}</div>
           <div class="inv-s" style="display:flex;gap:6px;align-items:center;margin-top:3px">
             ${item.typ?`<span style="font-size:10px;background:var(--tl);color:var(--tm);padding:1px 6px;border-radius:10px;font-weight:700">${item.typ}</span>`:''}
-            <span style="font-size:10px;color:var(--muted)">${item.s?('Stav: '+(item.s==='ok'?'✓ Přítomno':'✕ Chybí')):'nezkontrolováno'}</span>
+            <span style="font-size:10px;color:var(--muted)">${item.s?('Stav: '+materialStatusCz(item.s)):'nezkontrolováno'}</span>
           </div>
         </div>
         <div class="inv-btns">
@@ -2632,6 +2635,27 @@ function showAdminPOSDetail(posId) {
     </div>`;
   }
 
+  // Materiál (dlouhodobý majetek — Inventory) — struktura: SAP kód, množství,
+  // datum instalace, stav. Bez SAP integrace, jen příprava na ni.
+  const materials = posModel.materials;
+  if (materials.length) {
+    const matStatusColor = { ok: 'var(--green)', miss: 'var(--orange)', damaged: 'var(--red)', needs_replacement: 'var(--red)' };
+    html += `<div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Materiál (dlouhodobý majetek)</div>
+    <div style="background:white;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:14px">
+    ${materials.map(m => `<div style="padding:10px 14px;border-bottom:1px solid var(--bg)">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="flex:1;font-size:13px;font-weight:700">${m.name}</div>
+        <span style="font-size:10px;font-weight:700;color:${matStatusColor[m.status]||'var(--muted)'}">${m.status?materialStatusCz(m.status):'Nezkontrolováno'}</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">${m.location} · ${m.sapCode||'bez SAP kódu'} · ks: ${m.quantity}${m.installationDate?' · instalováno: '+m.installationDate:''}</div>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <button onclick="setAdminMaterialStatus('${posId}','${foundWeek}','${m.location==='vnitřní'?'vnitrni':'venkovni'}','${m.id}','damaged')" style="font-size:10px;font-weight:700;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:${m.status==='damaged'?'var(--rl)':'transparent'};color:var(--red);cursor:pointer">⚠ Poškozeno</button>
+        <button onclick="setAdminMaterialStatus('${posId}','${foundWeek}','${m.location==='vnitřní'?'vnitrni':'venkovni'}','${m.id}','needs_replacement')" style="font-size:10px;font-weight:700;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:${m.status==='needs_replacement'?'var(--rl)':'transparent'};color:var(--red);cursor:pointer">⟳ Nutná výměna</button>
+      </div>
+    </div>`).join('')}
+    </div>`;
+  }
+
   // Admin edit section
   html += `<div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Admin — přidat úkol</div>
   <div style="background:white;border-radius:10px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:14px">
@@ -2673,6 +2697,15 @@ function addAdminPosTask(posId, weekKey) {
   const btn = document.querySelector('#admin-pos-sheet button[onclick^="addAdmin"]');
   if (btn) { btn.textContent='✓ Přidáno!'; setTimeout(()=>btn.textContent='Přidat úkol technikovi ✓',2000); }
   document.getElementById('admin-pos-task-input').value = '';
+}
+
+function setAdminMaterialStatus(posId, weekKey, section, itemId, status) {
+  const p = (posData[weekKey]||[]).find(x=>x.id===posId);
+  if (!p || !p.inventory) return;
+  const item = (p.inventory[section]||[]).find(x=>x.id===itemId);
+  if (!item) return;
+  item.s = item.s === status ? null : status;
+  showAdminPOSDetail(posId);
 }
 
 // ── Make admin live list rows clickable ────────────────────────────────────

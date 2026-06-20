@@ -55,52 +55,55 @@ const REFS = {
 };
 // Inventory = dlouhodobý majetek
 // Struktura: { vnitrni: [...], venkovni: [...] }
+// Inventory = dlouhodobý majetek (Doménová pravidla #1: odděleno od Merch a
+// Spotřebního materiálu). `sap`/`qty`/`installDate` jsou jen STRUKTURA pro
+// budoucí napojení na reálný SAP — žádná SAP integrační logika zatím.
 const INV_DEFAULT = {
   IDT:{
     vnitrni:[
-      {id:'t',i:'🖥️',n:'Terminál Allwyn',typ:'',s:null},
-      {id:'st',i:'🏛️',n:'Stojan na sázenky (velký)',typ:'',s:null},
-      {id:'eso',i:'💡',n:'ESO výstrč',typ:'vnitřní',s:null},
+      {id:'t',i:'🖥️',n:'Terminál Allwyn',typ:'',s:null,sap:'SAP-INV-001',qty:1,installDate:null},
+      {id:'st',i:'🏛️',n:'Stojan na sázenky (velký)',typ:'',s:null,sap:'SAP-INV-002',qty:1,installDate:null},
+      {id:'eso',i:'💡',n:'ESO výstrč',typ:'vnitřní',s:null,sap:'SAP-INV-003',qty:1,installDate:null},
     ],
     venkovni:[
-      {id:'svetlo',i:'🏢',n:'Venkovní světelné označení',typ:'',s:null},
+      {id:'svetlo',i:'🏢',n:'Venkovní světelné označení',typ:'',s:null,sap:'SAP-INV-010',qty:1,installDate:null},
     ]
   },
   PETROL:{
     vnitrni:[
-      {id:'t',i:'🖥️',n:'Terminál Allwyn',typ:'',s:null},
-      {id:'to',i:'🏛️',n:'Totem Allwyn',typ:'3prvkový',s:null},
-      {id:'st',i:'🏛️',n:'Stojan na sázenky (velký)',typ:'',s:null},
-      {id:'eso',i:'💡',n:'ESO výstrč',typ:'vnitřní',s:null},
+      {id:'t',i:'🖥️',n:'Terminál Allwyn',typ:'',s:null,sap:'SAP-INV-001',qty:1,installDate:null},
+      {id:'to',i:'🏛️',n:'Totem Allwyn',typ:'3prvkový',s:null,sap:'SAP-INV-004',qty:1,installDate:null},
+      {id:'st',i:'🏛️',n:'Stojan na sázenky (velký)',typ:'',s:null,sap:'SAP-INV-002',qty:1,installDate:null},
+      {id:'eso',i:'💡',n:'ESO výstrč',typ:'vnitřní',s:null,sap:'SAP-INV-003',qty:1,installDate:null},
     ],
     venkovni:[
-      {id:'svetlo',i:'🏢',n:'Venkovní světelné označení',typ:'',s:null},
+      {id:'svetlo',i:'🏢',n:'Venkovní světelné označení',typ:'',s:null,sap:'SAP-INV-010',qty:1,installDate:null},
     ]
   },
   KA:{
     vnitrni:[
-      {id:'t',i:'🖥️',n:'Terminál Allwyn',typ:'',s:null},
-      {id:'to',i:'🏛️',n:'Totem Allwyn',typ:'3prvkový',s:null},
-      {id:'v',i:'📺',n:'VCU obrazovka',typ:'',s:null},
-      {id:'st',i:'🏛️',n:'Stojan na sázenky (velký)',typ:'',s:null},
-      {id:'eso',i:'💡',n:'ESO výstrč',typ:'vnitřní',s:null},
+      {id:'t',i:'🖥️',n:'Terminál Allwyn',typ:'',s:null,sap:'SAP-INV-001',qty:1,installDate:null},
+      {id:'to',i:'🏛️',n:'Totem Allwyn',typ:'3prvkový',s:null,sap:'SAP-INV-004',qty:1,installDate:null},
+      {id:'v',i:'📺',n:'VCU obrazovka',typ:'',s:null,sap:'SAP-INV-005',qty:1,installDate:null},
+      {id:'st',i:'🏛️',n:'Stojan na sázenky (velký)',typ:'',s:null,sap:'SAP-INV-002',qty:1,installDate:null},
+      {id:'eso',i:'💡',n:'ESO výstrč',typ:'vnitřní',s:null,sap:'SAP-INV-003',qty:1,installDate:null},
     ],
     venkovni:[
-      {id:'svetlo',i:'🏢',n:'Venkovní světelné označení',typ:'',s:null},
+      {id:'svetlo',i:'🏢',n:'Venkovní světelné označení',typ:'',s:null,sap:'SAP-INV-010',qty:1,installDate:null},
     ]
   },
   CORN:{
     vnitrni:[
-      {id:'t',i:'🖥️',n:'Terminál Allwyn',typ:'',s:null},
-      {id:'to',i:'🏛️',n:'Totem Allwyn',typ:'',s:null},
-      {id:'pult1',i:'🟡',n:'Primární pult (losy)',typ:'',s:null},
-      {id:'pult2',i:'🟡',n:'Sekundární pult (losy)',typ:'',s:null},
-      {id:'barketa',i:'🎫',n:'Barketa',typ:'',s:null},
-      {id:'stojka',i:'📋',n:'Stojka',typ:'',s:null},
-      {id:'eso',i:'💡',n:'ESO výstrč',typ:'vnitřní',s:null},
+      {id:'t',i:'🖥️',n:'Terminál Allwyn',typ:'',s:null,sap:'SAP-INV-001',qty:1,installDate:null},
+      {id:'to',i:'🏛️',n:'Totem Allwyn',typ:'',s:null,sap:'SAP-INV-004',qty:1,installDate:null},
+      {id:'pult1',i:'🟡',n:'Primární pult (losy)',typ:'',s:null,sap:'SAP-INV-006',qty:1,installDate:null},
+      {id:'pult2',i:'🟡',n:'Sekundární pult (losy)',typ:'',s:null,sap:'SAP-INV-007',qty:1,installDate:null},
+      {id:'barketa',i:'🎫',n:'Barketa',typ:'',s:null,sap:'SAP-INV-008',qty:1,installDate:null},
+      {id:'stojka',i:'📋',n:'Stojka',typ:'',s:null,sap:'SAP-INV-009',qty:1,installDate:null},
+      {id:'eso',i:'💡',n:'ESO výstrč',typ:'vnitřní',s:null,sap:'SAP-INV-003',qty:1,installDate:null},
     ],
     venkovni:[
-      {id:'svetlo',i:'🏢',n:'Venkovní světelné označení',typ:'',s:null},
+      {id:'svetlo',i:'🏢',n:'Venkovní světelné označení',typ:'',s:null,sap:'SAP-INV-010',qty:1,installDate:null},
     ]
   },
 };
