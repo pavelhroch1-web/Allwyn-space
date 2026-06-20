@@ -1,0 +1,2591 @@
+// ══════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════
+let cWeek='25', cDay=0, cIdx=null, pendingSlot=null, assigningId=null;
+let adminMap=null, adminMarkers=[];
+let activeRegion='all';
+let ciTimer=null;
+let sigCanvas=null, sigCtx=null, sigDrawing=false, sigMark=false;
+let supplyItems=[];
+
+// Build POS data with tasks, refs, inventory
+const posData={};
+for(const [w,list] of Object.entries(REAL_DATA.weeks)){
+  posData[w]=list.map(p=>{
+    // Start with EMPTY plan — technician assigns all days themselves (persisted)
+    if(!p.v) p.d = null;
+    // Corn = KA PARTNERS with kategorie starting with 9, or explicit CORN
+    const rawTyp = p.typ||'IDT';
+    const isCornPos = rawTyp==='CORN' || (p.k&&p.k.startsWith('9')) || p.typ==='CORN';
+    const typ = isCornPos ? 'CORN' : rawTyp;
+    return {
+      ...p,
+      typ,
+      photos:[],notes:'',
+      taskState:[...((TASK_TMPL[typ]||TASK_TMPL[rawTyp]||TASK_TMPL.IDT)).map(t=>({text:t,src:'template',done:p.v}))],
+      refs:(REFS[typ]||REFS[rawTyp]||REFS.IDT),
+      inventory:JSON.parse(JSON.stringify(INV_DEFAULT[typ]||INV_DEFAULT[rawTyp]||INV_DEFAULT.IDT)),
+    };
+  });
+}
+// Add 2 servis tasks for demo
+if(posData['25']&&posData['25'][0]) posData['25'][0].taskState.push({text:'Výměna tiskové hlavy — terminál netiskne',src:'servis',done:false,note:'SRV-2841 · Urgentní · náhradní díl v autě'});
+if(posData['25']&&posData['25'][5]) posData['25'][5].taskState.push({text:'Terminál se nepřipojí k síti',src:'servis',done:false,note:'SRV-2839 · Zkontroluj kabel + SIM'});
+
+// ══════════════════════════════════════════════════════
+// STORAGE
+// ══════════════════════════════════════════════════════
+function lsg(k,d=null){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch{return d;}}
+function lss(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
+function today(){return new Date().toISOString().split('T')[0];}
+
+// ══════════════════════════════════════════════════════
+// ROLE
+// ══════════════════════════════════════════════════════
+function enterRole(role){
+  document.getElementById('role-screen').style.display='none';
+  document.getElementById('switch-btn').style.display='block';
+  if(role==='technik'){
+    document.getElementById('technik-screen').classList.add('active');
+    document.getElementById('admin-screen').style.display='none';
+    updateHdrLabel();renderChips();renderDayTabs();renderList();
+    setTimeout(showBriefing,500);
+  } else {
+    document.getElementById('technik-screen').classList.remove('active');
+    document.getElementById('admin-screen').style.display='block';
+    renderAdminLive();renderAdminAlerts();renderAdminTechnici();renderAdminCasy();renderAdminFoto();
+    setTimeout(initAdminMap,300);
+  }
+}
+function goHome(){
+  document.getElementById('role-screen').style.display='flex';
+  document.getElementById('switch-btn').style.display='none';
+  document.getElementById('technik-screen').classList.remove('active');
+  document.getElementById('admin-screen').style.display='none';
+}
+function showAdmPage(p,btn){
+  document.querySelectorAll('.adm-page').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.adm-btn').forEach(x=>x.classList.remove('active'));
+  document.getElementById('adm-'+p).classList.add('active');
+  btn.classList.add('active');
+  if(p==='live'&&!adminMap) setTimeout(initAdminMap,100);
+  if(p==='casy') renderAdminCasy();
+}
+
+// ══════════════════════════════════════════════════════
+// BRIEFING
+// ══════════════════════════════════════════════════════
+function showBriefing(){
+  const pos=posData['25']||[];
+  const todayPos=pos.filter(p=>p.d===0);
+  const svc=pos.filter(p=>p.taskState.some(t=>t.src==='servis'&&!t.done));
+  const now=new Date();
+  document.getElementById('bf-date').textContent=now.toLocaleDateString('cs-CZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const msgs=[
+    'Losy: POUZE nová emise Zlaté rybky — ne původní! Stále se objevují chyby.',
+    'Rebranding: norma 2 POS/den. Kontroluj samolepky Sazka mobil — musí být odstraněny.',
+    'ORLEN: nově v tourplanu — pouze výměna losů + zásobování, NE rebranding.',
+    'Corn: priorita tohoto týdne — vždy 2 plakáty na totem, nikdy bílá plocha.',
+    'Zásobování: vždy vyžádej podpis a vyplň SAP kódy.',
+  ];
+  document.getElementById('bf-msg').textContent=msgs[Math.floor(Math.random()*msgs.length)];
+  document.getElementById('bf-total').textContent=pos.length;
+  document.getElementById('bf-today').textContent=todayPos.length||7;
+  document.getElementById('bf-svc').textContent=svc.length;
+  document.getElementById('bf-items').innerHTML=[
+    {c:'urg',i:'🔧',t:`${svc.length} servisních tiketů — začni jimi, jsou nejvyšší priorita`},
+    {c:'nrm',i:'🎯',t:'Deadline EuroJackpot plakáty: 20. 6. — dnes! Nezapomeň osadit'},
+    {c:'nrm',i:'📸',t:'Foť terminál PŘED a PO osazení — admin kontroluje'},
+    {c:'inf',i:'✍️',t:'U zásobování vždy vyžádej podpis přijímajícího'},
+  ].map(x=>`<div class="bf-item ${x.c}"><div class="bf-ico">${x.i}</div><div class="bf-txt">${x.t}</div></div>`).join('');
+  document.getElementById('briefing').classList.add('open');
+}
+function closeBriefing(){document.getElementById('briefing').classList.remove('open');}
+
+// ══════════════════════════════════════════════════════
+// WEEK CHIPS
+// ══════════════════════════════════════════════════════
+function updateHdrLabel(){
+  const m=WEEKS_META[cWeek];
+  document.getElementById('hdr-week-label').textContent=`${m.l} · ${m.d} 2025 · Lán Tomáš`;
+}
+function renderChips(){
+  document.getElementById('week-chips').innerHTML=Object.entries(WEEKS_META).map(([w,m])=>{
+    const pos=posData[w]||[];
+    const done=pos.filter(p=>p.v).length;
+    return `<div class="wchip ${w===cWeek?'active':''} ${parseInt(w)<25?'past':''}" onclick="selWeek('${w}')">
+      <div class="wc-num">${m.l}</div>
+      <div class="wc-dates">${m.d}</div>
+      <div class="wc-prog">${pos.length?done+'/'+pos.length:'—'} POS</div>
+    </div>`;
+  }).join('');
+  updateSummary();
+}
+function selWeek(w){cWeek=w;cDay=0;updateHdrLabel();renderChips();renderDayTabs();renderList();}
+function updateSummary(){
+  const pos=posData[cWeek]||[];
+  const done=pos.filter(p=>p.v).length;
+  const unpl=pos.filter(p=>p.d===null&&!p.v).length;
+  document.getElementById('ws-t').textContent=pos.length||'—';
+  document.getElementById('ws-d').textContent=pos.length?done:'—';
+  document.getElementById('ws-r').textContent=pos.length?(pos.length-done):'—';
+  document.getElementById('ws-u').textContent=pos.length?unpl:'—';
+  document.getElementById('wpfill').style.width=pos.length?(done/pos.length*100)+'%':'0%';
+}
+
+// ══════════════════════════════════════════════════════
+// DAY TABS
+// ══════════════════════════════════════════════════════
+function renderDayTabs(){
+  const pos=posData[cWeek]||[];
+  const m=WEEKS_META[cWeek];
+  const todayIdx=getTodayDayIdx();
+  const isCurrentWeek=cWeek===getCurrentWeekNum();
+  document.getElementById('day-tabs').innerHTML=DAYS.map((d,i)=>{
+    const dp=pos.filter(p=>p.d===i);
+    const ad=dp.length>0&&dp.every(p=>p.v);
+    // Lock past days in current week
+    const isPastDay=isCurrentWeek&&todayIdx!==null&&i<todayIdx;
+    const isTodayDay=isCurrentWeek&&i===todayIdx;
+    const lockIcon=isPastDay?' 🔒':isTodayDay?' •':'';
+    const opacity=isPastDay?'opacity:.5;':'';
+    return `<div class="dtab ${i===cDay?'active':''} ${ad?'ad':dp.length?'hp':''}" style="${opacity}" onclick="selDay(${i})">
+      <div class="dt-name">${d}${isTodayDay?' •':''}</div><div class="dt-date">${m.dd[i]}${isPastDay?' 🔒':''}</div><div class="dt-dot"></div>
+    </div>`;
+  }).join('');
+}
+function selDay(d){
+  cDay=d;
+  renderDayTabs();renderList();
+}
+
+// ══════════════════════════════════════════════════════
+// POS LIST
+// ══════════════════════════════════════════════════════
+function renderList(){
+  const wrap=document.getElementById('pos-list-wrap');
+  wrap.innerHTML='';
+  const all=posData[cWeek]||[];
+  if(!all.length){wrap.innerHTML='<div class="empty"><div class="empty-i">📋</div><div class="empty-t">Žádné POS tento týden</div></div>';return;}
+  const unpl=all.filter(p=>p.d===null&&!p.v);
+  if(unpl.length){
+    const b=document.createElement('div');b.className='upbanner';b.onclick=showUnplanned;
+    b.innerHTML=`<div class="upb-ico">📌</div><div><div class="upb-t">${unpl.length} POS bez přiřazeného dne</div><div class="upb-s">Klikni pro naplánování</div></div><div style="color:var(--orange);font-size:18px;margin-left:auto">›</div>`;
+    wrap.appendChild(b);
+  }
+  const dp=all.filter(p=>p.d===cDay);
+  if(!dp.length){
+    const e=document.createElement('div');e.className='empty';
+    e.innerHTML=`<div class="empty-i">📅</div><div class="empty-t">Nic naplánováno</div><div class="empty-s">Přiřaď POS z neplánovaných výše.</div>`;
+    wrap.appendChild(e);return;
+  }
+  const lbl=document.createElement('div');lbl.className='sec-lbl';
+  lbl.textContent=`${DAYS[cDay]} ${WEEKS_META[cWeek].dd[cDay]} — ${dp.length} POS`;
+  wrap.appendChild(lbl);
+  dp.forEach(p=>{wrap.appendChild(makePosCard(p,all.indexOf(p),false));});
+}
+function showUnplanned(){
+  const wrap=document.getElementById('pos-list-wrap');wrap.innerHTML='';
+  const all=posData[cWeek]||[];
+  const unpl=all.filter(p=>p.d===null&&!p.v);
+  const back=document.createElement('div');back.style.cssText='padding:10px 12px 4px';
+  back.innerHTML=`<button onclick="renderList()" style="background:none;border:none;color:var(--td);font-size:13px;font-weight:700;cursor:pointer">← Zpět</button>`;
+  wrap.appendChild(back);
+  const lbl=document.createElement('div');lbl.className='sec-lbl';lbl.textContent=`Neplánované POS (${unpl.length})`;
+  wrap.appendChild(lbl);
+  unpl.forEach(p=>{wrap.appendChild(makePosCard(p,all.indexOf(p),true));});
+}
+function typTag(p){
+  if(p.typ==='CORN')return`<span class="tag t-corn">🌽 Corn</span>`;
+  if(p.typ==='PETROL')return`<span class="tag t-petrol">⛽ ${p.partner||'PETROL'}</span>`;
+  if(p.typ==='KA')return`<span class="tag t-ka">★ ${p.partner||'KA'}</span>`;
+  return`<span class="tag t-idt">IDT</span>`;
+}
+function priChip(p){
+  if(p.taskState.some(t=>t.src==='servis'&&!t.done))return`<span class="tag t-svc">🔧 Servis</span>`;
+  const inv=p.inventory||[];
+  if(inv.some(i=>i.s==='miss'))return`<span class="tag" style="background:var(--ol);color:var(--orange)">📦 Chybí</span>`;
+  return'';
+}
+function makePosCard(p,ri,showAssign){
+  const done=p.taskState.filter(t=>t.done).length;
+  const hasSvc=p.taskState.some(t=>t.src==='servis'&&!t.done);
+  const dotCls=p.v?'pd-done':hasSvc?'pd-svc':'pd-pend';
+  let tags=p.v?`<span class="tag t-done">✓ Hotovo</span>`:`<span class="tag t-task">${done}/${p.taskState.length}</span>`;
+  tags+=priChip(p)+typTag(p);
+  const card=document.createElement('div');card.className='pos-card';
+  const right=showAssign?`<button class="asgn-btn" onclick="event.stopPropagation();openAssign('${p.id}')">+ Den</button>`:`<div class="parr">›</div>`;
+  card.innerHTML=`${p.v?'<div class="vs"></div>':''}<div class="pci"><div class="pdot ${dotCls}"></div><div class="pinfo"><div class="pname">${p.n}</div><div class="paddr">${p.a}</div><div class="pmeta">${tags}</div></div>${right}</div>`;
+  card.onclick=()=>openDetail(ri);
+  return card;
+}
+
+// ══════════════════════════════════════════════════════
+// ASSIGN
+// ══════════════════════════════════════════════════════
+function openAssign(id){
+  assigningId=id;
+  const all=posData[cWeek]||[];const p=all.find(x=>x.id===id);
+  document.getElementById('assign-title').textContent=p.n;
+  document.getElementById('assign-sub').textContent=p.a;
+  const m=WEEKS_META[cWeek];
+  document.getElementById('assign-opts').innerHTML=DAYS.map((d,i)=>{
+    const cnt=all.filter(x=>x.d===i).length;const sel=p.d===i;
+    return`<div class="dopt ${sel?'sel':''}" onclick="assignDay(${i})">
+      <div class="dopt-l"><div class="dopt-ico">${DAY_ICONS[i]}</div><div><div class="dopt-n">${d} ${m.dd[i]}</div><div class="dopt-c">${cnt} POS přiřazeno</div></div></div>
+      ${sel?'<span style="color:var(--td);font-weight:800">✓</span>':''}
+    </div>`;
+  }).join('');
+  document.getElementById('assign-modal').classList.add('open');
+}
+function assignDay(d){
+  const all=posData[cWeek]||[];const p=all.find(x=>x.id===assigningId);
+  if(p){ p.d=d; setAssignment(p.id, d); }
+  closeModal();updateSummary();renderChips();renderDayTabs();
+  // Stay in planning view if we were there
+  if(document.querySelector('#pos-list-wrap .sec-lbl')?.textContent?.includes('Nepřiřazené')||
+     document.querySelector('#pos-list-wrap')?.innerHTML?.includes('Naplánovat POS')){
+    showPlanningView();
+  } else {
+    renderList();
+  }
+}
+function closeModal(){document.getElementById('assign-modal').classList.remove('open');assigningId=null;}
+
+// ══════════════════════════════════════════════════════
+// DETAIL
+// ══════════════════════════════════════════════════════
+function openDetail(ri){
+  cIdx=ri;
+  const p=posData[cWeek][ri];
+  const m=WEEKS_META[cWeek];
+  document.getElementById('d-name').textContent=p.n;
+  document.getElementById('d-id').textContent=p.id;
+  document.getElementById('d-fullname').textContent=p.n;
+  document.getElementById('d-addr').textContent=p.a;
+  // chips
+  const chips=[];
+  chips.push(`<span class="chip ch-area">📍 ${p.area||'—'}</span>`);
+  if(p.d!==null&&p.d!==undefined) chips.push(`<span class="chip ch-day">📅 ${DAYS[p.d]} ${m.dd[p.d]}</span>`);
+  if(p.taskState.some(t=>t.src==='servis'&&!t.done)) chips.push(`<span class="chip ch-pri1">🔧 Servis</span>`);
+  document.getElementById('d-chips').innerHTML=chips.join('');
+  // info
+  document.getElementById('info-area').textContent=(p.area||'—')+' · '+p.k;
+  document.getElementById('info-typ').textContent=p.typ==='CORN'?'Corn — zvláštní kanál':p.typ==='KA'?`Klíčový partner · ${p.partner}`:p.typ==='PETROL'?`Petrol · ${p.partner}`:'IDT — Independent Dealer';
+  // notes
+  document.getElementById('notes-ta').value=p.notes||'';
+  // reset tabs
+  showDetTab('notes',document.querySelector('.det-tab'));
+  // render sections
+  renderCheckin();
+  renderCampaigns();
+  renderRefs();
+  renderSupply(p);
+  renderTasks();
+  renderPhotos();
+  renderCompleteBtn();
+  document.getElementById('t-list').style.display='none';
+  document.getElementById('t-detail').style.display='block';
+  window.scrollTo(0,0);
+}
+
+// ══════════════════════════════════════════════════════
+// CHECK-IN
+// ══════════════════════════════════════════════════════
+function renderCheckin(){
+  const p=posData[cWeek][cIdx];
+  const ci=lsg('ci_'+p.id);
+  const bar=document.getElementById('ci-bar');
+  const btn=document.getElementById('ci-btn');
+  const t=document.getElementById('ci-t');
+  const s=document.getElementById('ci-s');
+  if(ci&&ci.out){
+    bar.className='ci-bar done-ci';
+    t.textContent='✓ Návštěva zaznamenaná';
+    s.textContent=`${ci.inTime} – ${ci.outTime} · ${ci.dur} minut na místě`;
+    btn.textContent='Hotovo';btn.className='ci-btn done';btn.onclick=null;
+  } else if(ci&&!ci.out){
+    bar.className='ci-bar active';
+    t.textContent='● Na místě od '+ci.inTime;
+    btn.textContent='Check-out';btn.className='ci-btn out';btn.onclick=doCheckout;
+    startCiTimer(ci.inTs,s);
+  } else {
+    bar.className='ci-bar';
+    t.textContent='Check-in na POS';s.textContent='Potvrď příjezd na provozovnu';
+    btn.textContent='Check-in';btn.className='ci-btn';btn.onclick=doCheckin;
+  }
+}
+function doCheckin(){
+  const p=posData[cWeek][cIdx];
+  const now=new Date();
+  const timeStr=now.toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'});
+  lss('ci_'+p.id,{inTs:now.getTime(),inTime:timeStr,out:false});
+  if(!lsg('daystart_'+today())) lss('daystart_'+today(),{ts:now.getTime(),time:timeStr,posId:p.id,posName:p.n});
+  renderCheckin();
+}
+function doCheckout(){
+  const p=posData[cWeek][cIdx];
+  const ci=lsg('ci_'+p.id);if(!ci)return;
+  const now=new Date();
+  const timeStr=now.toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'});
+  const dur=Math.round((now.getTime()-ci.inTs)/60000);
+  lss('ci_'+p.id,{...ci,out:true,outTime:timeStr,outTs:now.getTime(),dur});
+  const log=lsg('vlog_'+today(),[]);
+  log.push({posId:p.id,posName:p.n,typ:p.typ,inTime:ci.inTime,outTime:timeStr,dur,flag:dur<10?'short':dur>60?'long':'ok'});
+  lss('vlog_'+today(),log);
+  if(ciTimer){clearInterval(ciTimer);ciTimer=null;}
+  renderCheckin();
+}
+function startCiTimer(inTs,el){
+  if(ciTimer)clearInterval(ciTimer);
+  ciTimer=setInterval(()=>{
+    const e=Math.floor((Date.now()-inTs)/1000);
+    const m=Math.floor(e/60),s=e%60;
+    if(el)el.textContent=`Na místě: ${m}:${s.toString().padStart(2,'0')}`;
+  },1000);
+}
+
+// ══════════════════════════════════════════════════════
+// CAMPAIGNS
+// ══════════════════════════════════════════════════════
+function renderCampaigns(){
+  const wrap=document.getElementById('camp-wrap');
+  const p=posData[cWeek]?.[cIdx];
+  const isCorn=p&&(p.typ==='CORN'||p.kat==='9'||p.k==='9');
+  const isOrlen=p&&(p.partner==='Orlen'||p.partner==='ORLEN'||(p.k&&p.k.includes('ORLEN')));
+  const html=[
+    ...CAMPAIGNS.losy.map(c=>campCard(c,'losy','🎫 Losy')),
+    ...CAMPAIGNS.loterie.map(c=>campCard(c,'lot','🎰 Loterie')),
+    ...(isOrlen?[{name:'ORLEN — speciální instrukce',dates:'W23–W28',deadline:'2025-07-11',items:['Pouze výměna losů ve folii','Případné doplnění zásobování','Neoznačovat jako rebranding — materiály ve výrobě'],note:'Kompletní rebranding Orlen bude následovat'}].map(c=>campCard(c,'reb','⛽ ORLEN')):[]),
+    ...CAMPAIGNS.rebranding.map(c=>campCard(c,'reb','🔄 Rebranding')),
+  ].join('');
+  wrap.innerHTML=html;
+  if(isCorn){
+    wrap.insertAdjacentHTML('afterbegin',`<div style="background:linear-gradient(135deg,#1A3C47,#2d5a6b);border-radius:12px;padding:14px 16px;margin-bottom:8px;border:1px solid rgba(46,205,192,.3)">
+      <div style="font-size:10px;font-weight:800;color:#f0c030;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">🌽 Corn — prioritní kanál</div>
+      <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:8px">Visibilita na Cornech — červenec</div>
+      <div style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:rgba(255,255,255,.8)">
+        <div>• Primární pult: nová emise losů dle plánogramu</div>
+        <div>• Totem: vždy 2 plakáty (losy + loterie), nikdy bílá plocha</div>
+        <div>• Barketa: Rybky + 20 mega sáz.</div>
+        <div>• Sazenka + obálky: předat obsluze</div>
+      </div>
+    </div>`);
+  }
+}
+function campCard(c,cls,lbl){
+  if(cls==='reb') cls='rebranding';
+  const now=new Date();
+  const dl=new Date(c.deadline);
+  const days=Math.ceil((dl-now)/86400000);
+  const dlColor=days<=0?'color:#ff6b6b':days<=3?'color:var(--orange)':'color:rgba(255,255,255,.5)';
+  const dlTxt=days<=0?'Dnes!':days===1?'Zítra':days+' dní';
+  return`<div class="camp-card camp-${cls}"><div class="camp-inner">
+    <div class="camp-type">${lbl}</div>
+    <div class="camp-name">${c.name}</div>
+    <div class="camp-dates">📅 ${c.dates}</div>
+    <div class="camp-items">${c.items.map(i=>`<div class="camp-item"><div class="camp-dot"></div>${i}</div>`).join('')}</div>
+    <div class="camp-dl" style="${dlColor}">⏱ Deadline: ${c.deadline.split('-').reverse().join('. ')} · ${dlTxt}</div>
+  </div></div>`;
+}
+
+// ══════════════════════════════════════════════════════
+// REFS
+// ══════════════════════════════════════════════════════
+function renderRefs(){
+  const p=posData[cWeek][cIdx];
+  const refs=p.refs||[];
+
+  // Channel color per type
+  const chColor={
+    'CORN':'linear-gradient(135deg,#1A3C47,#E65100)',
+    'PETROL':'linear-gradient(135deg,#1A3C47,#7B341E)',
+    'KA':'linear-gradient(135deg,#1A3C47,#1FA89D)',
+    'IDT':'linear-gradient(135deg,#1A3C47,#234F5E)',
+  };
+  const bg=chColor[p.typ]||chColor.IDT;
+
+  // Channel header badge
+  const channelBadge=`<div style="margin:0 12px 8px;padding:10px 14px;background:var(--navy);border-radius:10px;display:flex;align-items:center;gap:10px">
+    <div style="font-size:22px">${p.typ==='CORN'?'🌽':p.typ==='PETROL'?'⛽':p.typ==='KA'?'🏪':'🖼️'}</div>
+    <div>
+      <div style="font-size:12px;font-weight:800;color:var(--teal);text-transform:uppercase;letter-spacing:.8px">
+        ${p.typ==='CORN'?'Corn — zvláštní kanál':p.typ==='PETROL'?`Petrol · ${p.partner||''}`:p.typ==='KA'?`KA Partner · ${p.partner||''}`:p.market||'IDT'}
+      </div>
+      <div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:2px">
+        ${p.typ==='CORN'?'Plánogram dle konkrétní lokace — viz složka aktuálních plánogramů':
+          p.typ==='KA'?'Umístění schváleno centrálou — nesmí se měnit bez souhlasu KAM':
+          p.typ==='PETROL'?'Pozice na prodejním pultu, preferovaná deska na losy 38,5×24,5':
+          'Standardní IDT instalace — samolepka + plakát + stojánek'}
+      </div>
+    </div>
+  </div>`;
+
+  const cards=refs.map(r=>`
+    <div style="flex-shrink:0;width:210px;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.08)">
+      <div style="width:100%;height:120px;background:${bg};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px">
+        <div style="font-size:36px">${r.i}</div>
+      </div>
+      <div style="padding:8px 12px 4px;font-size:12px;font-weight:800;color:var(--navy)">${r.l}</div>
+      <div style="padding:0 12px 10px;font-size:11px;color:var(--muted);line-height:1.5">${r.d}</div>
+    </div>`).join('');
+
+  document.getElementById('refs-wrap').innerHTML = channelBadge +
+    (refs.length ? `<div style="display:flex;gap:10px;overflow-x:auto;padding:0 12px 6px;-webkit-overflow-scrolling:touch">${cards}</div>` : '');
+}
+
+// ══════════════════════════════════════════════════════
+// SUPPLY + SIGNATURE
+// ══════════════════════════════════════════════════════
+function renderSupply(p){
+  const sec=document.getElementById('supply-section');
+  sec.style.display='block';
+  const isCorn=p.typ==='CORN'||p.kat==='9'||p.k==='9';
+  const defaults=isCorn?SUPPLY_CORN:SUPPLY_DEFAULT;
+  const saved=lsg('supply_'+p.id+'_'+today());
+  supplyItems=saved?saved.items:defaults.map(x=>({...x}));
+  const hdrBadge=document.getElementById('supply-badge-lbl');
+  if(hdrBadge) hdrBadge.textContent=isCorn?'🌽 Corn — vyžaduje podpis':'Vyžaduje podpis';
+  renderSupplyItems();
+  document.getElementById('supply-recv-input').value=saved?saved.receiver:'';
+  document.getElementById('sig-done').style.display=saved&&saved.confirmed?'block':'none';
+  document.querySelector('.sig-conf').style.display=saved&&saved.confirmed?'none':'block';
+  initSig();
+}
+function renderSupplyItems(){
+  document.getElementById('supply-items').innerHTML=supplyItems.map((x,i)=>`
+    <div class="supply-item" style="flex-direction:column;align-items:stretch;gap:0;padding:0">
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 14px">
+        <div class="supply-item-n" style="flex:1">${x.n}${x.unit?' <span style="font-size:10px;color:var(--muted)">('+x.unit+')</span>':''}</div>
+        <div class="supply-qty">
+          <button class="sq-btn" onclick="adjQty(${i},-1)">−</button>
+          <div class="sq-val">${x.qty}</div>
+          <button class="sq-btn" onclick="adjQty(${i},1)">+</button>
+        </div>
+      </div>
+      ${x.qty>0?`<div style="display:flex;align-items:center;gap:8px;padding:0 14px 10px;border-top:1px solid var(--bg)">
+        <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;flex-shrink:0">SAP:</span>
+        <span style="flex:1;font-size:12px;font-weight:700;color:var(--navy);font-family:monospace">${x.sap||'—'}</span>
+        <span style="font-size:9px;color:var(--muted)">🔒 pevný kód</span>
+      </div>`:''}
+    </div>`).join('');
+}
+function adjQty(i,d){supplyItems[i].qty=Math.max(0,supplyItems[i].qty+d);renderSupplyItems();}
+function initSig(){
+  const c=document.getElementById('sig-canvas');if(!c)return;
+  sigCanvas=c;sigCtx=c.getContext('2d');
+  c.width=c.offsetWidth||360;c.height=120;
+  sigCtx.strokeStyle='#1A3C47';sigCtx.lineWidth=2.5;sigCtx.lineCap='round';sigCtx.lineJoin='round';
+  sigDrawing=false;sigMark=false;
+  const gp=e=>{const r=c.getBoundingClientRect();const src=e.touches?e.touches[0]:e;return{x:(src.clientX-r.left)*(c.width/r.width),y:(src.clientY-r.top)*(c.height/r.height)};};
+  c.onmousedown=c.ontouchstart=e=>{e.preventDefault();sigDrawing=true;sigMark=true;document.getElementById('sig-hint').style.opacity='0';const p=gp(e);sigCtx.beginPath();sigCtx.moveTo(p.x,p.y);};
+  c.onmousemove=c.ontouchmove=e=>{e.preventDefault();if(!sigDrawing)return;const p=gp(e);sigCtx.lineTo(p.x,p.y);sigCtx.stroke();};
+  c.onmouseup=c.ontouchend=c.onmouseleave=()=>{sigDrawing=false;};
+}
+function clearSig(){if(!sigCtx)return;sigCtx.clearRect(0,0,sigCanvas.width,sigCanvas.height);sigMark=false;document.getElementById('sig-hint').style.opacity='1';}
+function confirmSupply(){
+  const p=posData[cWeek][cIdx];
+  const recv=document.getElementById('supply-recv-input').value.trim();
+  if(!recv){alert('Vyplň jméno přijímajícího.');return;}
+  if(!sigMark){alert('Přijímající musí podepsat.');return;}
+  const sapCodes=supplyItems.filter(x=>x.sap&&x.sap.trim()).map(x=>x.n+': '+x.sap).join(', ');
+  lss('supply_'+p.id+'_'+today(),{items:supplyItems,receiver:recv,sigData:sigCanvas.toDataURL(),confirmed:true,at:new Date().toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'}),sapCodes});
+  document.getElementById('sig-done').style.display='block';
+  document.querySelector('.sig-conf').style.display='none';
+}
+
+// ══════════════════════════════════════════════════════
+// TASKS
+// ══════════════════════════════════════════════════════
+function renderTasks(){
+  const p=posData[cWeek][cIdx];
+  const list=document.getElementById('tasks-list');list.innerHTML='';
+  const groups=[
+    {src:'servis',lbl:'🔧 Servis — nejvyšší priorita',cls:'gl-svc'},
+    {src:'template',lbl:`Šablona · ${p.typ==='KA'?p.partner:p.typ==='PETROL'?p.partner:'IDT'}`,cls:'gl-tpl'},
+    {src:'on_top',lbl:'On top',cls:'gl-ot'},
+    {src:'own',lbl:'Vlastní',cls:'gl-own'},
+  ];
+  groups.forEach(({src,lbl,cls})=>{
+    const tasks=p.taskState.filter(t=>t.src===src);if(!tasks.length)return;
+    const hdr=document.createElement('div');hdr.className='tg-hdr';
+    hdr.innerHTML=`<span class="tg-lbl ${cls}">${lbl}</span>`;list.appendChild(hdr);
+    tasks.forEach(task=>{
+      const ti=p.taskState.indexOf(task);
+      const item=document.createElement('div');item.className='titem';
+      item.innerHTML=`<div class="trow" onclick="toggleTask(${ti})"><div class="tchk ${task.done?'on':''}"></div><div class="ttxt ${task.done?'done':''}">${task.text}</div></div>${task.note?`<div class="tnote">${task.note}</div>`:''}`;
+      list.appendChild(item);
+    });
+  });
+}
+function toggleTask(ti){
+  const p=posData[cWeek][cIdx];if(p.v)return;
+  p.taskState[ti].done=!p.taskState[ti].done;
+  renderTasks();renderCompleteBtn();
+}
+
+// ══════════════════════════════════════════════════════
+// PHOTOS
+// ══════════════════════════════════════════════════════
+function renderPhotos(){
+  const p=posData[cWeek][cIdx];
+  const grid=document.getElementById('photos-grid');grid.innerHTML='';
+  const lbls=['Před','Po','Detail'];
+  const slots=Math.max(3,p.photos.length+1);
+  for(let i=0;i<slots;i++){
+    const slot=document.createElement('div');
+    if(p.photos[i]){
+      slot.className='pslot filled';
+      slot.innerHTML=`<img src="${p.photos[i]}" alt="foto"/><button class="p-rm" onclick="rmPhoto(event,${i})">✕</button>`;
+    } else {
+      slot.className='pslot';
+      slot.innerHTML=`<div class="p-ico">📷</div><div class="p-lbl">${lbls[i]||'Foto '+(i+1)}</div>`;
+      slot.onclick=()=>{pendingSlot=i;document.getElementById('photo-input').click();};
+    }
+    grid.appendChild(slot);
+  }
+}
+function handlePhoto(e){
+  const file=e.target.files[0];if(!file)return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    const p=posData[cWeek][cIdx];
+    if(pendingSlot!==null&&pendingSlot<p.photos.length)p.photos[pendingSlot]=ev.target.result;
+    else p.photos.push(ev.target.result);
+    pendingSlot=null;renderPhotos();e.target.value='';
+  };r.readAsDataURL(file);
+}
+function rmPhoto(e,i){e.stopPropagation();posData[cWeek][cIdx].photos.splice(i,1);renderPhotos();}
+
+// ══════════════════════════════════════════════════════
+// DETAIL TABS
+// ══════════════════════════════════════════════════════
+function showDetTab(tab,btn){
+  document.querySelectorAll('.det-tc').forEach(t=>t.style.display='none');
+  document.querySelectorAll('.det-tab').forEach(b=>b.classList.remove('active'));
+  document.getElementById('dtc-'+tab).style.display='block';
+  if(btn)btn.classList.add('active');
+  if(tab==='inv')renderInventory();
+  if(tab==='karta')renderPosCard();
+}
+
+// ══════════════════════════════════════════════════════
+// INVENTORY
+// ══════════════════════════════════════════════════════
+
+// ── MERCH ─────────────────────────────────────────────────────────────────
+let merchItems = [];
+
+function renderMerch(p) {
+  const defaults = (MERCH_ITEMS[p.typ] || MERCH_ITEMS.IDT).map(x => ({...x}));
+  const saved = lsg('merch_' + p.id + '_' + today());
+  merchItems = saved || defaults;
+  const el = document.getElementById('merch-items');
+  if (!el) return;
+  el.innerHTML = merchItems.map((x, i) => `
+    <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--bg);cursor:pointer" onclick="toggleMerch(${i})">
+      <div style="width:22px;height:22px;border-radius:6px;border:2px solid ${x.done?'var(--tm)':'var(--border)'};background:${x.done?'var(--teal)':'#fff'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        ${x.done?'<span style="font-size:12px;font-weight:800;color:#fff">✓</span>':''}
+      </div>
+      <div style="font-size:13px;${x.done?'text-decoration:line-through;color:var(--muted)':''}">${x.n}</div>
+    </div>`).join('') || '<div style="padding:16px;text-align:center;font-size:12px;color:var(--muted)">Žádné merch položky</div>';
+}
+
+function toggleMerch(i) {
+  const p = posData[cWeek][cIdx];
+  if (!merchItems[i]) return;
+  merchItems[i].done = !merchItems[i].done;
+  lss('merch_' + p.id + '_' + today(), merchItems);
+  renderMerch(p);
+}
+
+// ── INVENTORY TABS ─────────────────────────────────────────────────────────
+function showInvTab(tab, btn) {
+  document.getElementById('inv-vnitrni').style.display = tab === 'vnitrni' ? 'block' : 'none';
+  document.getElementById('inv-venkovni').style.display = tab === 'venkovni' ? 'block' : 'none';
+  document.querySelectorAll('#dtc-inv button[onclick^="showInvTab"]').forEach(b => {
+    b.style.background = 'transparent'; b.style.color = 'var(--muted)';
+  });
+  if (btn) { btn.style.background = 'var(--navy)'; btn.style.color = 'var(--teal)'; }
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// INVENTORY CATALOG — admin-editable list of allowed items
+// ══════════════════════════════════════════════════════════════════════════
+const INV_CATALOG_DEFAULT = {
+  vnitrni: [
+    {i:'🖥️', n:'Terminál Allwyn'},
+    {i:'🏛️', n:'Totem Allwyn 3prvkový'},
+    {i:'🏛️', n:'Totem Allwyn 4prvkový'},
+    {i:'🏛️', n:'Totem Allwyn B'},
+    {i:'📺', n:'VCU obrazovka'},
+    {i:'💡', n:'ESO výstrč'},
+    {i:'🏛️', n:'Stojan na sázenky (velký)'},
+    {i:'📂', n:'Šanon na losy'},
+    {i:'🟡', n:'Primární pult (losy)'},
+    {i:'🟡', n:'Sekundární pult (losy)'},
+    {i:'🎫', n:'Barketa Rybky'},
+    {i:'📋', n:'Stojka'},
+  ],
+  venkovni: [
+    {i:'🏢', n:'Venkovní světelné označení'},
+    {i:'🪧', n:'Venkovní výstrč'},
+    {i:'🚩', n:'Venkovní vlajka / banner'},
+  ],
+};
+
+function getInvCatalog() {
+  return lsg('inv_catalog', INV_CATALOG_DEFAULT);
+}
+function saveInvCatalog(cat) {
+  lss('inv_catalog', cat);
+}
+
+// Replace addInvItem with catalog picker
+function addInvItem(section) {
+  section = section || 'vnitrni';
+  const catalog = getInvCatalog();
+  const items = catalog[section] || [];
+  showInvPicker(section, items);
+}
+
+function showInvPicker(section, items) {
+  let modal = document.getElementById('inv-picker');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'inv-picker';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:850;display:flex;align-items:flex-end;justify-content:center;max-width:430px;margin:0 auto';
+    document.body.appendChild(modal);
+    modal.onclick = e => { if (e.target === modal) modal.style.display = 'none'; };
+  }
+  modal.innerHTML = `<div style="background:#fff;border-radius:20px 20px 0 0;width:100%;max-height:70vh;overflow-y:auto;padding:20px 16px 32px">
+    <div style="width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px"></div>
+    <div style="font-size:16px;font-weight:800;margin-bottom:4px">Přidat ${section==='venkovni'?'venkovní':'vnitřní'} vybavení</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Vyber z katalogu (spravuje admin)</div>
+    ${items.map((item,i)=>`
+      <div onclick="pickInvItem('${section}',${i})" style="display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:10px;cursor:pointer;margin-bottom:4px;transition:background .15s" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='transparent'">
+        <div style="font-size:20px">${item.i}</div>
+        <div style="font-size:14px;font-weight:600;flex:1">${item.n}</div>
+        <div style="color:var(--teal);font-size:18px;font-weight:700">+</div>
+      </div>`).join('')}
+    <button onclick="document.getElementById('inv-picker').style.display='none'" style="width:100%;padding:13px;border:1px solid var(--border);border-radius:10px;background:transparent;font-size:14px;cursor:pointer;color:var(--muted);margin-top:8px">Zrušit</button>
+  </div>`;
+  modal.style.display = 'flex';
+}
+
+function pickInvItem(section, catalogIdx) {
+  const catalog = getInvCatalog();
+  const item = catalog[section][catalogIdx];
+  if (!item) return;
+  const p = posData[cWeek][cIdx];
+  if (!p.inventory[section]) p.inventory[section] = [];
+  p.inventory[section].push({id:'c'+Date.now(), i:item.i, n:item.n, typ:'', s:'ok'});
+  document.getElementById('inv-picker').style.display = 'none';
+  renderInventory();
+}
+
+function renderInventory(){
+  const p=posData[cWeek][cIdx];
+  const inv=p.inventory||{vnitrni:[],venkovni:[]};
+
+  function renderInvList(items, elId, section) {
+    const el=document.getElementById(elId);
+    if(!el) return;
+    if(!items||!items.length){
+      el.innerHTML='<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px">Žádné položky. Přidej níže při instalaci.</div>';
+      return;
+    }
+    el.innerHTML=items.map((item,i)=>`
+      <div class="inv-item">
+        <div class="inv-ico">${item.i}</div>
+        <div class="inv-info">
+          <div class="inv-n">${item.n}</div>
+          <div class="inv-s" style="display:flex;gap:6px;align-items:center;margin-top:3px">
+            ${item.typ?`<span style="font-size:10px;background:var(--tl);color:var(--tm);padding:1px 6px;border-radius:10px;font-weight:700">${item.typ}</span>`:''}
+            <span style="font-size:10px;color:var(--muted)">${item.s?('Stav: '+(item.s==='ok'?'✓ Přítomno':'✕ Chybí')):'nezkontrolováno'}</span>
+          </div>
+        </div>
+        <div class="inv-btns">
+          <button class="ibtn ibtn-ok ${item.s==='ok'?'on':''}" onclick="setInv('${section}',${i},'ok')">✓</button>
+          <button class="ibtn ibtn-miss ${item.s==='miss'?'on':''}" onclick="setInv('${section}',${i},'miss')">✕</button>
+        </div>
+      </div>`).join('');
+  }
+
+  renderInvList(inv.vnitrni, 'inv-card', 'vnitrni');
+  renderInvList(inv.venkovni, 'inv-card-venkovni', 'venkovni');
+}
+function setInv(section,i,s){
+  const p=posData[cWeek][cIdx];
+  const inv=p.inventory||{vnitrni:[],venkovni:[]};
+  const items=inv[section]||[];
+  if(!items[i]) return;
+  items[i].s = items[i].s===s ? null : s;
+  if(s==='miss'){
+    const txt=`Chybí ${section==='venkovni'?'venkovní':'vnitřní'} inventory: ${items[i].n}`;
+    if(!p.taskState.find(t=>t.text===txt)){
+      p.taskState.unshift({text:txt,src:'servis',done:false,note:'Automaticky z inventory — prověřit a nahlásit'});
+      renderTasks();renderCompleteBtn();
+    }
+  }
+  renderInventory();
+}
+
+
+// ══════════════════════════════════════════════════════
+// POS CARD
+// ══════════════════════════════════════════════════════
+function renderPosCard(){
+  const p=posData[cWeek][cIdx];
+  const notes=lsg('poscard_'+p.id,[]);
+  const el=document.getElementById('pos-card-log');
+  el.innerHTML=!notes.length
+    ?'<div class="pos-rec-empty">Zatím žádné záznamy. Přidej první níže.</div>'
+    :notes.slice().reverse().map(n=>`<div class="pos-rec"><div class="pos-rec-time">${n.time} · ${n.author}</div><div class="pos-rec-txt">${n.text}</div></div>`).join('');
+}
+function addPosCardNote(){
+  const p=posData[cWeek][cIdx];
+  const val=document.getElementById('pos-card-ta').value.trim();if(!val)return;
+  const notes=lsg('poscard_'+p.id,[]);
+  notes.push({text:val,time:new Date().toLocaleDateString('cs-CZ',{day:'numeric',month:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}),author:'Lán Tomáš'});
+  lss('poscard_'+p.id,notes);
+  document.getElementById('pos-card-ta').value='';
+  renderPosCard();
+}
+
+// ══════════════════════════════════════════════════════
+// NOTES / MAP / COMPLETE
+// ══════════════════════════════════════════════════════
+function saveNote(){posData[cWeek][cIdx].notes=document.getElementById('notes-ta').value;}
+function openMap(){const p=posData[cWeek][cIdx];window.open(`https://maps.google.com/?q=${encodeURIComponent(p.a)}`,'_blank');}
+function renderCompleteBtn(){
+  const p=posData[cWeek][cIdx];
+  const btn=document.getElementById('complete-btn');
+  const badge=document.getElementById('vis-badge-slot2');
+  const allDone=p.taskState.length>0&&p.taskState.every(t=>t.done);
+  if(p.v){
+    badge.innerHTML='<div class="vis-badge">✓ Návštěva dokončena</div>';
+    btn.textContent='Znovu otevřít';btn.className='btn-complete visited';
+  } else {
+    badge.innerHTML='';
+    if(allDone){btn.textContent='Označit jako navštíveno ✓';btn.className='btn-complete active';}
+    else{const r=p.taskState.filter(t=>!t.done).length;btn.textContent=`Zbývá ${r} ${r===1?'úkol':r<5?'úkoly':'úkolů'}`;btn.className='btn-complete disabled';}
+  }
+}
+function markVisited(){
+  const p=posData[cWeek][cIdx];
+  if(p.v||!p.taskState.every(t=>t.done))return;
+  p.v=true;renderCompleteBtn();updateSummary();renderChips();renderDayTabs();
+}
+function goBack(){
+  document.getElementById('t-detail').style.display='none';
+  document.getElementById('t-list').style.display='block';
+  hideAddForm();renderList();window.scrollTo(0,0);
+  if(ciTimer){clearInterval(ciTimer);ciTimer=null;}
+}
+function showAddForm(){document.getElementById('add-btn').style.display='none';document.getElementById('add-form').style.display='block';document.getElementById('new-task-input').focus();}
+function hideAddForm(){document.getElementById('add-btn').style.display='block';document.getElementById('add-form').style.display='none';document.getElementById('new-task-input').value='';}
+function addTask(){
+  const val=document.getElementById('new-task-input').value.trim();if(!val)return;
+  posData[cWeek][cIdx].taskState.push({text:val,src:'own',done:false});
+  hideAddForm();renderTasks();renderCompleteBtn();
+}
+
+// ══════════════════════════════════════════════════════
+// ADMIN — MAP
+// ══════════════════════════════════════════════════════
+function initAdminMap(){
+  if(adminMap)return;
+  try{
+    adminMap=L.map('admin-map',{zoomControl:true,attributionControl:false}).setView([49.8,15.5],7);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:18}).addTo(adminMap);
+    REAL_DATA.techs.forEach((t,idx)=>{
+      const pct=t.total?Math.round(t.done/t.total*100):0;
+      const color=t.overdue?'#CC2200':pct>=80?'#1A8C4E':'#2ECDC0';
+      const icon=L.divIcon({className:'',html:`<div style="width:30px;height:30px;background:${color};border-radius:50%;border:2.5px solid rgba(255,255,255,.9);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:${t.overdue?'#fff':pct>=80?'#fff':'#1A3C47'};box-shadow:0 2px 8px rgba(0,0,0,.4)">${t.initials}</div>`,iconSize:[30,30],iconAnchor:[15,15]});
+      const marker=L.marker([t.lat,t.lng],{icon}).addTo(adminMap);
+      marker.bindPopup(`<b>${t.name}</b><br>${t.done}/${t.total} POS · ${pct}%<br><em style="color:${t.overdue?'red':'green'}">${t.activity}</em>`);
+      adminMarkers.push(marker);
+    });
+  } catch(e){console.warn('Map init failed',e);}
+}
+
+// ══════════════════════════════════════════════════════
+// ADMIN — REGION FILTER
+// ══════════════════════════════════════════════════════
+function filterRegion(region,btn){
+  activeRegion=region;
+  document.querySelectorAll('.rfb').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderAdminLive();
+  adminMarkers.forEach((m,i)=>{
+    const t=REAL_DATA.techs[i];
+    const show=region==='all'||(t.area||'RSE')===region;
+    if(adminMap){show?m.addTo(adminMap):adminMap.removeLayer(m);}
+  });
+}
+
+// ══════════════════════════════════════════════════════
+// ADMIN — LIVE LIST
+// ══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
+// LIVE STATE ENGINE — propojení technik ↔ admin
+// ══════════════════════════════════════════════════════
+
+// Centrální stav — co technik udělal, admin vidí live
+function getLiveState() {
+  return {
+    technik: 'Lán Tomáš',
+    initials: 'LT',
+    week: '25',
+    dayStart: lsg('daystart_' + today()),
+    visitLog: lsg('vlog_' + today(), []),
+    checkins: (() => {
+      const all = posData['25'] || [];
+      return all.map(p => ({ posId: p.id, posName: p.n, typ: p.typ, partner: p.partner, ci: lsg('ci_' + p.id) })).filter(x => x.ci);
+    })(),
+    completedPos: (posData['25'] || []).filter(p => p.v),
+    totalPos: (posData['25'] || []).length,
+    photos: (() => {
+      const all = posData['25'] || [];
+      const photos = [];
+      all.forEach(p => { p.photos.forEach((ph, i) => photos.push({ posName: p.n, posId: p.id, url: ph, slot: ['Před','Po','Detail'][i] || ('Foto '+(i+1)) })); });
+      return photos;
+    })(),
+    supplies: (() => {
+      const all = posData['25'] || [];
+      return all.map(p => {
+        const s = lsg('supply_' + p.id + '_' + today());
+        return s && s.confirmed ? { posName: p.n, receiver: s.receiver, at: s.at, items: s.items } : null;
+      }).filter(Boolean);
+    })(),
+    posCardNotes: (() => {
+      const all = posData['25'] || [];
+      const notes = [];
+      all.forEach(p => { const n = lsg('poscard_' + p.id, []); if (n.length) notes.push({ posName: p.n, notes: n }); });
+      return notes;
+    })(),
+    servisOpen: (posData['25'] || []).filter(p => p.taskState.some(t => t.src === 'servis' && !t.done)),
+    shortVisits: lsg('vlog_' + today(), []).filter(v => v.flag === 'short'),
+  };
+}
+
+function getActiveTechPos() {
+  // Which POS is technik currently on?
+  const all = posData['25'] || [];
+  return all.find(p => { const ci = lsg('ci_' + p.id); return ci && !ci.out; });
+}
+
+// Auto-refresh admin every 5s when visible
+let adminRefreshTimer = null;
+function startAdminRefresh() {
+  if (adminRefreshTimer) return;
+  adminRefreshTimer = setInterval(() => {
+    if (document.getElementById('admin-screen').style.display !== 'none') {
+      const activePage = document.querySelector('.adm-page.active');
+      if (!activePage) return;
+      if (activePage.id === 'adm-live') renderAdminLive();
+      if (activePage.id === 'adm-casy') renderAdminCasy();
+      if (activePage.id === 'adm-alerts') renderAdminAlerts();
+      if (activePage.id === 'adm-foto') renderAdminFoto();
+    }
+  }, 5000);
+}
+
+// ══════════════════════════════════════════════════════
+// ADMIN — LIVE LIST (live data)
+// ══════════════════════════════════════════════════════
+function renderAdminLive() {
+  const live = getLiveState();
+  const activePos = getActiveTechPos();
+
+  // Update LT stats in REAL_DATA
+  const lt = REAL_DATA.techs.find(t => t.name === 'Lán Tomáš');
+  if (lt) {
+    lt.done = live.completedPos.length;
+    lt.activity = activePos ? 'Na POS' : live.dayStart ? 'Na cestě' : '○ Nezačal';
+    if (live.visitLog.length) {
+      const last = live.visitLog[live.visitLog.length - 1];
+      lt.last_visit = last.outTime;
+    }
+  }
+
+  const done = REAL_DATA.techs.reduce((s, t) => s + t.done, 0);
+  const behind = REAL_DATA.techs.filter(t => t.overdue).length;
+  document.getElementById('adm-done-n').textContent = done;
+  document.getElementById('adm-behind').textContent = behind;
+
+  const filtered = activeRegion === 'all' ? REAL_DATA.techs : REAL_DATA.techs.filter(t => (t.area || 'RSE') === activeRegion);
+
+  document.getElementById('adm-live-list').innerHTML = filtered.map(t => {
+    const pct = t.total ? Math.round(t.done / t.total * 100) : 0;
+    const isLT = t.name === 'Lán Tomáš';
+    const currentPos = isLT && activePos ? ` · <span style="color:var(--teal);font-weight:700">● ${activePos.n.substring(0, 20)}…</span>` : '';
+    const badge = t.done === t.total ? '<span class="badge b-done">✓ Hotovo</span>'
+      : t.overdue ? '<span class="badge b-beh">⚠ Pozadu</span>'
+      : t.done > 0 ? '<span class="badge b-act">● Aktivní</span>'
+      : '<span class="badge b-wait">○ Nezačal</span>';
+    return `<div class="tr" onclick="showTechDetail('${t.name}')">
+      <div class="tav ${t.overdue ? 'ov' : ''}" style="${isLT ? 'background:var(--teal);color:var(--navy)' : ''}">${t.initials}</div>
+      <div class="tinf">
+        <div class="tn">${t.name}${isLT ? ' <span style="font-size:9px;background:var(--teal);color:var(--navy);padding:1px 5px;border-radius:10px;font-weight:800">LIVE</span>' : ''}</div>
+        <div class="ts">${t.activity} · ${t.last_visit}${currentPos}</div>
+      </div>
+      <div class="tr-right">
+        <div class="mp"><div class="mpbg"><div class="mpf ${t.done === t.total ? 'gn' : t.overdue ? 'rd' : ''}" style="width:${pct}%"></div></div><div class="mpp">${pct}%</div></div>
+        ${badge}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════
+// ADMIN — TECH DETAIL DRAWER
+// ══════════════════════════════════════════════════════
+function showTechDetail(name) {
+  const t = REAL_DATA.techs.find(x => x.name === name);
+  if (!t) return;
+  const isLT = name === 'Lán Tomáš';
+  const live = isLT ? getLiveState() : null;
+  const pct = t.total ? Math.round(t.done / t.total * 100) : 0;
+
+  // Build drawer content
+  let html = `<div style="padding:20px 18px 32px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+      <div class="tav" style="width:44px;height:44px;font-size:14px;background:${isLT?'var(--teal)':'var(--navy)'};color:${isLT?'var(--navy)':'var(--teal)'}">${t.initials}</div>
+      <div>
+        <div style="font-size:18px;font-weight:800">${t.name}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">${t.activity} · ${t.total} POS tento týden · ${pct}% splněno</div>
+      </div>
+    </div>`;
+
+  // Progress bar
+  html += `<div style="background:var(--bg);border-radius:10px;padding:14px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">
+      <span>W25 Progress</span><span style="color:${pct>70?'var(--green)':pct>40?'var(--orange)':'var(--red)'}">${t.done}/${t.total} POS</span>
+    </div>
+    <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden">
+      <div style="height:100%;width:${pct}%;background:${pct>70?'var(--green)':'var(--teal)'};border-radius:4px;transition:width .5s"></div>
+    </div>
+  </div>`;
+
+  if (isLT && live) {
+    // Day timeline
+    if (live.dayStart || live.visitLog.length) {
+      html += `<div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Dnešní průběh</div>
+      <div style="background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);margin-bottom:14px">`;
+      if (live.dayStart) html += `<div class="vrow start"><div class="vtime">▶ ${live.dayStart.time}</div><div class="vname" style="font-weight:700;color:var(--tm)">Začátek pracovní doby</div><div class="vdur"></div><div class="vflag">🟢</div></div>`;
+      live.visitLog.forEach(v => {
+        html += `<div class="vrow ${v.flag==='short'?'short':''}"><div class="vtime">${v.inTime}</div><div class="vname">${v.posName.substring(0,28)}</div><div class="vdur">${v.dur}m</div><div class="vflag">${v.flag==='short'?'🚩':'✓'}</div></div>`;
+      });
+      const active = getActiveTechPos();
+      if (active) html += `<div class="vrow" style="background:var(--tl)"><div class="vtime" style="color:var(--tm)">● Nyní</div><div class="vname" style="color:var(--tm);font-weight:700">${active.n.substring(0,28)}</div><div class="vdur" style="color:var(--tm)">live</div><div class="vflag">📍</div></div>`;
+      html += `</div>`;
+    }
+
+    // Supplies confirmed
+    if (live.supplies.length) {
+      html += `<div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Potvrzené zásobování</div>
+      <div style="background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);margin-bottom:14px">`;
+      live.supplies.forEach(s => {
+        const total = s.items.reduce((n, i) => n + i.qty, 0);
+        html += `<div style="padding:10px 14px;border-bottom:1px solid var(--bg)">
+          <div style="font-size:13px;font-weight:700">${s.posName}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">✓ Podepsáno: ${s.receiver} · ${s.at} · ${total} ks celkem</div>
+        </div>`;
+      });
+      html += `</div>`;
+    }
+
+    // Completed POS
+    if (live.completedPos.length) {
+      html += `<div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Dokončené POS (${live.completedPos.length})</div>
+      <div style="background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);margin-bottom:14px">`;
+      live.completedPos.forEach(p => {
+        html += `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--bg)">
+          <span style="color:var(--green);font-weight:700">✓</span>
+          <span style="font-size:13px;flex:1">${p.n}</span>
+          <span style="font-size:11px;color:var(--muted)">${p.a.split(',')[1]||''}</span>
+        </div>`;
+      });
+      html += `</div>`;
+    }
+
+    // Photos
+    if (live.photos.length) {
+      html += `<div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Fotodokumentace (${live.photos.length})</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">`;
+      live.photos.forEach(ph => {
+        html += `<div style="aspect-ratio:1;border-radius:8px;overflow:hidden;position:relative">
+          <img src="${ph.url}" style="width:100%;height:100%;object-fit:cover"/>
+          <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.6);color:#fff;font-size:9px;font-weight:700;padding:3px 5px">${ph.slot}</div>
+        </div>`;
+      });
+      html += `</div>`;
+    }
+
+    // Servis open
+    if (live.servisOpen.length) {
+      html += `<div style="font-size:11px;font-weight:800;color:var(--red);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Otevřené servisy (${live.servisOpen.length})</div>
+      <div style="background:var(--rl);border-radius:10px;overflow:hidden;margin-bottom:14px">`;
+      live.servisOpen.forEach(p => {
+        const st = p.taskState.find(t => t.src === 'servis' && !t.done);
+        html += `<div style="padding:10px 14px;border-bottom:1px solid rgba(204,34,0,.15)">
+          <div style="font-size:13px;font-weight:700;color:var(--red)">${p.n}</div>
+          <div style="font-size:11px;color:var(--red);opacity:.8;margin-top:2px">${st.text}</div>
+        </div>`;
+      });
+      html += `</div>`;
+    }
+
+    // POS card notes
+    if (live.posCardNotes.length) {
+      html += `<div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Záznamy z karet POS</div>
+      <div style="background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);margin-bottom:14px">`;
+      live.posCardNotes.forEach(pn => {
+        pn.notes.forEach(n => {
+          html += `<div style="padding:10px 14px;border-bottom:1px solid var(--bg)">
+            <div style="font-size:10px;font-weight:700;color:var(--muted)">${pn.posName} · ${n.time}</div>
+            <div style="font-size:13px;margin-top:3px">${n.text}</div>
+          </div>`;
+        });
+      });
+      html += `</div>`;
+    }
+  }
+
+  html += `<button onclick="closeTechDrawer()" style="width:100%;padding:13px;border:1px solid var(--border);border-radius:10px;background:transparent;font-size:14px;cursor:pointer;color:var(--muted)">Zavřít</button></div>`;
+
+  // Show drawer
+  let drawer = document.getElementById('tech-drawer');
+  if (!drawer) {
+    drawer = document.createElement('div');
+    drawer.id = 'tech-drawer';
+    drawer.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:600;display:flex;align-items:flex-end;justify-content:center';
+    drawer.innerHTML = `<div id="tech-drawer-sheet" style="background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:430px;max-height:85vh;overflow-y:auto"><div style="width:40px;height:4px;background:var(--border);border-radius:2px;margin:16px auto 0"></div></div>`;
+    document.body.appendChild(drawer);
+    drawer.onclick = e => { if (e.target === drawer) closeTechDrawer(); };
+  }
+  document.getElementById('tech-drawer-sheet').innerHTML = `<div style="width:40px;height:4px;background:var(--border);border-radius:2px;margin:16px auto 0"></div>` + html;
+  drawer.style.display = 'flex';
+}
+
+function closeTechDrawer() {
+  const d = document.getElementById('tech-drawer');
+  if (d) d.style.display = 'none';
+}
+
+// ══════════════════════════════════════════════════════
+// ADMIN — ALERTS (live)
+// ══════════════════════════════════════════════════════
+function renderAdminAlerts() {
+  const live = getLiveState();
+  const alerts = [];
+
+  // Live alerts from technik actions
+  live.servisOpen.forEach(p => {
+    const st = p.taskState.find(t => t.src === 'servis' && !t.done);
+    alerts.push({ t: 'red', i: '🔧', title: `Servis — ${p.n}`, sub: st.text + (st.note ? ' · ' + st.note : ''), tm: 'Live' });
+  });
+  live.shortVisits.forEach(v => {
+    alerts.push({ t: 'orange', i: '⏱', title: `Krátká návštěva — ${v.posName}`, sub: `Lán Tomáš · ${v.inTime}–${v.outTime} · ${v.dur} min · zkontroluj`, tm: 'Dnes' });
+  });
+  if (live.supplies.length === 0 && live.visitLog.length > 2) {
+    alerts.push({ t: 'orange', i: '📦', title: 'Zásobování bez podpisu', sub: 'Lán Tomáš · Žádné zásobování nebylo potvrzeno podpisem', tm: 'Dnes' });
+  }
+
+  // Static alerts
+  alerts.push(
+    { t: 'orange', i: '⚠️', title: 'Brindžák Michal — pouze 6/35 POS', sub: 'Progress 17% · W25 · Výrazně pozadu', tm: 'W25' },
+    { t: 'orange', i: '⚠️', title: 'Dolníček Richard — 6/35 POS', sub: 'Progress 17% · W25 · Doporučeno zkontrolovat', tm: 'W25' },
+    { t: 'green', i: '✓', title: 'Dvořák Petr — 32/35 POS', sub: 'Progress 91% · Očekává dokončení do 17:00', tm: 'W25' },
+    { t: 'green', i: '✓', title: 'Hanuš Robert — 35/35 POS', sub: 'Výborný výkon · W25 dokončen', tm: 'W25' },
+  );
+
+  // Supplied confirmed — positive alert
+  live.supplies.forEach(s => {
+    alerts.push({ t: 'green', i: '✍️', title: `Zásobování potvrzeno — ${s.posName}`, sub: `Podepsal: ${s.receiver} · ${s.at} · Lán Tomáš`, tm: 'Dnes' });
+  });
+
+  document.getElementById('adm-alerts-list').innerHTML = alerts.map(a => `
+    <div class="alert-row ${a.t}">
+      <div class="ar-ico">${a.i}</div>
+      <div class="ar-inf"><div class="ar-t">${a.title}</div><div class="ar-s">${a.sub}</div></div>
+      <div class="ar-tm">${a.tm}</div>
+    </div>`).join('');
+}
+
+// ══════════════════════════════════════════════════════
+// ADMIN — ČASY (live)
+// ══════════════════════════════════════════════════════
+function renderAdminCasy() {
+  const live = getLiveState();
+  const mockLog = [
+    { posName: 'Jiří Kohl, Police nad Metují', typ: 'IDT', inTime: '07:14', outTime: '07:38', dur: 24, flag: 'ok' },
+    { posName: 'Obec Stará Paka', typ: 'IDT', inTime: '08:02', outTime: '08:29', dur: 27, flag: 'ok' },
+    { posName: 'Městys Častolovice', typ: 'IDT', inTime: '09:11', outTime: '09:19', dur: 8, flag: 'short' },
+    { posName: 'Klicperova, Jičín', typ: 'IDT', inTime: '10:05', outTime: '10:33', dur: 28, flag: 'ok' },
+    { posName: 'Shell Hradec Králové', typ: 'PETROL', inTime: '11:20', outTime: '12:05', dur: 45, flag: 'ok' },
+    { posName: 'Albert Nový Bydžov', typ: 'KA', inTime: '13:15', outTime: '13:52', dur: 37, flag: 'ok' },
+    { posName: 'Husova, Jičín', typ: 'IDT', inTime: '14:30', outTime: '14:37', dur: 7, flag: 'short' },
+    { posName: 'Pražská, Jičín', typ: 'IDT', inTime: '15:05', outTime: '15:31', dur: 26, flag: 'ok' },
+  ];
+
+  // Real log takes priority, fill rest with mock
+  const realLog = live.visitLog;
+  const combined = realLog.length ? [...realLog, ...mockLog.slice(realLog.length)] : mockLog;
+  const log = combined.slice(0, 12);
+  const shorts = log.filter(v => v.flag === 'short').length;
+  const avgDur = Math.round(log.reduce((s, v) => s + v.dur, 0) / log.length);
+
+  // Update stats
+  document.getElementById('adm-shorts').textContent = shorts;
+
+  const el = document.getElementById('adm-casy-list'); if (!el) return;
+  const ds = live.dayStart || { time: '07:14' };
+  const active = getActiveTechPos();
+
+  let html = `<div class="vrow start"><div class="vtime">▶ ${ds.time}</div><div class="vname" style="font-weight:700;color:var(--tm)">Začátek pracovní doby · první check-in</div><div class="vdur"></div><div class="vflag">🟢</div></div>`;
+
+  log.forEach(v => {
+    html += `<div class="vrow ${v.flag === 'short' ? 'short' : v.flag === 'long' ? 'long' : ''}">
+      <div class="vtime">${v.inTime}</div>
+      <div class="vname">${(v.posName || '').substring(0, 30)} <span style="font-size:10px;color:var(--muted)">${v.typ || ''}</span></div>
+      <div class="vdur">${v.dur}m</div>
+      <div class="vflag">${v.flag === 'short' ? '🚩' : v.flag === 'long' ? '⚠️' : '✓'}</div>
+    </div>`;
+  });
+
+  if (active) {
+    const ci = lsg('ci_' + active.id);
+    const elapsed = ci ? Math.floor((Date.now() - ci.inTs) / 60000) : '?';
+    html += `<div class="vrow" style="background:var(--tl)"><div class="vtime" style="color:var(--tm)">● Nyní</div><div class="vname" style="color:var(--tm);font-weight:700">${active.n.substring(0, 28)} <span style="font-size:10px">CHECK-IN</span></div><div class="vdur" style="color:var(--tm)">${elapsed}m+</div><div class="vflag">📍</div></div>`;
+  }
+
+  el.innerHTML = html;
+
+  // Update summary stats
+  const statCards = document.querySelectorAll('#adm-casy .sgrid .scard');
+  if (statCards[2]) { statCards[2].querySelector('.sv').textContent = avgDur + 'm'; }
+}
+
+// ══════════════════════════════════════════════════════
+// ADMIN — FOTO (live)
+// ══════════════════════════════════════════════════════
+function renderAdminFoto() {
+  const live = getLiveState();
+  const grid = document.getElementById('foto-grid'); if (!grid) return;
+  const infoBox = grid.nextElementSibling;
+
+  if (live.photos.length) {
+    grid.innerHTML = live.photos.map(ph => `
+      <div style="aspect-ratio:1;border-radius:8px;overflow:hidden;position:relative;background:#222">
+        <img src="${ph.url}" style="width:100%;height:100%;object-fit:cover"/>
+        <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.7);color:#fff;font-size:9px;font-weight:700;padding:3px 5px;line-height:1.3">${ph.posName.substring(0,18)}<br>${ph.slot}</div>
+      </div>`).join('');
+    if (infoBox) infoBox.style.display = 'none';
+  } else {
+    grid.innerHTML = '';
+    if (infoBox) infoBox.style.display = 'block';
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// PATCH enterRole — start admin refresh
+// ══════════════════════════════════════════════════════
+const _origEnterRole = enterRole;
+enterRole = function(role) {
+  _origEnterRole(role);
+  if (role === 'admin') startAdminRefresh();
+};
+
+// ══════════════════════════════════════════════════════
+// PATCH markVisited — notify admin live
+// ══════════════════════════════════════════════════════
+const _origMarkVisited = markVisited;
+markVisited = function() {
+  _origMarkVisited();
+  // Auto-checkout if checked in
+  const p = posData[cWeek][cIdx];
+  if (p && p.v) {
+    const ci = lsg('ci_' + p.id);
+    if (ci && !ci.out) doCheckout();
+  }
+};
+
+
+
+// ══════════════════════════════════════════════════════
+// ADMIN TASK STORAGE
+// ══════════════════════════════════════════════════════
+function getAdminTasks() { return lsg('admin_tasks', []); }
+function saveAdminTask(task) {
+  const tasks = getAdminTasks();
+  tasks.unshift({ ...task, id: 'AT_' + Date.now(), createdAt: new Date().toLocaleString('cs-CZ'), status: 'active' });
+  lss('admin_tasks', tasks);
+  // Inject into posData for technik to see
+  injectAdminTasksIntoPosData();
+}
+function injectAdminTasksIntoPosData() {
+  const tasks = getAdminTasks().filter(t => t.status === 'active');
+  tasks.forEach(task => {
+    // Find matching POS
+    Object.values(posData).forEach(weekList => {
+      weekList.forEach(p => {
+        const match = taskMatchesPos(task, p);
+        if (!match) return;
+        // Don't duplicate
+        const exists = p.taskState.find(t => t.adminTaskId === task.id);
+        if (exists) return;
+        p.taskState.push({
+          text: task.text,
+          src: 'on_top',
+          done: false,
+          adminTaskId: task.id,
+          note: task.deadline ? `Deadline: ${task.deadline}` : undefined,
+          priority: task.priority,
+        });
+      });
+    });
+  });
+}
+function taskMatchesPos(task, p) {
+  if (task.target === 'group') {
+    if (task.groups.includes('all')) return true;
+    if (task.groups.includes('IDT') && p.typ === 'IDT') return true;
+    if (task.groups.includes('PETROL') && p.typ === 'PETROL') return true;
+    if (task.groups.includes('KA') && p.typ === 'KA') return true;
+    if (p.partner && task.groups.includes(p.partner)) return true;
+    return false;
+  }
+  if (task.target === 'technik') return task.technikName === 'Lán Tomáš'; // demo: LT only
+  if (task.target === 'pos') return p.id === task.posId;
+  return false;
+}
+
+// ══════════════════════════════════════════════════════
+// EDITORIAL MODAL
+// ══════════════════════════════════════════════════════
+let editModalMode = 'group';
+let editGroupSel = [];
+let editPriority = 'normal';
+
+function openEditModal(mode) {
+  editModalMode = mode;
+  editGroupSel = [];
+  editPriority = 'normal';
+  const titles = { group: '✏️ Úkol pro skupinu POS', technik: '✏️ Úkol pro technika', pos: '✏️ Úkol pro konkrétní POS' };
+  document.getElementById('edit-modal-title').textContent = titles[mode];
+  renderEditModalBody(mode);
+  document.getElementById('edit-modal').classList.add('open');
+}
+function closeEditModal() { document.getElementById('edit-modal').classList.remove('open'); }
+
+function renderEditModalBody(mode) {
+  let html = '';
+
+  if (mode === 'group') {
+    html += `<label class="ef-label">Skupina POS</label>
+    <div class="ef-chips" id="ef-groups">
+      <div class="ef-chip on" onclick="toggleGroup('all',this)">🇨🇿 Všechny POS</div>
+      <div class="ef-chip" onclick="toggleGroup('IDT',this)">IDT</div>
+      <div class="ef-chip" onclick="toggleGroup('PETROL',this)">⛽ PETROL</div>
+      <div class="ef-chip" onclick="toggleGroup('KA',this)">★ KA Partneři</div>
+      <div class="ef-chip" onclick="toggleGroup('CORN',this)">🌽 Corn</div>
+      <div class="ef-chip" onclick="toggleGroup('Albert',this)">Albert</div>
+      <div class="ef-chip" onclick="toggleGroup('Tesco',this)">Tesco</div>
+      <div class="ef-chip" onclick="toggleGroup('Shell',this)">Shell</div>
+      <div class="ef-chip" onclick="toggleGroup('Benzina',this)">Benzina</div>
+    </div>`;
+    editGroupSel = ['all'];
+
+    html += `<label class="ef-label">Region (volitelné)</label>
+    <div class="ef-chips">
+      <div class="ef-chip on" onclick="toggleRegionFilter('all',this)">Celá ČR</div>
+      <div class="ef-chip" onclick="toggleRegionFilter('RSE',this)">RSE</div>
+      <div class="ef-chip" onclick="toggleRegionFilter('RSZ',this)">RSZ</div>
+      <div class="ef-chip" onclick="toggleRegionFilter('RSJ',this)">RSJ</div>
+      <div class="ef-chip" onclick="toggleRegionFilter('RSM',this)">RSM</div>
+    </div>`;
+  }
+
+  if (mode === 'technik') {
+    html += `<label class="ef-label">Technik</label>
+    <select class="ef-select" id="ef-technik">
+      ${REAL_DATA.techs.map(t => `<option value="${t.name}">${t.name}</option>`).join('')}
+    </select>`;
+  }
+
+  if (mode === 'pos') {
+    const allPos = posData['25'] || [];
+    html += `<label class="ef-label">Vyhledat POS</label>
+    <input class="ef-input" id="ef-pos-search" type="text" placeholder="Název nebo ID provozovny…" oninput="filterPosList(this.value)" />
+    <div id="ef-pos-list" style="margin-top:8px;max-height:150px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px">
+      ${allPos.slice(0,8).map(p => `<div class="task-feed-item" style="cursor:pointer" onclick="selectPos('${p.id}','${p.n.replace(/'/g,"\\'")}',this)">
+        <div class="tfi-body"><div class="tfi-title">${p.n}</div><div class="tfi-sub">${p.a}</div></div>
+        <div style="font-size:10px;color:var(--muted)">${p.typ}</div>
+      </div>`).join('')}
+    </div>
+    <div id="ef-pos-selected" style="display:none;margin-top:6px;padding:8px 12px;background:var(--tl);border-radius:8px;font-size:13px;font-weight:700;color:var(--tm)"></div>`;
+  }
+
+  html += `<label class="ef-label">Úkol</label>
+  <textarea class="ef-textarea" id="ef-task-text" placeholder="Co mají technici udělat…"></textarea>
+
+  <label class="ef-label">Priorita</label>
+  <div class="ef-chips" id="ef-priority">
+    <div class="ef-chip" onclick="setPriority('servis',this)" style="background:var(--rl);color:var(--red);border-color:var(--red)">🔴 Servis / Urgentní</div>
+    <div class="ef-chip on orange" onclick="setPriority('high',this)">🟠 Vysoká</div>
+    <div class="ef-chip" onclick="setPriority('normal',this)">🟡 Standardní</div>
+  </div>
+
+  <div class="ef-row" style="margin-top:14px">
+    <div>
+      <label class="ef-label" style="margin-top:0">Deadline</label>
+      <input class="ef-input" id="ef-deadline" type="date" />
+    </div>
+    <div>
+      <label class="ef-label" style="margin-top:0">Počet POS</label>
+      <div style="padding:10px 12px;background:var(--bg);border-radius:8px;font-size:14px;font-weight:700;color:var(--navy)" id="ef-pos-count">—</div>
+    </div>
+  </div>
+
+  <label class="ef-label">Poznámka pro technika</label>
+  <textarea class="ef-textarea" id="ef-note" placeholder="Volitelná poznámka…" style="min-height:50px"></textarea>`;
+
+  document.getElementById('edit-modal-body').innerHTML = html;
+
+  // Set default deadline to next Monday
+  const nextMon = new Date();
+  nextMon.setDate(nextMon.getDate() + (8 - nextMon.getDay()) % 7 || 7);
+  const dl = document.getElementById('ef-deadline');
+  if (dl) dl.value = nextMon.toISOString().split('T')[0];
+
+  updatePosCount();
+}
+
+let editRegionFilter = 'all';
+let editPosSel = null;
+
+function toggleGroup(g, btn) {
+  if (g === 'all') {
+    editGroupSel = ['all'];
+    document.querySelectorAll('#ef-groups .ef-chip').forEach(c => c.classList.remove('on'));
+    btn.classList.add('on');
+  } else {
+    editGroupSel = editGroupSel.filter(x => x !== 'all');
+    document.querySelector('#ef-groups .ef-chip:first-child').classList.remove('on');
+    if (editGroupSel.includes(g)) {
+      editGroupSel = editGroupSel.filter(x => x !== g);
+      btn.classList.remove('on');
+    } else {
+      editGroupSel.push(g);
+      btn.classList.add('on');
+    }
+    if (!editGroupSel.length) { editGroupSel = ['all']; document.querySelector('#ef-groups .ef-chip:first-child').classList.add('on'); }
+  }
+  updatePosCount();
+}
+function toggleRegionFilter(r, btn) {
+  editRegionFilter = r;
+  document.querySelectorAll('.ef-chips .ef-chip').forEach(c => { if (c.textContent.includes('ČR') || ['RSE','RSZ','RSJ','RSM'].includes(c.textContent)) c.classList.remove('on'); });
+  btn.classList.add('on');
+  updatePosCount();
+}
+function setPriority(p, btn) {
+  editPriority = p;
+  document.querySelectorAll('#ef-priority .ef-chip').forEach(c => c.classList.remove('on'));
+  btn.classList.add('on');
+}
+function updatePosCount() {
+  const el = document.getElementById('ef-pos-count'); if (!el) return;
+  if (editModalMode !== 'group') { el.textContent = editModalMode === 'pos' ? '1 POS' : '35 POS'; return; }
+  const all = Object.values(posData).flat();
+  const count = all.filter(p => {
+    const regionOk = editRegionFilter === 'all' || p.area === editRegionFilter;
+    const groupOk = editGroupSel.includes('all') || editGroupSel.includes(p.typ) || editGroupSel.includes(p.partner);
+    return regionOk && groupOk;
+  }).length;
+  el.textContent = count + ' POS';
+}
+function filterPosList(q) {
+  const all = posData['25'] || [];
+  const filtered = q ? all.filter(p => p.n.toLowerCase().includes(q.toLowerCase()) || p.id.includes(q)).slice(0, 8) : all.slice(0, 8);
+  document.getElementById('ef-pos-list').innerHTML = filtered.map(p => `<div class="task-feed-item" style="cursor:pointer" onclick="selectPos('${p.id}','${p.n.replace(/'/g,"\\'")}',this)">
+    <div class="tfi-body"><div class="tfi-title">${p.n}</div><div class="tfi-sub">${p.a}</div></div>
+  </div>`).join('');
+}
+function selectPos(id, name, el) {
+  editPosSel = id;
+  document.querySelectorAll('#ef-pos-list .task-feed-item').forEach(x => x.style.background = '');
+  el.style.background = 'var(--tl)';
+  const sel = document.getElementById('ef-pos-selected');
+  sel.textContent = '✓ Vybrána: ' + name;
+  sel.style.display = 'block';
+}
+function saveEditTask() {
+  const text = document.getElementById('ef-task-text').value.trim();
+  if (!text) { alert('Zadej text úkolu.'); return; }
+  const deadline = document.getElementById('ef-deadline').value;
+  const note = document.getElementById('ef-note').value.trim();
+  const task = {
+    text, deadline, note, priority: editPriority, target: editModalMode,
+    groups: editModalMode === 'group' ? editGroupSel : [],
+    region: editRegionFilter,
+    technikName: editModalMode === 'technik' ? document.getElementById('ef-technik')?.value : null,
+    posId: editModalMode === 'pos' ? editPosSel : null,
+  };
+  if (editModalMode === 'pos' && !editPosSel) { alert('Vyber konkrétní POS.'); return; }
+  saveAdminTask(task);
+  closeEditModal();
+  renderTaskFeed();
+  // Show confirm
+  const btn = document.querySelector('.ef-btn-save');
+  if (btn) { btn.textContent = '✓ Uloženo!'; setTimeout(() => { btn.textContent = 'Uložit a rozeslat'; }, 2000); }
+}
+
+// ══════════════════════════════════════════════════════
+// TASK FEED
+// ══════════════════════════════════════════════════════
+function renderTaskFeed() {
+  const tasks = getAdminTasks();
+  const el = document.getElementById('task-feed'); if (!el) return;
+  if (!tasks.length) {
+    el.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">Žádné aktivní úkoly.<br>Klikni "+ Nový úkol" pro zadání.</div>';
+    return;
+  }
+  el.innerHTML = tasks.map(t => {
+    const priIcon = t.priority === 'servis' ? '🔴' : t.priority === 'high' ? '🟠' : '🟡';
+    const targetLabel = t.target === 'group' ? `Skupina: ${t.groups.join(', ')}${t.region !== 'all' ? ' · ' + t.region : ''}` : t.target === 'technik' ? `Technik: ${t.technikName}` : `POS: ${t.posId}`;
+    const dlLabel = t.deadline ? `· Deadline: ${t.deadline}` : '';
+    return `<div class="task-feed-item">
+      <div class="tfi-icon">${priIcon}</div>
+      <div class="tfi-body">
+        <div class="tfi-title">${t.text}</div>
+        <div class="tfi-sub">${targetLabel} ${dlLabel}</div>
+        <div class="tfi-meta">
+          <span style="font-size:10px;color:var(--muted)">${t.createdAt}</span>
+          <span class="approval-badge appr-ok">✓ Aktivní</span>
+        </div>
+      </div>
+      <button onclick="deleteAdminTask('${t.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:4px;flex-shrink:0">✕</button>
+    </div>`;
+  }).join('');
+}
+function deleteAdminTask(id) {
+  const tasks = getAdminTasks().map(t => t.id === id ? { ...t, status: 'deleted' } : t);
+  lss('admin_tasks', tasks);
+  // Remove from posData
+  Object.values(posData).forEach(weekList => {
+    weekList.forEach(p => { p.taskState = p.taskState.filter(t => t.adminTaskId !== id); });
+  });
+  renderTaskFeed();
+}
+
+// ══════════════════════════════════════════════════════
+// SCHVÁLENÍ NÁVŠTĚV
+// ══════════════════════════════════════════════════════
+function renderSchvaleni() {
+  const live = getLiveState();
+  const el = document.getElementById('schvaleni-list'); if (!el) return;
+
+  // Build approval items from completed POS
+  const items = [];
+
+  // Real completed POS
+  live.completedPos.forEach(p => {
+    const ci = lsg('ci_' + p.id);
+    const supply = lsg('supply_' + p.id + '_' + today());
+    const photos = p.photos.length;
+    const shortVisit = live.visitLog.find(v => v.posId === p.id && v.flag === 'short');
+    const approval = lsg('approval_' + p.id);
+    items.push({ p, ci, supply, photos, shortVisit, approval, isReal: true });
+  });
+
+  // Mock approved visits for demo
+  const mockVisits = [
+    { posName: 'Jiří Kohl, Police nad Metují', time: '07:14–07:38', dur: 24, typ: 'IDT', photos: 2, supply: null, approval: 'ok' },
+    { posName: 'Obec Stará Paka', time: '08:02–08:29', dur: 27, typ: 'IDT', photos: 2, supply: null, approval: 'ok' },
+    { posName: 'Městys Častolovice', time: '09:11–09:19', dur: 8, typ: 'IDT', photos: 0, supply: null, approval: null, flag: 'short' },
+    { posName: 'Shell Hradec Králové', time: '11:20–12:05', dur: 45, typ: 'PETROL', photos: 3, supply: { receiver: 'Pan Dvořák' }, approval: null },
+  ];
+
+  const waiting = mockVisits.filter(v => !v.approval).length + items.filter(x => !x.approval).length;
+  const countEl = document.getElementById('schvaleni-count');
+  if (countEl) countEl.textContent = waiting + ' čeká';
+
+  let html = '';
+
+  // Real items
+  items.forEach(({ p, ci, supply, photos, shortVisit, approval }) => {
+    const apprBadge = approval === 'ok' ? '<span class="approval-badge appr-ok">✓ Schváleno</span>' : approval === 'rej' ? '<span class="approval-badge appr-rej">✕ Zamítnuto</span>' : '<span class="approval-badge appr-wait">⏳ Čeká</span>';
+    const flags = [];
+    if (shortVisit) flags.push('⚠️ Krátká návštěva');
+    if (!photos) flags.push('📷 Bez fotek');
+    if (!supply && (p.typ === 'KA' || p.typ === 'PETROL')) flags.push('📦 Bez zásobování');
+    html += `<div style="padding:14px;border-bottom:1px solid var(--bg)">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px">
+        <div>
+          <div style="font-size:13px;font-weight:700">${p.n}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${ci ? ci.inTime + '–' + ci.outTime + ' · ' + ci.dur + ' min' : 'Bez check-inu'} · ${photos} fotek · ${p.typ}</div>
+          ${flags.length ? `<div style="margin-top:5px">${flags.map(f => `<span style="font-size:10px;font-weight:700;background:var(--ol);color:var(--orange);padding:2px 6px;border-radius:10px;margin-right:4px">${f}</span>`).join('')}</div>` : ''}
+        </div>
+        ${apprBadge}
+      </div>
+      ${!approval ? `<div style="display:flex;gap:8px">
+        <button onclick="approveVisit('${p.id}','ok')" style="flex:1;padding:9px;background:var(--gl);color:var(--green);border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">✓ Schválit</button>
+        <button onclick="approveVisit('${p.id}','rej')" style="flex:1;padding:9px;background:var(--rl);color:var(--red);border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">✕ Zamítnout</button>
+      </div>` : ''}
+    </div>`;
+  });
+
+  // Mock items
+  mockVisits.forEach((v, i) => {
+    const apprBadge = v.approval === 'ok' ? '<span class="approval-badge appr-ok">✓ Schváleno</span>' : v.flag === 'short' ? '<span class="approval-badge appr-wait">⚠️ Čeká — krátká</span>' : '<span class="approval-badge appr-wait">⏳ Čeká</span>';
+    const flags = [];
+    if (v.flag === 'short') flags.push('⚠️ Pouze ' + v.dur + ' min');
+    if (!v.photos) flags.push('📷 Bez fotek');
+    html += `<div style="padding:14px;border-bottom:1px solid var(--bg)">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px">
+        <div>
+          <div style="font-size:13px;font-weight:700">${v.posName}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${v.time} · ${v.dur} min · ${v.photos} fotek · ${v.typ}</div>
+          ${flags.length ? `<div style="margin-top:5px">${flags.map(f => `<span style="font-size:10px;font-weight:700;background:var(--ol);color:var(--orange);padding:2px 6px;border-radius:10px;margin-right:4px">${f}</span>`).join('')}</div>` : ''}
+          ${v.supply ? `<div style="margin-top:5px;font-size:11px;color:var(--green)">✍️ Zásobování podepsáno: ${v.supply.receiver}</div>` : ''}
+        </div>
+        ${apprBadge}
+      </div>
+      ${!v.approval ? `<div style="display:flex;gap:8px">
+        <button onclick="approveMock(${i},'ok',this)" style="flex:1;padding:9px;background:var(--gl);color:var(--green);border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">✓ Schválit</button>
+        <button onclick="approveMock(${i},'rej',this)" style="flex:1;padding:9px;background:var(--rl);color:var(--red);border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">✕ Zamítnout</button>
+      </div>` : ''}
+    </div>`;
+  });
+
+  el.innerHTML = html || '<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">Žádné návštěvy ke schválení.</div>';
+}
+
+function approveVisit(posId, decision) {
+  lss('approval_' + posId, decision);
+  renderSchvaleni();
+}
+function approveMock(idx, decision, btn) {
+  const row = btn.closest('div[style*="padding:14px"]');
+  if (row) {
+    const btnWrap = btn.parentElement;
+    btnWrap.innerHTML = decision === 'ok'
+      ? '<span class="approval-badge appr-ok" style="display:block;text-align:center;padding:9px">✓ Schváleno</span>'
+      : '<span class="approval-badge appr-rej" style="display:block;text-align:center;padding:9px">✕ Zamítnuto</span>';
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// PATCH showAdmPage — render new pages
+// ══════════════════════════════════════════════════════
+const __origShowAdmPage2 = showAdmPage;
+showAdmPage = function(p, btn) {
+  __origShowAdmPage2(p, btn);
+  if (p === 'redakce') { renderTaskFeed(); injectAdminTasksIntoPosData(); }
+  if (p === 'schvaleni') renderSchvaleni();
+};
+
+// ══════════════════════════════════════════════════════
+// INIT — inject saved tasks on load
+// ══════════════════════════════════════════════════════
+injectAdminTasksIntoPosData();
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// GPS VERIFICATION
+// ══════════════════════════════════════════════════════════════════════════
+function getDistanceKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2-lat1)*Math.PI/180;
+  const dLon = (lon2-lon1)*Math.PI/180;
+  const a = Math.sin(dLat/2)*Math.sin(dLat/2) +
+    Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
+    Math.sin(dLon/2)*Math.sin(dLon/2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function verifyGPS(posLat, posLng, callback) {
+  const el = document.getElementById('gps-status');
+  if (!navigator.geolocation) {
+    if (el) el.innerHTML = '<span class="gps-badge gps-warn">⚠ GPS nedostupná</span>';
+    callback(null, null, null);
+    return;
+  }
+  if (el) el.innerHTML = '<span class="gps-badge gps-loading">📡 Zjišťuji polohu…</span>';
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      const dist = posLat && posLng ? getDistanceKm(lat, lng, posLat, posLng) : null;
+      if (el) {
+        if (dist === null) {
+          el.innerHTML = `<span class="gps-badge gps-ok">✓ GPS OK · ${lat.toFixed(4)}, ${lng.toFixed(4)}</span>`;
+        } else if (dist < 0.3) {
+          el.innerHTML = `<span class="gps-badge gps-ok">✓ Na místě · ${Math.round(dist*1000)}m od POS</span>`;
+        } else if (dist < 1) {
+          el.innerHTML = `<span class="gps-badge gps-warn">⚠ ${Math.round(dist*1000)}m od POS</span>`;
+        } else {
+          el.innerHTML = `<span class="gps-badge gps-err">🚩 ${dist.toFixed(1)}km od POS — podezřelé!</span>`;
+        }
+      }
+      callback(lat, lng, dist);
+    },
+    err => {
+      if (el) el.innerHTML = '<span class="gps-badge gps-warn">⚠ GPS zamítnuta</span>';
+      callback(null, null, null);
+    },
+    { enableHighAccuracy: true, timeout: 8000 }
+  );
+}
+
+// ── Patch doCheckin with GPS ──────────────────────────────────────────────
+const _origDoCheckin = doCheckin;
+doCheckin = function() {
+  const p = posData[cWeek][cIdx];
+  const posLat = p.lat || null;
+  const posLng = p.lng || null;
+  verifyGPS(posLat, posLng, (lat, lng, dist) => {
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'});
+    const gpsFlag = dist !== null && dist > 1;
+    lss('ci_' + p.id, {
+      inTs: now.getTime(), inTime: timeStr, out: false,
+      gpsLat: lat, gpsLng: lng, gpsDist: dist,
+      gpsFlag: gpsFlag
+    });
+    if (!lsg('daystart_' + today())) {
+      lss('daystart_' + today(), {ts: now.getTime(), time: timeStr, posId: p.id, posName: p.n});
+    }
+    // Log GPS flag for admin
+    if (gpsFlag) {
+      const flags = lsg('gps_flags_' + today(), []);
+      flags.push({posId: p.id, posName: p.n, time: timeStr, dist: dist, lat, lng});
+      lss('gps_flags_' + today(), flags);
+    }
+    renderCheckin();
+  });
+};
+
+// ── Show GPS in check-in ──────────────────────────────────────────────────
+const _origRenderCheckin = renderCheckin;
+renderCheckin = function() {
+  _origRenderCheckin();
+  const p = posData[cWeek][cIdx];
+  const ci = lsg('ci_' + p.id);
+  if (ci && ci.gpsDist !== undefined && ci.gpsDist !== null) {
+    const el = document.getElementById('gps-status');
+    if (el) {
+      const dist = ci.gpsDist;
+      const cls = dist < 0.3 ? 'gps-ok' : dist < 1 ? 'gps-warn' : 'gps-err';
+      const icon = dist < 0.3 ? '✓' : dist < 1 ? '⚠' : '🚩';
+      el.innerHTML = `<span class="gps-badge ${cls}">${icon} ${dist < 1 ? Math.round(dist*1000)+'m' : dist.toFixed(1)+'km'} od POS · ${ci.inTime}</span>`;
+    }
+  }
+};
+
+// ══════════════════════════════════════════════════════════════════════════
+// AI BRIEFING (Claude API)
+// ══════════════════════════════════════════════════════════════════════════
+async function generateAIBriefing() {
+  const pos = posData['25'] || [];
+  const done = pos.filter(p => p.v).length;
+  const svc = pos.filter(p => p.taskState.some(t => t.src==='servis'&&!t.done));
+  const adminMsg = lsg('editor_briefing') || '';
+  const customAlert = lsg('editor_alert') || '';
+
+  const prompt = `Jsi asistent pro field techniky v loteriové společnosti Allwyn. 
+Napiš krátký ranní briefing pro technika Lán Tomáš.
+
+Fakta o jeho týdnu:
+- Týden W25, ${pos.length} POS celkem
+- Splněno: ${done}/${pos.length} POS
+- Otevřené servisní tikety: ${svc.length} (${svc.map(p=>p.n).join(', ') || 'žádné'})
+- Aktuální kampaň: Zlatá rybka (NOVÁ emise), EuroJackpot
+- Rebranding norma: 2 POS/den, kontrola samolepek Sazka mobil
+${adminMsg ? '- Zpráva od manažera: ' + adminMsg : ''}
+${customAlert ? '- Upozornění: ' + customAlert : ''}
+
+Napiš přátelský, motivující briefing v češtině. Max 3 věty. Zmiň co je nejdůležitější dnes. Buď konkrétní.`;
+
+  const el = document.getElementById('bf-msg');
+  const typing = document.getElementById('bf-typing');
+  if (typing) typing.textContent = '';
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        messages: [{role:'user', content: prompt}]
+      })
+    });
+    const data = await res.json();
+    const text = data.content?.[0]?.text || 'Dobrý den! Dnes máš před sebou další den v terénu. Zaměř se na kvalitu, foť vše co osazuješ.';
+    if (el) {
+      el.innerHTML = `${text}<span class="ai-badge">✨ AI</span>`;
+    }
+  } catch(e) {
+    // Fallback if API not available
+    const fallbacks = [
+      `Tomáši, dnes máš ${pos.length - done} POS zbývajících a ${svc.length} servisní tikety — začni servisy. Nezapomeň fotit před i po osazení a vyžádat podpis při zásobování.`,
+      `Dobrý den! Zlatá rybka jen NOVÁ emise — zkontroluj co máš v autě. Rebranding norma 2 POS/den, pečlivě odstraňuj samolepky Sazka mobil.`,
+      `Dnes priorita: ${svc.length > 0 ? svc[0].n + ' — servis nejdřív!' : 'splnit normu 2 rebrandingy.'} Fotodokumentace je povinná, admin kontroluje každou návštěvu.`,
+    ];
+    const txt = fallbacks[Math.floor(Math.random()*fallbacks.length)];
+    if (el) el.innerHTML = `${txt}<span class="ai-badge">✨ AI</span>`;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// AI ADMIN REPORT (Claude API)
+// ══════════════════════════════════════════════════════════════════════════
+async function generateAIReport() {
+  const btn = document.getElementById('ai-gen-btn');
+  const wrap = document.getElementById('ai-report-wrap');
+  if (!btn || !wrap) return;
+
+  btn.disabled = true;
+  btn.innerHTML = '<span>⏳</span> AI analyzuje data…';
+  wrap.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">Analyzuji výkon 27 techniků…<br><br><div class="ai-typing" style="font-size:20px">▋</div></div>';
+
+  const live = getLiveState ? getLiveState() : {};
+  const gpsFlags = lsg('gps_flags_' + today(), []);
+  const shortVisits = lsg('vlog_' + today(), []).filter(v => v.flag === 'short');
+
+  const techData = REAL_DATA.techs.map(t => {
+    const pct = t.total ? Math.round(t.done/t.total*100) : 0;
+    return `${t.name}: ${t.done}/${t.total} POS (${pct}%) — ${t.activity}`;
+  }).join('\n');
+
+  const prompt = `Jsi AI analytik pro field operations manažera v Allwyn (loterie).
+Analyzuj výkon 27 merch techniků za tento týden (W25) a identifikuj problémy.
+
+Data techniků:
+${techData}
+
+GPS flagy dnes (check-in daleko od POS): ${gpsFlags.length > 0 ? gpsFlags.map(f=>`${f.posName} - ${f.dist?.toFixed(1)}km`).join(', ') : 'žádné'}
+Krátké návštěvy dnes (<10 min): ${shortVisits.length > 0 ? shortVisits.map(v=>v.posName).join(', ') : 'žádné'}
+Dokončeno dnes: ${live.completedPos?.length || 0} POS
+Otevřené servisy: ${live.servisOpen?.length || 0}
+
+Napiš stručný management report v češtině se sekcemi:
+1. 🚨 Rizika a podezřelé aktivity (kdo je výrazně pozadu, GPS anomálie)
+2. ✅ Pozitivní výkon (kdo exceluje)  
+3. 💡 Doporučení pro manažera
+
+Buď konkrétní, zmiňuj jména. Max 300 slov.`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        messages: [{role:'user', content: prompt}]
+      })
+    });
+    const data = await res.json();
+    const text = data.content?.[0]?.text || '';
+    renderAIReport(text, gpsFlags, shortVisits);
+  } catch(e) {
+    // Fallback mock report
+    const mockReport = generateMockReport(gpsFlags, shortVisits);
+    renderAIReport(mockReport, gpsFlags, shortVisits);
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '<span>🤖</span> Obnovit analýzu';
+}
+
+function generateMockReport(gpsFlags, shortVisits) {
+  const behind = REAL_DATA.techs.filter(t => t.total && t.done/t.total < 0.2);
+  const great = REAL_DATA.techs.filter(t => t.total && t.done/t.total > 0.8);
+  return `🚨 **Rizika a podezřelé aktivity**
+
+${behind.map(t => `• **${t.name}**: pouze ${t.done}/${t.total} POS (${Math.round(t.done/t.total*100)}%) — výrazně pod normou, doporučena kontrola`).join('\n')}
+${gpsFlags.length ? gpsFlags.map(f => `• GPS anomálie: check-in **${f.posName}** — ${f.dist?.toFixed(1)}km od adresy POS v ${f.time}`).join('\n') : ''}
+${shortVisits.length ? shortVisits.map(v => `• Krátká návštěva: **${v.posName}** — pouze ${v.dur} minut`).join('\n') : '• Žádné GPS anomálie ani podezřelé krátké návštěvy dnes'}
+
+✅ **Pozitivní výkon**
+
+${great.map(t => `• **${t.name}**: ${t.done}/${t.total} POS — výborný výkon`).join('\n') || '• Data se načítají…'}
+
+💡 **Doporučení**
+
+• Kontaktovat techniky s plněním pod 20% a ověřit důvod zpoždění
+• Nastavit minimální dobu návštěvy 15 minut pro IDT a 25 minut pro KA
+• GPS ověření aktivní — případné anomálie budou automaticky flagovány`;
+}
+
+function renderAIReport(text, gpsFlags, shortVisits) {
+  const wrap = document.getElementById('ai-report-wrap');
+  if (!wrap) return;
+
+  // Format markdown-like text to HTML
+  const formatted = text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/^🚨(.+)$/gm, '<h4>🚨$1</h4>')
+    .replace(/^✅(.+)$/gm, '<h4>✅$1</h4>')
+    .replace(/^💡(.+)$/gm, '<h4>💡$1</h4>')
+    .replace(/^• (.+)$/gm, '<div class="ai-flag-item ai-flag-orange"><span>•</span><span>$1</span></div>')
+    .replace(/\n\n/g, '<br>');
+
+  wrap.innerHTML = `
+    <div class="ai-report-card">
+      <div class="ai-report-hdr">
+        <div class="ai-report-hdr-icon">🤖</div>
+        <div class="ai-report-hdr-t">AI Analýza výkonu — W25</div>
+        <div class="ai-report-hdr-badge">Claude AI</div>
+      </div>
+      <div class="ai-report-body">${formatted}</div>
+    </div>
+    ${gpsFlags.length ? `<div class="ai-report-card">
+      <div class="ai-report-hdr" style="background:var(--red)">
+        <div class="ai-report-hdr-icon">🚨</div>
+        <div class="ai-report-hdr-t">GPS Anomálie dnes</div>
+        <div class="ai-report-hdr-badge" style="background:rgba(255,255,255,.2);color:#fff">${gpsFlags.length} flagů</div>
+      </div>
+      <div class="ai-report-body">
+        ${gpsFlags.map(f => `<div class="ai-flag-item ai-flag-red"><span>📍</span><span><strong>${f.posName}</strong> · ${f.time} · ${f.dist?.toFixed(2)}km od adresy POS</span></div>`).join('')}
+      </div>
+    </div>` : ''}
+  `;
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// ADMIN EDITOR
+// ══════════════════════════════════════════════════════════════════════════
+function initEditor() {
+  const fields = ['briefing', 'alert', 'idt', 'ka'];
+  fields.forEach(k => {
+    const el = document.getElementById('ed-' + k);
+    if (el) el.value = lsg('editor_' + k) || '';
+  });
+}
+
+function saveEditorText(key) {
+  const el = document.getElementById('ed-' + key);
+  if (!el) return;
+  lss('editor_' + key, el.value);
+  const btn = el.nextElementSibling;
+  if (btn) { btn.textContent = '✓ Uloženo!'; setTimeout(() => btn.textContent = 'Uložit ✓', 2000); }
+}
+
+// Show admin alert banner in POS detail
+function renderAdminAlertBanner(p) {
+  const el = document.getElementById('admin-alert-banner');
+  if (!el) return;
+  const globalAlert = lsg('editor_alert') || '';
+  const typAlert = p.typ === 'IDT' ? lsg('editor_idt') : lsg('editor_ka');
+  const msgs = [globalAlert, typAlert].filter(Boolean);
+  if (!msgs.length) { el.innerHTML = ''; return; }
+  el.innerHTML = msgs.map(m => `
+    <div style="margin:8px 12px 0;padding:10px 14px;background:var(--ol);border-left:3px solid var(--orange);border-radius:0 8px 8px 0;font-size:12px;font-weight:600;color:var(--orange);line-height:1.4">
+      📢 ${m}
+    </div>`).join('');
+}
+
+// ── Patch showAdmPage for editor + AI ─────────────────────────────────────
+const __origShowAdmPage3 = showAdmPage;
+showAdmPage = function(p, btn) {
+  __origShowAdmPage3(p, btn);
+  if (p === 'editor') initEditor();
+  if (p === 'ai') { document.getElementById('ai-report-wrap').innerHTML = '<div style="padding:30px;text-align:center;color:var(--muted);font-size:13px">Klikni na tlačítko pro spuštění AI analýzy.</div>'; }
+};
+
+// ── Patch openDetail with admin alert banner ───────────────────────────────
+const ___origOpenDetail = openDetail;
+openDetail = function(ri) {
+  ___origOpenDetail(ri);
+  const p = posData[cWeek][ri];
+  renderAdminAlertBanner(p);
+};
+
+// ── Patch showBriefing to use AI ──────────────────────────────────────────
+const _origShowBriefing = showBriefing;
+showBriefing = function() {
+  _origShowBriefing();
+  // Override static message with AI
+  const el = document.getElementById('bf-msg');
+  const typing = document.getElementById('bf-typing');
+  if (el && typing) {
+    el.innerHTML = '<span class="ai-typing">Generuji personalizovaný briefing</span><span class="ai-badge">✨ AI</span>';
+    setTimeout(() => generateAIBriefing(), 800);
+  }
+};
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// DATE & WEEK HELPERS — auto-detect today
+// ══════════════════════════════════════════════════════════════════════════
+function getTodayDayIdx() {
+  // 0=Po, 1=Út, 2=St, 3=Čt, 4=Pá, null=weekend
+  const d = new Date().getDay(); // 0=Sun, 1=Mon...6=Sat
+  if (d === 0 || d === 6) return null; // weekend
+  return d - 1; // Mon=0, Tue=1...Fri=4
+}
+
+function getCurrentWeekNum() {
+  const d = new Date();
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  return String(Math.ceil((((date - yearStart) / 86400000) + 1) / 7));
+}
+
+function isToday(dayIdx) {
+  return getTodayDayIdx() === dayIdx;
+}
+
+function isFuture(dayIdx) {
+  const tod = getTodayDayIdx();
+  if (tod === null) return dayIdx >= 0;
+  return dayIdx > tod;
+}
+
+function isPast(dayIdx) {
+  const tod = getTodayDayIdx();
+  if (tod === null) return false;
+  return dayIdx < tod;
+}
+
+// ── OVERDUE: POS from past days not completed → carry forward ─────────────
+function getOverduePOS(weekKey) {
+  const all = posData[weekKey] || [];
+  const tod = getTodayDayIdx();
+  if (tod === null) return [];
+  return all.filter(p => !p.v && p.d !== null && p.d !== undefined && p.d < tod);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// VISIT HISTORY — per POS across all weeks
+// ══════════════════════════════════════════════════════════════════════════
+function recordVisit(posId, posName, weekKey, dayIdx) {
+  const key = 'visits_' + posId;
+  const history = lsg(key, []);
+  const ci = lsg('ci_' + posId);
+  history.unshift({
+    date: new Date().toLocaleDateString('cs-CZ'),
+    time: ci ? ci.inTime + '–' + (ci.outTime||'?') : new Date().toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'}),
+    dur: ci ? ci.dur : null,
+    week: weekKey,
+    day: dayIdx,
+    technik: 'Lán Tomáš',
+    gpsOk: ci ? (ci.gpsDist === null || ci.gpsDist < 1) : null,
+  });
+  lss(key, history.slice(0, 20)); // keep last 20
+}
+
+function getVisitHistory(posId) {
+  return lsg('visits_' + posId, []);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// PATCH renderList — show today's POS locked, future plannable, overdue flagged
+// ══════════════════════════════════════════════════════════════════════════
+const _origRenderList = renderList;
+renderList = function() {
+  const wrap = document.getElementById('pos-list-wrap');
+  wrap.innerHTML = '';
+  const all = posData[cWeek] || [];
+  if (!all.length) {
+    wrap.innerHTML = '<div class="empty"><div class="empty-i">📋</div><div class="empty-t">Žádné POS tento týden</div></div>';
+    return;
+  }
+
+  const todayIdx = getTodayDayIdx();
+  const isCurrentWeek = cWeek === getCurrentWeekNum();
+
+  // Overdue POS (past days, not done) — show at top of today
+  const overdue = isCurrentWeek ? getOverduePOS(cWeek) : [];
+
+  // Unplanned for this week
+  const unpl = all.filter(p => (p.d === null || p.d === undefined) && !p.v);
+
+  // Today's POS
+  const todayPos = all.filter(p => p.d === cDay);
+
+  // Header: what day is selected
+  const meta = WEEKS_META[cWeek];
+  const dayDate = meta ? meta.dd[cDay] : '';
+  const isTodaySelected = isCurrentWeek && cDay === todayIdx;
+
+  // Overdue banner (only on today's view in current week)
+  if (isTodaySelected && overdue.length > 0) {
+    const banner = document.createElement('div');
+    banner.style.cssText = 'margin:8px 12px 0;padding:10px 14px;background:var(--rl);border:1.5px solid var(--red);border-radius:10px;cursor:pointer';
+    banner.onclick = () => showOverdue();
+    banner.innerHTML = `<div style="font-size:13px;font-weight:700;color:var(--red)">⏰ ${overdue.length} nesplněných POS z minulých dní</div>
+      <div style="font-size:11px;color:var(--red);opacity:.8;margin-top:2px">Klikni pro zobrazení — přidej je na dnes nebo zpracuj</div>`;
+    wrap.appendChild(banner);
+  }
+
+  // Unplanned banner
+  if (unpl.length > 0) {
+    const b = document.createElement('div');
+    b.className = 'upbanner';
+    b.onclick = showUnplanned;
+    b.innerHTML = `<div class="upb-ico">📌</div><div><div class="upb-t">${unpl.length} POS bez přiřazeného dne</div><div class="upb-s">Klikni pro naplánování</div></div><div style="color:var(--orange);font-size:18px;margin-left:auto">›</div>`;
+    wrap.appendChild(b);
+  }
+
+  // Plan button
+  const planBtn = document.createElement('div');
+  planBtn.style.cssText = 'padding:8px 12px 0';
+  planBtn.innerHTML = `<button onclick="showPlanningView()" style="width:100%;padding:11px;background:var(--navy);color:var(--teal);border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">📋 Naplánovat POS na týden</button>`;
+  wrap.appendChild(planBtn);
+
+  // Day label
+  const lbl = document.createElement('div');
+  lbl.className = 'sec-lbl';
+  lbl.style.display = 'flex';
+  lbl.style.alignItems = 'center';
+  lbl.style.justifyContent = 'space-between';
+  lbl.style.paddingRight = '18px';
+  const dayLabel = isTodaySelected ? `${DAYS[cDay]} ${dayDate} — DNES` : `${DAYS[cDay]} ${dayDate}`;
+  lbl.innerHTML = `<span>${dayLabel} · ${todayPos.length} POS</span>`;
+  wrap.appendChild(lbl);
+
+  if (!todayPos.length) {
+    const e = document.createElement('div');
+    e.className = 'empty';
+
+    // Can they add POS from unplanned?
+    const canPlan = isCurrentWeek && (isTodaySelected || isFuture(cDay));
+    e.innerHTML = `<div class="empty-i">📅</div>
+      <div class="empty-t">Nic naplánováno</div>
+      <div class="empty-s">${canPlan ? 'Přiřaď POS z neplánovaných výše.' : 'Minulý den — pouze pro přehled.'}</div>`;
+    wrap.appendChild(e);
+    return;
+  }
+
+  todayPos.forEach(p => {
+    const ri = all.indexOf(p);
+    // Lock past days - can view but not check-in/complete
+    const locked = isCurrentWeek && isPast(cDay) && !p.v;
+    wrap.appendChild(makePosCard(p, ri, false, locked));
+  });
+};
+
+// ── Show overdue POS ───────────────────────────────────────────────────────
+function showOverdue() {
+  const wrap = document.getElementById('pos-list-wrap');
+  wrap.innerHTML = '';
+  const all = posData[cWeek] || [];
+  const overdue = getOverduePOS(cWeek);
+
+  const back = document.createElement('div');
+  back.style.cssText = 'padding:10px 12px 4px';
+  back.innerHTML = `<button onclick="renderList()" style="background:none;border:none;color:var(--td);font-size:13px;font-weight:700;cursor:pointer">← Zpět</button>`;
+  wrap.appendChild(back);
+
+  const lbl = document.createElement('div');
+  lbl.className = 'sec-lbl';
+  lbl.style.color = 'var(--red)';
+  lbl.textContent = `Nesplněné z minulých dní (${overdue.length})`;
+  wrap.appendChild(lbl);
+
+  overdue.forEach(p => {
+    const ri = all.indexOf(p);
+    const card = makePosCard(p, ri, true); // show assign btn
+    wrap.appendChild(card);
+  });
+}
+
+// ── Update makePosCard to support locked state ────────────────────────────
+const _origMakePosCard = makePosCard;
+makePosCard = function(p, ri, showAssign, locked) {
+  const card = _origMakePosCard(p, ri, showAssign);
+  if (locked) {
+    // Add "nesplněno" overlay badge
+    const inner = card.querySelector('.pci');
+    if (inner) {
+      const badge = document.createElement('span');
+      badge.style.cssText = 'font-size:10px;font-weight:700;background:var(--ol);color:var(--orange);padding:2px 6px;border-radius:10px;flex-shrink:0';
+      badge.textContent = 'Nesplněno';
+      inner.appendChild(badge);
+    }
+  }
+  return card;
+};
+
+// ── Patch markVisited to record visit history ─────────────────────────────
+const _origMarkVisited2 = markVisited;
+markVisited = function() {
+  const p = posData[cWeek][cIdx];
+  if (!p || p.v || !p.taskState.every(t => t.done)) return;
+  recordVisit(p.id, p.n, cWeek, cDay);
+  _origMarkVisited2();
+};
+
+// ── Auto-set today's week and day on init ────────────────────────────────
+function autoSetCurrentDay() {
+  const weekNum = getCurrentWeekNum();
+  // Use W25 as demo if current week not in data
+  if (posData[weekNum] && posData[weekNum].length > 0) {
+    cWeek = weekNum;
+  }
+  const todayIdx = getTodayDayIdx();
+  cDay = todayIdx !== null ? todayIdx : 0;
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// ADMIN — POS DETAIL DRAWER
+// ══════════════════════════════════════════════════════════════════════════
+function showAdminPOSDetail(posId) {
+  // Find POS across all weeks
+  let foundPos = null;
+  let foundWeek = null;
+  for (const [w, list] of Object.entries(posData)) {
+    const p = list.find(x => x.id === posId);
+    if (p) { foundPos = p; foundWeek = w; break; }
+  }
+  if (!foundPos) return;
+
+  const p = foundPos;
+  const history = getVisitHistory(posId);
+  const ci = lsg('ci_' + posId);
+  const supply = lsg('supply_' + posId + '_' + today());
+  const posNotes = lsg('poscard_' + posId, []);
+  const lastVisit = history[0];
+
+  let html = `<div style="padding:20px 18px 32px">
+    <div style="background:var(--navy);border-radius:12px;padding:14px 16px;margin-bottom:16px;color:white">
+      <div style="font-size:10px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px">${p.id} · ${p.typ}</div>
+      <div style="font-size:18px;font-weight:800">${p.n}</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:4px">${p.a}</div>
+      ${p.partner ? `<div style="margin-top:8px"><span style="font-size:11px;font-weight:700;background:rgba(46,205,192,.2);color:var(--teal);padding:3px 9px;border-radius:20px">★ ${p.partner}</span></div>` : ''}
+    </div>
+
+    <!-- Last visit summary -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      <div style="background:white;border-radius:10px;padding:13px;box-shadow:0 1px 3px rgba(0,0,0,.06)">
+        <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Poslední návštěva</div>
+        <div style="font-size:15px;font-weight:800;margin-top:4px;color:var(--navy)">${lastVisit ? lastVisit.date : '—'}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${lastVisit ? lastVisit.technik : 'Nikdy'}</div>
+      </div>
+      <div style="background:white;border-radius:10px;padding:13px;box-shadow:0 1px 3px rgba(0,0,0,.06)">
+        <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Celkem návštěv</div>
+        <div style="font-size:15px;font-weight:800;margin-top:4px;color:var(--navy)">${history.length}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">W${foundWeek} · ${p.v?'✓ Hotovo':'Čeká'}</div>
+      </div>
+    </div>`;
+
+  // Visit history
+  if (history.length) {
+    html += `<div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Historie návštěv</div>
+    <div style="background:white;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:14px">
+    ${history.map(h => `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--bg)">
+      <div style="font-size:13px;font-weight:700;min-width:70px">${h.date}</div>
+      <div style="flex:1;font-size:12px;color:var(--muted)">${h.technik} · W${h.week} · ${h.time||''}${h.dur?' · '+h.dur+'min':''}</div>
+      <div style="font-size:14px">${h.gpsOk===false?'🚩':h.gpsOk===true?'✓':''}</div>
+    </div>`).join('')}
+    </div>`;
+  }
+
+  // POS card notes
+  if (posNotes.length) {
+    html += `<div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Záznamy z karty POS</div>
+    <div style="background:white;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:14px">
+    ${posNotes.slice().reverse().map(n=>`<div style="padding:10px 14px;border-bottom:1px solid var(--bg)">
+      <div style="font-size:10px;font-weight:700;color:var(--muted)">${n.time} · ${n.author}</div>
+      <div style="font-size:13px;margin-top:3px">${n.text}</div>
+    </div>`).join('')}
+    </div>`;
+  }
+
+  // Supply confirmed
+  if (supply && supply.confirmed) {
+    html += `<div style="background:var(--gl);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:var(--green)">
+      ✍️ Zásobování potvrzeno · ${supply.at} · Přijal: ${supply.receiver}
+    </div>`;
+  }
+
+  // Admin edit section
+  html += `<div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Admin — přidat úkol</div>
+  <div style="background:white;border-radius:10px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:14px">
+    <input type="text" id="admin-pos-task-input" placeholder="Zadej on-top úkol pro tuto POS…"
+      style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;font-size:14px;font-family:inherit;outline:none;margin-bottom:8px"/>
+    <button onclick="addAdminPosTask('${posId}','${foundWeek}')"
+      style="width:100%;padding:11px;background:var(--navy);color:var(--teal);border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">
+      Přidat úkol technikovi ✓
+    </button>
+  </div>
+
+  <button onclick="closeAdminPOSDrawer()" style="width:100%;padding:13px;border:1.5px solid var(--border);border-radius:10px;background:transparent;font-size:14px;cursor:pointer;color:var(--muted)">Zavřít</button>
+  </div>`;
+
+  let drawer = document.getElementById('admin-pos-drawer');
+  if (!drawer) {
+    drawer = document.createElement('div');
+    drawer.id = 'admin-pos-drawer';
+    drawer.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:700;display:flex;align-items:flex-end;justify-content:center';
+    drawer.innerHTML = `<div id="admin-pos-sheet" style="background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:430px;max-height:88vh;overflow-y:auto"><div style="width:40px;height:4px;background:var(--border);border-radius:2px;margin:16px auto 0"></div></div>`;
+    document.body.appendChild(drawer);
+    drawer.onclick = e => { if (e.target === drawer) closeAdminPOSDrawer(); };
+  }
+  document.getElementById('admin-pos-sheet').innerHTML = `<div style="width:40px;height:4px;background:var(--border);border-radius:2px;margin:16px auto 0"></div>` + html;
+  drawer.style.display = 'flex';
+}
+
+function closeAdminPOSDrawer() {
+  const d = document.getElementById('admin-pos-drawer');
+  if (d) d.style.display = 'none';
+}
+
+function addAdminPosTask(posId, weekKey) {
+  const val = document.getElementById('admin-pos-task-input')?.value.trim();
+  if (!val) return;
+  const p = (posData[weekKey]||[]).find(x=>x.id===posId);
+  if (!p) return;
+  p.taskState.push({text:val, src:'on_top', done:false, note:'Přidáno adminem'});
+  const btn = document.querySelector('#admin-pos-sheet button[onclick^="addAdmin"]');
+  if (btn) { btn.textContent='✓ Přidáno!'; setTimeout(()=>btn.textContent='Přidat úkol technikovi ✓',2000); }
+  document.getElementById('admin-pos-task-input').value = '';
+}
+
+// ── Make admin live list rows clickable ────────────────────────────────────
+function showTechPOSList(techName) {
+  // Show all POS for this technik in current week (demo: show LT's POS)
+  const all = posData['25'] || [];
+  let html = `<div style="padding:20px 18px 32px">
+    <div style="font-size:18px;font-weight:800;margin-bottom:4px">${techName}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:16px">W25 · ${all.length} POS přiřazeno</div>`;
+
+  html += `<div style="background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)">
+    ${all.map(p => {
+      const hist = getVisitHistory(p.id);
+      const last = hist[0];
+      const pct = Math.round(p.taskState.filter(t=>t.done).length/Math.max(p.taskState.length,1)*100);
+      return `<div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--bg);cursor:pointer"
+        onclick="showAdminPOSDetail('${p.id}')">
+        <div style="width:8px;height:8px;border-radius:50%;background:${p.v?'var(--green)':'var(--border)'};flex-shrink:0"></div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.n}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:1px">${last?'Naposledy: '+last.date:'Dosud nenavštíveno'} · ${pct}%</div>
+        </div>
+        <div style="font-size:18px;color:var(--border)">›</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+
+  html += `<button onclick="closeTechDrawer()" style="width:100%;padding:13px;border:1.5px solid var(--border);border-radius:10px;background:transparent;font-size:14px;cursor:pointer;color:var(--muted);margin-top:14px">Zavřít</button></div>`;
+
+  let drawer = document.getElementById('tech-drawer');
+  if (!drawer) {
+    drawer = document.createElement('div');
+    drawer.id = 'tech-drawer';
+    drawer.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:600;display:flex;align-items:flex-end;justify-content:center';
+    drawer.innerHTML = `<div id="tech-drawer-sheet" style="background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:430px;max-height:85vh;overflow-y:auto"><div style="width:40px;height:4px;background:var(--border);border-radius:2px;margin:16px auto 0"></div></div>`;
+    document.body.appendChild(drawer);
+    drawer.onclick = e => { if (e.target === drawer) closeTechDrawer(); };
+  }
+  document.getElementById('tech-drawer-sheet').innerHTML = `<div style="width:40px;height:4px;background:var(--border);border-radius:2px;margin:16px auto 0"></div>` + html;
+  drawer.style.display = 'flex';
+}
+
+// ── Patch admin live list to open POS list on click ────────────────────────
+const _origRenderAdminLive2 = renderAdminLive;
+renderAdminLive = function() {
+  _origRenderAdminLive2();
+  // Re-wire click handlers to show POS list
+  document.querySelectorAll('#adm-live-list .tr').forEach(row => {
+    const name = row.querySelector('.tn')?.textContent?.replace(' LIVE','').trim();
+    if (name) row.onclick = () => showTechPOSList(name);
+  });
+};
+
+// ── Patch showAdmPage to wire up technici ─────────────────────────────────
+const ____origShowAdmPage = showAdmPage;
+showAdmPage = function(p, btn) {
+  ____origShowAdmPage(p, btn);
+  if (p === 'technici') {
+    setTimeout(() => {
+      document.querySelectorAll('#adm-all-list .tr').forEach(row => {
+        const name = row.querySelector('.tn')?.textContent?.trim();
+        if (name) row.style.cursor = 'pointer', row.onclick = () => showTechPOSList(name);
+      });
+    }, 100);
+  }
+};
+
+// ── Auto init day/week on role enter ──────────────────────────────────────
+const _origEnterRole2 = enterRole;
+enterRole = function(role) {
+  autoSetCurrentDay();
+  applyAssignments();
+  _origEnterRole2(role);
+};
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// DAY ASSIGNMENT PERSISTENCE
+// ══════════════════════════════════════════════════════════════════════════
+function getAssignment(posId) {
+  const a = lsg('assign_' + posId);
+  return a !== null ? a : undefined;
+}
+function setAssignment(posId, dayIdx) {
+  if (dayIdx === null || dayIdx === undefined) {
+    localStorage.removeItem('assign_' + posId);
+  } else {
+    lss('assign_' + posId, dayIdx);
+  }
+}
+
+// Apply saved assignments to posData (overrides Excel pre-assignment)
+function applyAssignments() {
+  Object.values(posData).forEach(list => {
+    list.forEach(p => {
+      const saved = getAssignment(p.id);
+      if (saved !== undefined) {
+        p.d = saved;
+      }
+    });
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// REBUILT: PLANNING VIEW — technik picks from week list + overdue
+// ══════════════════════════════════════════════════════════════════════════
+function showPlanningView() {
+  const wrap = document.getElementById('pos-list-wrap');
+  wrap.innerHTML = '';
+  const all = posData[cWeek] || [];
+  const todayIdx = getTodayDayIdx();
+  const isCurrentWeek = cWeek === getCurrentWeekNum();
+
+  // Back button
+  const back = document.createElement('div');
+  back.style.cssText = 'padding:10px 12px 4px';
+  back.innerHTML = `<button onclick="renderList()" style="background:none;border:none;color:var(--td);font-size:13px;font-weight:700;cursor:pointer">← Zpět na denní plán</button>`;
+  wrap.appendChild(back);
+
+  // Header
+  const hdr = document.createElement('div');
+  hdr.style.cssText = 'padding:8px 16px 4px';
+  hdr.innerHTML = `<div style="font-size:16px;font-weight:800;color:var(--navy)">Naplánovat POS</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:2px">Vyber které POS pojedeš a přiřaď je ke dnům</div>`;
+  wrap.appendChild(hdr);
+
+  // Overdue section (current week only)
+  const overdue = isCurrentWeek ? getOverduePOS(cWeek) : [];
+  if (overdue.length) {
+    const lbl = document.createElement('div');
+    lbl.className = 'sec-lbl';
+    lbl.style.color = 'var(--red)';
+    lbl.textContent = `⏰ Nesplněné z minulých dní (${overdue.length})`;
+    wrap.appendChild(lbl);
+    overdue.forEach(p => wrap.appendChild(makePlanCard(p, all.indexOf(p))));
+  }
+
+  // Unplanned section
+  const unpl = all.filter(p => (p.d === null || p.d === undefined) && !p.v);
+  const lbl2 = document.createElement('div');
+  lbl2.className = 'sec-lbl';
+  lbl2.textContent = `Nepřiřazené POS (${unpl.length})`;
+  wrap.appendChild(lbl2);
+
+  if (!unpl.length) {
+    const e = document.createElement('div');
+    e.style.cssText = 'padding:20px;text-align:center;color:var(--muted);font-size:13px';
+    e.innerHTML = 'Všechny POS jsou přiřazené ke dnům. 🎉';
+    wrap.appendChild(e);
+  } else {
+    unpl.forEach(p => wrap.appendChild(makePlanCard(p, all.indexOf(p))));
+  }
+
+  // Already planned section (grouped by day)
+  const planned = all.filter(p => p.d !== null && p.d !== undefined && !p.v);
+  if (planned.length) {
+    const lbl3 = document.createElement('div');
+    lbl3.className = 'sec-lbl';
+    lbl3.textContent = `Naplánované (${planned.length})`;
+    wrap.appendChild(lbl3);
+    DAYS.forEach((dname, di) => {
+      const dayPos = planned.filter(p => p.d === di);
+      if (!dayPos.length) return;
+      const dlbl = document.createElement('div');
+      dlbl.style.cssText = 'padding:6px 16px 2px;font-size:11px;font-weight:700;color:var(--td)';
+      dlbl.textContent = `${dname} ${WEEKS_META[cWeek].dd[di]}${di===todayIdx&&isCurrentWeek?' · DNES':''} (${dayPos.length})`;
+      wrap.appendChild(dlbl);
+      dayPos.forEach(p => wrap.appendChild(makePlanCard(p, all.indexOf(p))));
+    });
+  }
+}
+
+function makePlanCard(p, ri) {
+  const card = document.createElement('div');
+  card.className = 'pos-card';
+  card.style.cursor = 'default';
+  const dayBadge = (p.d !== null && p.d !== undefined)
+    ? `<span style="font-size:11px;font-weight:700;color:var(--td);background:var(--tl);padding:3px 9px;border-radius:20px">${DAYS[p.d]} ${WEEKS_META[cWeek].dd[p.d]}</span>`
+    : `<span style="font-size:11px;font-weight:700;color:var(--muted);background:var(--bg);padding:3px 9px;border-radius:20px">Nepřiřazeno</span>`;
+  card.innerHTML = `
+    <div class="pci">
+      <div class="pinfo">
+        <div class="pname">${p.n}</div>
+        <div class="paddr">${p.a}</div>
+        <div class="pmeta">${typTag(p)}</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;padding:0 14px 12px">
+      ${dayBadge}
+      <button onclick="openAssign('${p.id}')" style="margin-left:auto;font-size:12px;font-weight:700;color:var(--navy);background:var(--teal);border:none;border-radius:8px;padding:6px 14px;cursor:pointer">
+        ${(p.d!==null&&p.d!==undefined)?'Změnit den':'+ Přiřadit den'}
+      </button>
+    </div>`;
+  return card;
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// EDITOR SECTIONS (texty / kampaně / inventory katalog)
+// ══════════════════════════════════════════════════════════════════════════
+function showEditorSection(sec, btn) {
+  ['texty','kampane','inventory'].forEach(s => {
+    const el = document.getElementById('ed-sec-' + s);
+    if (el) el.style.display = s === sec ? 'block' : 'none';
+  });
+  document.querySelectorAll('.ed-subnav').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  if (sec === 'kampane') renderEditorCampaigns();
+  if (sec === 'inventory') renderEditorCatalog();
+}
+
+// ── EDITABLE CAMPAIGNS ─────────────────────────────────────────────────────
+function getEditorCampaigns() {
+  const saved = lsg('editor_campaigns');
+  if (saved) return saved;
+  // Seed from CAMPAIGNS default
+  return [
+    {type:'Losy', name:'Zlatá rybka — nová emise', dates:'W23–W28', deadline:'2025-07-11', items:'POUZE nová emise Zlaté rybky — ne původní!\nPlakát A4 nad displej\nStojánek 20 Mega'},
+    {type:'Loterie', name:'EuroJackpot', dates:'W23–W28', deadline:'2025-07-11', items:'Plakát A4 EuroJackpot nad displej\nNa Corn totem: 2 plakáty (losy + loterie)'},
+    {type:'Rebranding', name:'Rebranding — 2 POS/den', dates:'Probíhá', deadline:'2025-07-11', items:'Norma 2 rebrandované POS/den\nOdstranit samolepky Sazka mobil\nORLEN: jen výměna losů, NE rebranding'},
+  ];
+}
+function saveEditorCampaigns(camps) { lss('editor_campaigns', camps); }
+
+function renderEditorCampaigns() {
+  const camps = getEditorCampaigns();
+  const el = document.getElementById('ed-campaigns-list');
+  if (!el) return;
+  el.innerHTML = camps.map((c,i) => `
+    <div class="editor-card" style="margin-bottom:10px">
+      <div class="editor-item">
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <input value="${c.type||''}" placeholder="Typ" oninput="updateCampaign(${i},'type',this.value)" style="width:90px;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:12px;font-weight:700;outline:none"/>
+          <input value="${c.name||''}" placeholder="Název kampaně" oninput="updateCampaign(${i},'name',this.value)" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:13px;outline:none"/>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <input value="${c.dates||''}" placeholder="Termín" oninput="updateCampaign(${i},'dates',this.value)" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:12px;outline:none"/>
+          <input type="date" value="${c.deadline||''}" oninput="updateCampaign(${i},'deadline',this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:12px;outline:none"/>
+        </div>
+        <textarea placeholder="Co osadit (každý řádek = položka)" oninput="updateCampaign(${i},'items',this.value)" style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:12px;font-family:inherit;resize:none;min-height:60px;outline:none;line-height:1.5">${c.items||''}</textarea>
+        <button onclick="deleteCampaign(${i})" style="margin-top:8px;padding:6px 12px;background:var(--rl);color:var(--red);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Smazat kampaň</button>
+      </div>
+    </div>`).join('');
+}
+function updateCampaign(i, field, val) {
+  const camps = getEditorCampaigns();
+  camps[i][field] = val;
+  saveEditorCampaigns(camps);
+}
+function addCampaign() {
+  const camps = getEditorCampaigns();
+  camps.push({type:'Losy', name:'Nová kampaň', dates:'', deadline:'', items:''});
+  saveEditorCampaigns(camps);
+  renderEditorCampaigns();
+}
+function deleteCampaign(i) {
+  const camps = getEditorCampaigns();
+  camps.splice(i,1);
+  saveEditorCampaigns(camps);
+  renderEditorCampaigns();
+}
+
+// ── EDITABLE INVENTORY CATALOG ─────────────────────────────────────────────
+function renderEditorCatalog() {
+  const cat = getInvCatalog();
+  ['vnitrni','venkovni'].forEach(section => {
+    const el = document.getElementById('ed-cat-' + section);
+    if (!el) return;
+    const items = cat[section] || [];
+    el.innerHTML = items.map((item,i) => `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--bg)">
+        <input value="${item.i}" oninput="updateCatalogItem('${section}',${i},'i',this.value)" style="width:40px;text-align:center;border:1.5px solid var(--border);border-radius:8px;padding:6px;font-size:16px;outline:none"/>
+        <input value="${item.n}" oninput="updateCatalogItem('${section}',${i},'n',this.value)" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:13px;outline:none"/>
+        <button onclick="deleteCatalogItem('${section}',${i})" style="background:none;border:none;color:var(--red);font-size:16px;cursor:pointer;padding:4px">✕</button>
+      </div>`).join('') || '<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px">Žádné položky</div>';
+  });
+}
+function updateCatalogItem(section, i, field, val) {
+  const cat = getInvCatalog();
+  cat[section][i][field] = val;
+  saveInvCatalog(cat);
+}
+function addCatalogItem(section) {
+  const cat = getInvCatalog();
+  if (!cat[section]) cat[section] = [];
+  cat[section].push({i: section==='venkovni'?'🏢':'📦', n:'Nová položka'});
+  saveInvCatalog(cat);
+  renderEditorCatalog();
+}
+function deleteCatalogItem(section, i) {
+  const cat = getInvCatalog();
+  cat[section].splice(i,1);
+  saveInvCatalog(cat);
+  renderEditorCatalog();
+}
+
+// ── Patch renderCampaigns to use editor campaigns ──────────────────────────
+const _origRenderCampaigns = renderCampaigns;
+renderCampaigns = function() {
+  const editorCamps = lsg('editor_campaigns');
+  if (!editorCamps || !editorCamps.length) {
+    _origRenderCampaigns();
+    return;
+  }
+  const wrap = document.getElementById('camp-wrap');
+  if (!wrap) return;
+  const typeColors = {'Losy':'camp-losy','Loterie':'camp-lot','Rebranding':'camp-rebranding'};
+  const typeIcons = {'Losy':'🎫 Losy','Loterie':'🎰 Loterie','Rebranding':'🔄 Rebranding','ORLEN':'⛽ ORLEN','Corn':'🌽 Corn'};
+  wrap.innerHTML = editorCamps.map(c => {
+    const cls = typeColors[c.type] || 'camp-losy';
+    const lbl = typeIcons[c.type] || ('📢 '+c.type);
+    const items = (c.items||'').split('\n').filter(Boolean);
+    let daysLeft = '';
+    if (c.deadline) {
+      const dl = new Date(c.deadline);
+      const days = Math.ceil((dl - new Date())/86400000);
+      daysLeft = days<=0?'Dnes!':days===1?'Zítra':days+' dní';
+    }
+    return `<div class="camp-card ${cls}"><div class="camp-inner">
+      <div class="camp-type">${lbl}</div>
+      <div class="camp-name">${c.name}</div>
+      ${c.dates?`<div class="camp-dates">📅 ${c.dates}</div>`:''}
+      <div class="camp-items">${items.map(it=>`<div class="camp-item"><div class="camp-dot"></div>${it}</div>`).join('')}</div>
+      ${c.deadline?`<div class="camp-dl">⏱ Deadline: ${c.deadline.split('-').reverse().join('. ')} · ${daysLeft}</div>`:''}
+    </div></div>`;
+  }).join('');
+};
+
+// ── Patch showAdmPage for editor sections ──────────────────────────────────
+const _____origShowAdmPage = showAdmPage;
+showAdmPage = function(p, btn) {
+  _____origShowAdmPage(p, btn);
+  if (p === 'editor') {
+    initEditor();
+    showEditorSection('texty', document.querySelector('.ed-subnav'));
+  }
+};
+
