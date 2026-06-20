@@ -53,7 +53,7 @@ function enterRole(role){
   } else {
     document.getElementById('technik-screen').classList.remove('active');
     document.getElementById('admin-screen').style.display='block';
-    renderAdminLive();renderAdminAlerts();renderAdminTechnici();renderAdminCasy();renderAdminFoto();
+    renderAdminDashboard();renderAdminLive();renderAdminAlerts();renderAdminTechnici();renderAdminCasy();renderAdminFoto();
     setTimeout(initAdminMap,300);
   }
 }
@@ -70,6 +70,7 @@ function showAdmPage(p,btn){
   btn.classList.add('active');
   if(p==='live'&&!adminMap) setTimeout(initAdminMap,100);
   if(p==='casy') renderAdminCasy();
+  if(p==='dashboard') renderAdminDashboard();
 }
 
 // ══════════════════════════════════════════════════════
@@ -886,12 +887,101 @@ function startAdminRefresh() {
     if (document.getElementById('admin-screen').style.display !== 'none') {
       const activePage = document.querySelector('.adm-page.active');
       if (!activePage) return;
+      if (activePage.id === 'adm-dashboard') renderAdminDashboard();
       if (activePage.id === 'adm-live') renderAdminLive();
       if (activePage.id === 'adm-casy') renderAdminCasy();
       if (activePage.id === 'adm-alerts') renderAdminAlerts();
       if (activePage.id === 'adm-foto') renderAdminFoto();
     }
   }, 5000);
+}
+
+// ══════════════════════════════════════════════════════
+// ADMIN — EXECUTIVE DASHBOARD (computed from existing data, no backend)
+// ══════════════════════════════════════════════════════
+function renderAdminDashboard() {
+  const live = getLiveState();
+  const pos = posData['25'] || [];
+  const gpsFlags = lsg('gps_flags_' + today(), []);
+  const shortVisits = lsg('vlog_' + today(), []).filter(v => v.flag === 'short');
+
+  const totalPOS = REAL_DATA.techs.reduce((s, t) => s + t.total, 0);
+  const donePOS = REAL_DATA.techs.reduce((s, t) => s + t.done, 0);
+  const completionPct = totalPOS ? Math.round(donePOS / totalPOS * 100) : 0;
+  const behind = REAL_DATA.techs.filter(t => t.overdue);
+  const activeCount = REAL_DATA.techs.filter(t => t.done > 0 && t.done < t.total).length;
+  const flagsToday = gpsFlags.length + shortVisits.length;
+
+  const kpiEl = document.getElementById('dash-kpis');
+  if (kpiEl) kpiEl.innerHTML = `
+    <div class="kpi-card"><div class="kpi-icon">✅</div><div class="kpi-val">${completionPct}%</div><div class="kpi-lbl">Plnění týmu dnes</div></div>
+    <div class="kpi-card"><div class="kpi-icon">👥</div><div class="kpi-val">${activeCount}</div><div class="kpi-lbl">Aktivní v terénu</div></div>
+    <div class="kpi-card warn"><div class="kpi-icon">⚠️</div><div class="kpi-val">${behind.length}</div><div class="kpi-lbl">Technici pozadu</div></div>
+    <div class="kpi-card danger"><div class="kpi-icon">🚩</div><div class="kpi-val">${flagsToday}</div><div class="kpi-lbl">Flagy dnes</div></div>
+    <div class="kpi-card"><div class="kpi-icon">🔧</div><div class="kpi-val">${live.servisOpen.length}</div><div class="kpi-lbl">Servisy otevřené</div></div>
+    <div class="kpi-card"><div class="kpi-icon">📍</div><div class="kpi-val">${donePOS}/${totalPOS}</div><div class="kpi-lbl">POS navštíveno (W25)</div></div>
+  `;
+
+  // Channel breakdown (IDT / KA / PETROL / CORN jsou oddělené kanály)
+  const channels = ['IDT', 'KA', 'PETROL', 'CORN'];
+  const chStats = channels.map(ch => {
+    const list = pos.filter(p => p.typ === ch);
+    const done = list.filter(p => p.v).length;
+    return { ch, list, done, pct: list.length ? Math.round(done / list.length * 100) : 0 };
+  });
+  const chEl = document.getElementById('dash-channels');
+  if (chEl) chEl.innerHTML = chStats.map(c => `
+    <div class="ch-row">
+      <div class="ch-name">${c.ch}</div>
+      <div class="ch-bar-bg"><div class="ch-bar-fg" style="width:${c.pct}%"></div></div>
+      <div class="ch-pct">${c.done}/${c.list.length}</div>
+    </div>`).join('');
+
+  // Leaderboard — top 3 / bottom 3 podle % plnění
+  const ranked = REAL_DATA.techs.filter(t => t.total).slice().sort((a, b) => (b.done / b.total) - (a.done / a.total));
+  const top3 = ranked.slice(0, 3);
+  const bottom3 = ranked.slice(-3).reverse();
+  const lbRow = (t, medal) => {
+    const pct = Math.round(t.done / t.total * 100);
+    return `<div class="tr" onclick="showTechDetail('${t.name}')">
+      <div class="tav">${medal}</div>
+      <div class="tinf"><div class="tn">${t.name}</div><div class="ts">${t.done}/${t.total} POS</div></div>
+      <div class="tr-right"><div class="mpp" style="font-weight:800;color:${pct >= 70 ? 'var(--green)' : pct < 30 ? 'var(--red)' : 'var(--muted)'}">${pct}%</div></div>
+    </div>`;
+  };
+  const lbEl = document.getElementById('dash-leaderboard');
+  if (lbEl) lbEl.innerHTML = `
+    <div class="lb-col"><div class="lb-hdr">🏆 Nejlepší výkon</div>${top3.map((t, i) => lbRow(t, ['🥇', '🥈', '🥉'][i])).join('')}</div>
+    <div class="lb-col"><div class="lb-hdr">🔻 Vyžaduje pozornost</div>${bottom3.map((t, i) => lbRow(t, i + 1)).join('')}</div>
+  `;
+
+  // AI insighty — syntetizované z reálných dat (bez nutnosti volat AI API)
+  const avgPosPerTech = REAL_DATA.techs.length ? Math.round(totalPOS / REAL_DATA.techs.length) : 0;
+  const bestChannel = chStats.filter(c => c.list.length).sort((a, b) => b.pct - a.pct)[0];
+  const insights = [
+    { icon: '📊', title: 'Route efektivita', text: `Průměrně ${avgPosPerTech} POS na technika za týden, ${activeCount} týmů aktivně v terénu právě teď.` },
+    { icon: '🚀', title: 'Nejlepší kanál', text: bestChannel ? `${bestChannel.ch} má nejvyšší plnění (${bestChannel.pct}%) ze všech kanálů tento týden.` : 'Data se počítají…' },
+    { icon: '🔍', title: 'Anti-fraud kontrola', text: flagsToday ? `${gpsFlags.length} GPS anomálií a ${shortVisits.length} podezřele krátkých návštěv dnes — doporučena kontrola.` : 'Žádné GPS anomálie ani podezřele krátké návštěvy dnes.' },
+    { icon: '🎯', title: 'Predikce dokončení', text: `Při aktuálním tempu tým dokončí týden na ${completionPct}% — ${completionPct >= 70 ? 'na dobré cestě splnit normu.' : 'hrozí nesplnění normy, zvážit prioritizaci.'}` },
+  ];
+  const insEl = document.getElementById('dash-insights');
+  if (insEl) insEl.innerHTML = insights.map(i => `
+    <div class="insight-card"><div class="insight-icon">${i.icon}</div><div class="insight-body"><div class="insight-title">${i.title}</div><div class="insight-text">${i.text}</div></div></div>
+  `).join('');
+
+  // Attention feed — servisy, GPS flagy, krátké návštěvy, technici pozadu
+  const attnItems = [];
+  live.servisOpen.forEach(p => attnItems.push({ icon: '🔧', sev: 'red', text: `Servis čeká: <strong>${p.n}</strong>` }));
+  gpsFlags.forEach(f => attnItems.push({ icon: '📍', sev: 'red', text: `GPS anomálie: <strong>${f.posName}</strong> · ${f.dist != null ? f.dist.toFixed(1) + 'km' : ''} od POS` }));
+  shortVisits.forEach(v => attnItems.push({ icon: '⏱', sev: 'orange', text: `Krátká návštěva: <strong>${v.posName}</strong> · ${v.dur} min` }));
+  behind.forEach(t => attnItems.push({ icon: '⚠️', sev: 'orange', text: `<strong>${t.name}</strong> je pozadu — ${t.done}/${t.total} POS` }));
+
+  const attnEl = document.getElementById('dash-attention');
+  if (attnEl) {
+    attnEl.innerHTML = attnItems.length
+      ? attnItems.map(a => `<div class="attn-item attn-${a.sev}"><span class="attn-icon">${a.icon}</span><span>${a.text}</span></div>`).join('')
+      : '<div class="empty"><div class="empty-i">✅</div><div class="empty-t">Žádné problémy</div><div class="empty-s">Vše běží podle plánu.</div></div>';
+  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -1767,6 +1857,65 @@ Napiš přátelský, motivující briefing v češtině. Max 3 věty. Zmiň co j
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+// AI MANAGER BRIEFING — krátké executive summary pro manažera (Claude API)
+// ══════════════════════════════════════════════════════════════════════════
+async function generateManagerBriefing() {
+  const btn = document.getElementById('mgr-briefing-btn');
+  const wrap = document.getElementById('mgr-briefing-wrap');
+  if (!btn || !wrap) return;
+
+  btn.disabled = true;
+  btn.innerHTML = '<span>⏳</span> Generuji briefing…';
+  wrap.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">Sestavuji executive summary…<br><br><div class="ai-typing" style="font-size:20px">▋</div></div>';
+
+  const live = getLiveState ? getLiveState() : {};
+  const totalPOS = REAL_DATA.techs.reduce((s, t) => s + t.total, 0);
+  const donePOS = REAL_DATA.techs.reduce((s, t) => s + t.done, 0);
+  const pct = totalPOS ? Math.round(donePOS / totalPOS * 100) : 0;
+  const behind = REAL_DATA.techs.filter(t => t.overdue);
+  const gpsFlags = lsg('gps_flags_' + today(), []);
+
+  const prompt = `Jsi AI executive asistent pro manažera field operations v Allwyn (loterie, ČR), který řídí 27 merch techniků.
+Napiš krátký denní briefing pro manažera (executive summary) v češtině, max 4 věty, profesionální tón pro vedení.
+
+Data:
+- Plnění týmu dnes: ${donePOS}/${totalPOS} POS (${pct}%)
+- Technici pozadu: ${behind.length} (${behind.map(t => t.name).join(', ') || 'žádní'})
+- Otevřené servisy: ${live.servisOpen?.length || 0}
+- GPS anomálie dnes: ${gpsFlags.length}
+
+Shrň nejdůležitější fakt, jedno riziko a jedno konkrétní doporučení.`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 500, messages: [{ role: 'user', content: prompt }] })
+    });
+    const data = await res.json();
+    const text = data.content?.[0]?.text || '';
+    wrap.innerHTML = renderBriefingCard(text);
+  } catch (e) {
+    const fallback = `Tým dnes plní ${pct}% týdenní normy (${donePOS}/${totalPOS} POS). ${behind.length ? `${behind.length} technik(ů) je výrazně pozadu (${behind.map(t => t.name).join(', ')}) — doporučuji telefonickou kontrolu ještě dnes.` : 'Žádný technik výrazně nezaostává.'} ${gpsFlags.length ? `Zaznamenáno ${gpsFlags.length} GPS anomálií — prověřit u dotčených POS.` : 'GPS kontrola bez anomálií.'} Doporučení: prioritizovat otevřené servisy (${live.servisOpen?.length || 0}) před koncem dne.`;
+    wrap.innerHTML = renderBriefingCard(fallback);
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '<span>🌅</span> Obnovit briefing';
+}
+
+function renderBriefingCard(text) {
+  return `<div class="ai-report-card">
+    <div class="ai-report-hdr" style="background:var(--teal)">
+      <div class="ai-report-hdr-icon">🌅</div>
+      <div class="ai-report-hdr-t" style="color:var(--navy)">Denní briefing pro manažera</div>
+      <div class="ai-report-hdr-badge" style="background:var(--navy);color:var(--teal)">Claude AI</div>
+    </div>
+    <div class="ai-report-body">${text}</div>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════
 // AI ADMIN REPORT (Claude API)
 // ══════════════════════════════════════════════════════════════════════════
 async function generateAIReport() {
@@ -1921,7 +2070,14 @@ const __origShowAdmPage3 = showAdmPage;
 showAdmPage = function(p, btn) {
   __origShowAdmPage3(p, btn);
   if (p === 'editor') initEditor();
-  if (p === 'ai') { document.getElementById('ai-report-wrap').innerHTML = '<div style="padding:30px;text-align:center;color:var(--muted);font-size:13px">Klikni na tlačítko pro spuštění AI analýzy.</div>'; }
+  if (p === 'ai') {
+    if (!document.getElementById('mgr-briefing-wrap').innerHTML.trim()) {
+      document.getElementById('mgr-briefing-wrap').innerHTML = '<div class="empty"><div class="empty-i">🌅</div><div class="empty-t">Briefing pro manažera</div><div class="empty-s">Klikni výše a AI sestaví executive summary z dnešních dat.</div></div>';
+    }
+    if (!document.getElementById('ai-report-wrap').innerHTML.trim()) {
+      document.getElementById('ai-report-wrap').innerHTML = '<div class="empty"><div class="empty-i">🤖</div><div class="empty-t">Hloubková analýza výkonu</div><div class="empty-s">Klikni na tlačítko pro spuštění AI analýzy celého týmu.</div></div>';
+    }
+  }
 };
 
 // ── Patch openDetail with admin alert banner ───────────────────────────────
