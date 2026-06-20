@@ -9,6 +9,51 @@
 <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
+<!-- ICON SPRITE (unified line-icon set, replaces emoji glyphs across the app) -->
+<svg style="display:none" aria-hidden="true">
+<defs>
+<symbol id="ic-dashboard" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/></symbol>
+<symbol id="ic-live" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+<symbol id="ic-warning" viewBox="0 0 24 24"><path d="M12 4 21 19H3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><line x1="12" y1="10" x2="12" y2="14.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="17" r="0.9"/></symbol>
+<symbol id="ic-team" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="17" cy="9" r="2.3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M15.5 14.7c2.4.3 4.3 2.2 4.5 5.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+<symbol id="ic-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 7.5V12l3.2 2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+<symbol id="ic-camera" viewBox="0 0 24 24"><path d="M4 8.5a1.5 1.5 0 0 1 1.5-1.5h1.6l.9-1.6h7l.9 1.6h1.6A1.5 1.5 0 0 1 20 8.5v10A1.5 1.5 0 0 1 18.5 20h-13A1.5 1.5 0 0 1 4 18.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.2" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+<symbol id="ic-edit" viewBox="0 0 24 24"><path d="M16.7 3.3a2 2 0 0 1 2.8 2.8L8 17.6 4 19l1.4-4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+<symbol id="ic-intel" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.4" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="4" cy="6" r="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="20" cy="6" r="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="4" cy="18" r="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="20" cy="18" r="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><line x1="9.6" y1="10.2" x2="5.2" y2="7" stroke="currentColor" stroke-width="1.2"/><line x1="14.4" y1="10.2" x2="18.8" y2="7" stroke="currentColor" stroke-width="1.2"/><line x1="9.6" y1="13.8" x2="5.2" y2="17" stroke="currentColor" stroke-width="1.2"/><line x1="14.4" y1="13.8" x2="18.8" y2="17" stroke="currentColor" stroke-width="1.2"/></symbol>
+<symbol id="ic-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8.3 12.3l2.4 2.4 5-5.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="ic-notes" viewBox="0 0 24 24"><rect x="4.5" y="3.5" width="15" height="17" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.6"/><line x1="8" y1="8.5" x2="16" y2="8.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><line x1="8" y1="12.3" x2="16" y2="12.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><line x1="8" y1="16.1" x2="13" y2="16.1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+<symbol id="ic-box" viewBox="0 0 24 24"><path d="M3.5 7.8 12 3.5l8.5 4.3-8.5 4.3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M3.5 7.8v8.4L12 20.5l8.5-4.3V7.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><line x1="12" y1="12.1" x2="12" y2="20.5" stroke="currentColor" stroke-width="1.6"/></symbol>
+<symbol id="ic-card" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="8" cy="11" r="1.7" fill="none" stroke="currentColor" stroke-width="1.4"/><line x1="13" y1="10" x2="18" y2="10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><line x1="13" y1="13" x2="18" y2="13" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><line x1="5" y1="16" x2="11" y2="16" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></symbol>
+<symbol id="ic-store" viewBox="0 0 24 24"><path d="M4 9.5 5.2 4h13.6l1.2 5.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M4 9.5a2.2 2.2 0 0 0 4.4.3 2.2 2.2 0 0 0 4.4 0 2.2 2.2 0 0 0 4.4 0 2.2 2.2 0 0 0 4.4-.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M5 9.8V20h14V9.8" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="9.5" y="14" width="5" height="6" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+<symbol id="ic-building" viewBox="0 0 24 24"><rect x="5" y="3.5" width="14" height="17" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/><line x1="8.5" y1="7.5" x2="8.5" y2="7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="7.5" x2="12" y2="7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="15.5" y1="7.5" x2="15.5" y2="7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="8.5" y1="11.5" x2="8.5" y2="11.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="11.5" x2="12" y2="11.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="15.5" y1="11.5" x2="15.5" y2="11.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="9.5" y="15" width="5" height="5.5" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+<symbol id="ic-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-6.1-6.5-11.2A6.5 6.5 0 0 1 12 3.3a6.5 6.5 0 0 1 6.5 6.5C18.5 14.9 12 21 12 21z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="9.8" r="2.2" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+<symbol id="ic-map" viewBox="0 0 24 24"><path d="M9 4 4 6v14l5-2 6 2 5-2V4l-5 2-6-2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><line x1="9" y1="4" x2="9" y2="18" stroke="currentColor" stroke-width="1.4"/><line x1="15" y1="6" x2="15" y2="20" stroke="currentColor" stroke-width="1.4"/></symbol>
+<symbol id="ic-flag" viewBox="0 0 24 24"><path d="M6 3v18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M6 4h11l-2.5 3.5L17 11H6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+<symbol id="ic-wrench" viewBox="0 0 24 24"><path d="M14.7 9.3 18 6a3.5 3.5 0 0 0-5-1.4L9.5 8 4 13.5 6.5 16 12 10.5l3.4 3.4a3.5 3.5 0 0 0-1.4-5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+<symbol id="ic-route" viewBox="0 0 24 24"><circle cx="5.5" cy="6" r="2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="18.5" cy="18" r="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5.5 8v4a4 4 0 0 0 4 4h4a4 4 0 0 0 4-4v-2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+<symbol id="ic-trophy" viewBox="0 0 24 24"><path d="M7 4h10v4a5 5 0 0 1-10 0z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M7 5H4.5a1 1 0 0 0-1 1.2c.3 1.8 1.5 3.2 3.5 3.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M17 5h2.5a1 1 0 0 1 1 1.2c-.3 1.8-1.5 3.2-3.5 3.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><line x1="12" y1="12.7" x2="12" y2="16" stroke="currentColor" stroke-width="1.6"/><path d="M8.5 20h7l-1-3.3h-5z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+<symbol id="ic-arrow-down" viewBox="0 0 24 24"><line x1="12" y1="4" x2="12" y2="18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M6.5 13 12 18.5 17.5 13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="ic-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.6"/><line x1="3.5" y1="9.5" x2="20.5" y2="9.5" stroke="currentColor" stroke-width="1.6"/><line x1="8" y1="3" x2="8" y2="6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><line x1="16" y1="3" x2="16" y2="6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+<symbol id="ic-shield" viewBox="0 0 24 24"><path d="M12 3.5 19 6.3v5.4c0 5-3 8-7 9.3-4-1.3-7-4.3-7-9.3V6.3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 12l2.2 2.2L15.5 9.7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="ic-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="12" cy="12" r="1.2"/></symbol>
+<symbol id="ic-image" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="8.3" cy="9.3" r="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M4.5 17 9 12.5l3 2.7L16.5 11l3.5 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="ic-fuel" viewBox="0 0 24 24"><rect x="4" y="4" width="9" height="16" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.6"/><line x1="6.5" y1="8" x2="10.5" y2="8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M13 8.5h2.3L18 11v6a1.4 1.4 0 0 1-2.8 0v-3h-2.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+<symbol id="ic-close" viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+<symbol id="ic-bell" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2H4.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M10 19.5a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+<symbol id="ic-monitor" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="12" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.6"/><line x1="8.5" y1="20" x2="15.5" y2="20" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><line x1="12" y1="16.5" x2="12" y2="20" stroke="currentColor" stroke-width="1.6"/></symbol>
+<symbol id="ic-bulb" viewBox="0 0 24 24"><path d="M9 18.5h6M10 21h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M12 3.5a5.8 5.8 0 0 0-3 10.8c.6.4 1 1 1 1.7v.5h4v-.5c0-.7.4-1.3 1-1.7A5.8 5.8 0 0 0 12 3.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+<symbol id="ic-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.6"/><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="12" y1="2.5" x2="12" y2="4.8"/><line x1="12" y1="19.2" x2="12" y2="21.5"/><line x1="2.5" y1="12" x2="4.8" y2="12"/><line x1="19.2" y1="12" x2="21.5" y2="12"/><line x1="5.1" y1="5.1" x2="6.7" y2="6.7"/><line x1="17.3" y1="17.3" x2="18.9" y2="18.9"/><line x1="5.1" y1="18.9" x2="6.7" y2="17.3"/><line x1="17.3" y1="6.7" x2="18.9" y2="5.1"/></g></symbol>
+<symbol id="ic-lock" viewBox="0 0 24 24"><rect x="5.5" y="11" width="13" height="9" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+<symbol id="ic-image" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="9" cy="10" r="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M4 16.5l5-4.5 3.5 3 3-2.5 4.5 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+<symbol id="ic-signal" viewBox="0 0 24 24"><circle cx="12" cy="17" r="1.5" fill="currentColor"/><path d="M8.5 14a5 5 0 0 1 7 0M5.5 11a9 9 0 0 1 13 0M2.8 8a13 13 0 0 1 18.4 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+<symbol id="ic-check-badge" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 12.3l2.6 2.6 5.4-5.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="ic-palette" viewBox="0 0 24 24"><path d="M12 3.5a8.5 8 0 1 0 0 16c1.2 0 1.8-.7 1.8-1.6 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.7-1.6 1.6-1.6h1.9a4 3.8 0 0 0 4.2-3.8C20.5 6.3 16.7 3.5 12 3.5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="7.2" cy="11" r="1.1" fill="currentColor"/><circle cx="9.5" cy="7.3" r="1.1" fill="currentColor"/><circle cx="14.5" cy="7.3" r="1.1" fill="currentColor"/><circle cx="16.8" cy="11" r="1.1" fill="currentColor"/></symbol>
+<symbol id="ic-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><line x1="12" y1="11" x2="12" y2="16.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="7.8" r="1" fill="currentColor"/></symbol>
+<symbol id="ic-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5.5 19.5c0-3.5 3-6 6.5-6s6.5 2.5 6.5 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+<symbol id="ic-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3.5 19c0-3 2.5-5.3 5.5-5.3S14.5 16 14.5 19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M15.5 6a3 3 0 0 1 0 5.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M16 13.7c2.3.4 4 2.4 4 5.3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+</defs>
+</svg>
+
 <!-- ROLE SELECT -->
 <div id="role-screen">
   <div class="rs-bg">
@@ -84,10 +129,10 @@
     <div class="briefing-sh">
       <div class="bf-handle"></div>
       <div class="bf-hdr">
-        <div class="bf-emoji">☀️</div>
+        <div class="bf-emoji"><svg class="ic ic-xl"><use href="#ic-calendar"/></svg></div>
         <div><div class="bf-title">Dobré ráno, Tomáš!</div><div class="bf-date" id="bf-date"></div></div>
       </div>
-      <div class="ai-msg" id="bf-msg"><span class="ai-typing" id="bf-typing"></span><span class="ai-badge">✨ AI</span></div>
+      <div class="ai-msg" id="bf-msg"><span id="bf-typing"></span><span class="ai-badge">AI Insight</span></div>
       <div class="bf-stats">
         <div class="bf-stat o"><div class="bf-sv" id="bf-total">35</div><div class="bf-sl">POS týden</div></div>
         <div class="bf-stat g"><div class="bf-sv" id="bf-today">7</div><div class="bf-sl">Dnes</div></div>
@@ -140,7 +185,7 @@
 
     <!-- CHECK-IN -->
     <div class="ci-bar" id="ci-bar">
-      <div class="ci-ico">📍</div>
+      <div class="ci-ico"><svg class="ic ic-lg"><use href="#ic-pin"/></svg></div>
       <div class="ci-info">
         <div class="ci-t" id="ci-t">Check-in na POS</div>
         <div class="ci-s" id="ci-s">Potvrď příjezd na provozovnu</div>
@@ -156,15 +201,15 @@
     <div class="sec-lbl">Info o provozovně</div>
     <div style="background:#fff;border-radius:10px;margin:0 12px 8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05)">
       <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--bg)">
-        <div style="font-size:15px;width:20px;text-align:center">📍</div>
+        <div style="width:20px;text-align:center;color:var(--teal)"><svg class="ic"><use href="#ic-pin"/></svg></div>
         <div><div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Oblast / Region</div><div style="font-size:13px;font-weight:600;margin-top:1px" id="info-area">—</div></div>
       </div>
       <div style="display:flex;align-items:center;gap:12px;padding:11px 14px">
-        <div style="font-size:15px;width:20px;text-align:center">🏪</div>
+        <div style="width:20px;text-align:center;color:var(--teal)"><svg class="ic"><use href="#ic-store"/></svg></div>
         <div><div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Typ partnerství</div><div style="font-size:13px;font-weight:600;margin-top:1px" id="info-typ">—</div></div>
       </div>
     </div>
-    <div style="margin:0 12px 8px;border-radius:10px;background:#fff;border:2px dashed var(--border);padding:11px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted)" onclick="openMap()">🗺️ Navigovat na místo</div>
+    <div style="margin:0 12px 8px;border-radius:10px;background:#fff;border:2px dashed var(--border);padding:11px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted)" onclick="openMap()"><svg class="ic"><use href="#ic-map"/></svg> Navigovat na místo</div>
 
     <!-- CAMPAIGNS -->
     <div class="sec-lbl">Aktuální kampaně</div>
@@ -179,7 +224,7 @@
       <div class="sec-lbl">Merch — osazení materiálů</div>
       <div class="supply-card" style="margin:0 12px 8px">
         <div class="supply-hdr" style="background:var(--tm)">
-          <div class="supply-hdr-t">🎨 Merchandising</div>
+          <div class="supply-hdr-t"><svg class="ic ic-sm"><use href="#ic-palette"/></svg> Merchandising</div>
           <div class="supply-badge" style="background:rgba(255,255,255,.2);color:#fff">Bez podpisu</div>
         </div>
         <div id="merch-items"></div>
@@ -194,7 +239,7 @@
       <div class="sec-lbl">Spotřební materiál — předání</div>
       <div class="supply-card" style="margin:0 12px 8px">
         <div class="supply-hdr">
-          <div class="supply-hdr-t">📦 Spotřební materiál</div>
+          <div class="supply-hdr-t"><svg class="ic ic-sm"><use href="#ic-box"/></svg> Spotřební materiál</div>
           <div class="supply-badge" id="supply-badge-lbl">Vyžaduje podpis</div>
         </div>
         <div id="supply-items"></div>
@@ -236,9 +281,9 @@
 
     <!-- DETAIL TABS -->
     <div class="det-tabs">
-      <div class="det-tab active" onclick="showDetTab('notes',this)">📝 Poznámky</div>
-      <div class="det-tab" onclick="showDetTab('inv',this)">📦 Inventory</div>
-      <div class="det-tab" onclick="showDetTab('karta',this)">🗂️ Karta POS</div>
+      <div class="det-tab active" onclick="showDetTab('notes',this)"><svg class="ic ic-sm"><use href="#ic-notes"/></svg> Poznámky</div>
+      <div class="det-tab" onclick="showDetTab('inv',this)"><svg class="ic ic-sm"><use href="#ic-box"/></svg> Inventory</div>
+      <div class="det-tab" onclick="showDetTab('karta',this)"><svg class="ic ic-sm"><use href="#ic-card"/></svg> Karta POS</div>
     </div>
 
     <div id="dtc-notes" class="det-tc" style="padding:8px 12px">
@@ -249,11 +294,11 @@
       <div style="display:flex;margin:4px 12px 10px;background:var(--bg);border-radius:10px;padding:3px;gap:3px">
         <button onclick="showInvTab('vnitrni',this)" id="inv-tab-vnitrni"
           style="flex:1;padding:7px;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:var(--navy);color:var(--teal)">
-          🏪 Vnitřní
+          <svg class="ic ic-sm"><use href="#ic-store"/></svg> Vnitřní
         </button>
         <button onclick="showInvTab('venkovni',this)" id="inv-tab-venkovni"
           style="flex:1;padding:7px;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:transparent;color:var(--muted)">
-          🏢 Venkovní
+          <svg class="ic ic-sm"><use href="#ic-building"/></svg> Venkovní
         </button>
       </div>
 
@@ -269,8 +314,9 @@
         <button class="inv-add" onclick="addInvItem('venkovni')">+ Přidat venkovní položku</button>
       </div>
 
-      <div style="margin:8px 12px;padding:10px 14px;background:var(--bg);border-radius:10px;font-size:11px;color:var(--muted);line-height:1.5">
-        📋 Inventory = dlouhodobý majetek. Aktualizuj pouze při instalaci, výměně nebo zjištěné změně. Označení "Chybí" automaticky vytvoří prioritní úkol.
+      <div style="margin:8px 12px;padding:10px 14px;background:var(--bg);border-radius:10px;font-size:11px;color:var(--muted);line-height:1.5;display:flex;gap:6px">
+        <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-info"/></svg>
+        <span>Inventory = dlouhodobý majetek. Aktualizuj pouze při instalaci, výměně nebo zjištěné změně. Označení "Chybí" automaticky vytvoří prioritní úkol.</span>
       </div>
     </div>
     <div id="dtc-karta" class="det-tc" style="display:none;padding:8px 12px">
@@ -318,16 +364,16 @@
   <div class="adm-hdr">
     <div class="adm-logo"><div class="adm-a">a</div><div class="adm-title">allwyn <span>space</span> · velín</div></div>
     <div class="adm-nav">
-      <button class="adm-btn active" onclick="showAdmPage('dashboard',this)">📊 Dashboard</button>
-      <button class="adm-btn" onclick="showAdmPage('live',this)">🔴 Live</button>
-      <button class="adm-btn" onclick="showAdmPage('alerts',this)">⚠️ Flagy</button>
-      <button class="adm-btn" onclick="showAdmPage('technici',this)">👥 Technici</button>
-      <button class="adm-btn" onclick="showAdmPage('casy',this)">⏱ Časy</button>
-      <button class="adm-btn" onclick="showAdmPage('foto',this)">📸 Fotky</button>
-      <button class="adm-btn" onclick="showAdmPage('redakce',this)">✏️ Úkoly</button>
-      <button class="adm-btn" onclick="showAdmPage('ai',this)">🤖 AI</button>
-      <button class="adm-btn" onclick="showAdmPage('editor',this)">✍️ Editor</button>
-      <button class="adm-btn" onclick="showAdmPage('schvaleni',this)">✅ Schválení</button>
+      <button class="adm-btn active" onclick="showAdmPage('dashboard',this)"><svg class="ic ic-sm"><use href="#ic-dashboard"/></svg> Dashboard</button>
+      <button class="adm-btn" onclick="showAdmPage('live',this)"><svg class="ic ic-sm"><use href="#ic-live"/></svg> Live</button>
+      <button class="adm-btn" onclick="showAdmPage('alerts',this)"><svg class="ic ic-sm"><use href="#ic-warning"/></svg> Flagy</button>
+      <button class="adm-btn" onclick="showAdmPage('technici',this)"><svg class="ic ic-sm"><use href="#ic-team"/></svg> Technici</button>
+      <button class="adm-btn" onclick="showAdmPage('casy',this)"><svg class="ic ic-sm"><use href="#ic-clock"/></svg> Časy</button>
+      <button class="adm-btn" onclick="showAdmPage('foto',this)"><svg class="ic ic-sm"><use href="#ic-camera"/></svg> Fotky</button>
+      <button class="adm-btn" onclick="showAdmPage('redakce',this)"><svg class="ic ic-sm"><use href="#ic-edit"/></svg> Úkoly</button>
+      <button class="adm-btn" onclick="showAdmPage('ai',this)"><svg class="ic ic-sm"><use href="#ic-intel"/></svg> Intelligence</button>
+      <button class="adm-btn" onclick="showAdmPage('editor',this)"><svg class="ic ic-sm"><use href="#ic-edit"/></svg> Editor</button>
+      <button class="adm-btn" onclick="showAdmPage('schvaleni',this)"><svg class="ic ic-sm"><use href="#ic-check-circle"/></svg> Schválení</button>
     </div>
   </div>
   <div class="adm-content">
@@ -338,22 +384,22 @@
       <div class="kpi-grid" id="dash-kpis"></div>
 
       <div class="dash-block">
-        <div class="dash-block-t">📡 Plnění podle kanálu</div>
+        <div class="dash-block-t"><svg class="ic"><use href="#ic-route"/></svg> Plnění podle kanálu</div>
         <div id="dash-channels"></div>
       </div>
 
       <div class="dash-block">
-        <div class="dash-block-t">🏆 Výkon techniků</div>
+        <div class="dash-block-t"><svg class="ic"><use href="#ic-trophy"/></svg> Výkon techniků</div>
         <div class="lb-grid" id="dash-leaderboard"></div>
       </div>
 
       <div class="dash-block">
-        <div class="dash-block-t">🧠 AI insighty</div>
+        <div class="dash-block-t"><svg class="ic"><use href="#ic-intel"/></svg> Operations Intelligence</div>
         <div class="insight-grid" id="dash-insights"></div>
       </div>
 
       <div class="dash-block">
-        <div class="dash-block-t">🚨 Vyžaduje pozornost</div>
+        <div class="dash-block-t"><svg class="ic"><use href="#ic-warning"/></svg> Vyžaduje pozornost</div>
         <div class="cw" id="dash-attention"></div>
       </div>
     </div>
@@ -363,7 +409,7 @@
       <div class="rf-wrap">
         <div class="rf-lbl">Filtr regionu</div>
         <div class="rf-row" id="rf-row">
-          <button class="rfb active" onclick="filterRegion('all',this)">🇨🇿 Celá ČR</button>
+          <button class="rfb active" onclick="filterRegion('all',this)">Celá ČR</button>
           <button class="rfb" onclick="filterRegion('RSE',this)">RSE</button>
           <button class="rfb" onclick="filterRegion('RSZ',this)">RSZ</button>
           <button class="rfb" onclick="filterRegion('RSJ',this)">RSJ</button>
@@ -423,13 +469,13 @@
       <!-- Quick action buttons -->
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
         <button onclick="openEditModal('group')" style="flex:1;min-width:120px;padding:12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;text-align:center;cursor:pointer;font-size:12px;font-weight:700;color:var(--navy)">
-          <div style="font-size:20px;margin-bottom:4px">👥</div>Skupině POS
+          <div style="margin-bottom:4px;color:var(--teal)"><svg class="ic ic-lg"><use href="#ic-users"/></svg></div>Skupině POS
         </button>
         <button onclick="openEditModal('technik')" style="flex:1;min-width:120px;padding:12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;text-align:center;cursor:pointer;font-size:12px;font-weight:700;color:var(--navy)">
-          <div style="font-size:20px;margin-bottom:4px">👤</div>Technikovi
+          <div style="margin-bottom:4px;color:var(--teal)"><svg class="ic ic-lg"><use href="#ic-user"/></svg></div>Technikovi
         </button>
         <button onclick="openEditModal('pos')" style="flex:1;min-width:120px;padding:12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;text-align:center;cursor:pointer;font-size:12px;font-weight:700;color:var(--navy)">
-          <div style="font-size:20px;margin-bottom:4px">📍</div>Konkrétní POS
+          <div style="margin-bottom:4px;color:var(--teal)"><svg class="ic ic-lg"><use href="#ic-pin"/></svg></div>Konkrétní POS
         </button>
       </div>
 
@@ -450,12 +496,12 @@
     <!-- AI ANALÝZA -->
     <div class="adm-page" id="adm-ai">
       <button class="ai-generate-btn" id="mgr-briefing-btn" onclick="generateManagerBriefing()" style="background:var(--teal);color:var(--navy)">
-        <span>🌅</span> Denní briefing pro manažera
+        <svg class="ic"><use href="#ic-calendar"/></svg> Daily Executive Briefing
       </button>
       <div id="mgr-briefing-wrap"></div>
 
       <button class="ai-generate-btn" id="ai-gen-btn" onclick="generateAIReport()">
-        <span>🤖</span> Analyzovat výkon týmu — AI
+        <svg class="ic"><use href="#ic-intel"/></svg> Team Performance Analysis
       </button>
       <div id="ai-report-wrap"></div>
     </div>
@@ -464,9 +510,9 @@
     <div class="adm-page" id="adm-editor">
       <!-- Editor sub-nav -->
       <div style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto">
-        <button class="ed-subnav active" onclick="showEditorSection('texty',this)">📝 Texty</button>
-        <button class="ed-subnav" onclick="showEditorSection('kampane',this)">🎯 Kampaně</button>
-        <button class="ed-subnav" onclick="showEditorSection('inventory',this)">📦 Inventory katalog</button>
+        <button class="ed-subnav active" onclick="showEditorSection('texty',this)"><svg class="ic ic-sm"><use href="#ic-edit"/></svg> Texty</button>
+        <button class="ed-subnav" onclick="showEditorSection('kampane',this)"><svg class="ic ic-sm"><use href="#ic-target"/></svg> Kampaně</button>
+        <button class="ed-subnav" onclick="showEditorSection('inventory',this)"><svg class="ic ic-sm"><use href="#ic-box"/></svg> Inventory katalog</button>
       </div>
 
       <!-- TEXTY -->
@@ -502,8 +548,9 @@
           <button onclick="addCampaign()" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Kampaň</button>
         </div>
         <div id="ed-campaigns-list"></div>
-        <div style="padding:12px;background:var(--tl);border-radius:10px;font-size:12px;color:var(--tm);line-height:1.5;margin-top:8px">
-          💡 Kampaně se zobrazí technikům v detailu POS. Edituj přímo zde.
+        <div style="padding:12px;background:var(--tl);border-radius:10px;font-size:12px;color:var(--tm);line-height:1.5;margin-top:8px;display:flex;gap:6px">
+          <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-bulb"/></svg>
+          <span>Kampaně se zobrazí technikům v detailu POS. Edituj přímo zde.</span>
         </div>
       </div>
 
@@ -517,8 +564,9 @@
           <button onclick="addCatalogItem('venkovni')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Položka</button>
         </div>
         <div class="editor-card" id="ed-cat-venkovni"></div>
-        <div style="padding:12px;background:var(--tl);border-radius:10px;font-size:12px;color:var(--tm);line-height:1.5;margin-top:8px">
-          💡 Technici vybírají inventory POUZE z tohoto katalogu.
+        <div style="padding:12px;background:var(--tl);border-radius:10px;font-size:12px;color:var(--tm);line-height:1.5;margin-top:8px;display:flex;gap:6px">
+          <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-bulb"/></svg>
+          <span>Technici vybírají inventory POUZE z tohoto katalogu.</span>
         </div>
       </div>
     </div>
@@ -527,7 +575,7 @@
       <div class="adm-sh"><div class="adm-st">Fotodokumentace — W25</div></div>
       <div class="foto-grid" id="foto-grid"></div>
       <div style="background:#fff;border-radius:12px;padding:20px;text-align:center;color:var(--muted);font-size:13px;box-shadow:0 1px 3px rgba(0,0,0,.06)">
-        <div style="font-size:30px;margin-bottom:8px">📸</div>
+        <div style="margin-bottom:8px;color:var(--muted);display:flex;justify-content:center"><svg class="ic ic-xl"><use href="#ic-camera"/></svg></div>
         <div style="font-weight:700;color:var(--text);margin-bottom:4px">Fotky z dnešních návštěv</div>
         <div>Technici fotí terminál před a po osazení. Zobrazí se zde v reálném čase.</div>
       </div>

@@ -94,10 +94,10 @@ function showBriefing(){
   document.getElementById('bf-today').textContent=todayPos.length||7;
   document.getElementById('bf-svc').textContent=svc.length;
   document.getElementById('bf-items').innerHTML=[
-    {c:'urg',i:'🔧',t:`${svc.length} servisních tiketů — začni jimi, jsou nejvyšší priorita`},
-    {c:'nrm',i:'🎯',t:'Deadline EuroJackpot plakáty: 20. 6. — dnes! Nezapomeň osadit'},
-    {c:'nrm',i:'📸',t:'Foť terminál PŘED a PO osazení — admin kontroluje'},
-    {c:'inf',i:'✍️',t:'U zásobování vždy vyžádej podpis přijímajícího'},
+    {c:'urg',i:ic('ic-wrench'),t:`${svc.length} servisních tiketů — začni jimi, jsou nejvyšší priorita`},
+    {c:'nrm',i:ic('ic-target'),t:'Deadline EuroJackpot plakáty: 20. 6. — dnes! Nezapomeň osadit'},
+    {c:'nrm',i:ic('ic-camera'),t:'Foť terminál PŘED a PO osazení — admin kontroluje'},
+    {c:'inf',i:ic('ic-edit'),t:'U zásobování vždy vyžádej podpis přijímajícího'},
   ].map(x=>`<div class="bf-item ${x.c}"><div class="bf-ico">${x.i}</div><div class="bf-txt">${x.t}</div></div>`).join('');
   document.getElementById('briefing').classList.add('open');
 }
@@ -148,10 +148,9 @@ function renderDayTabs(){
     // Lock past days in current week
     const isPastDay=isCurrentWeek&&todayIdx!==null&&i<todayIdx;
     const isTodayDay=isCurrentWeek&&i===todayIdx;
-    const lockIcon=isPastDay?' 🔒':isTodayDay?' •':'';
     const opacity=isPastDay?'opacity:.5;':'';
     return `<div class="dtab ${i===cDay?'active':''} ${ad?'ad':dp.length?'hp':''}" style="${opacity}" onclick="selDay(${i})">
-      <div class="dt-name">${d}${isTodayDay?' •':''}</div><div class="dt-date">${m.dd[i]}${isPastDay?' 🔒':''}</div><div class="dt-dot"></div>
+      <div class="dt-name">${d}${isTodayDay?' •':''}</div><div class="dt-date">${m.dd[i]}${isPastDay?' <svg class="ic ic-sm"><use href="#ic-lock"/></svg>':''}</div><div class="dt-dot"></div>
     </div>`;
   }).join('');
 }
@@ -167,17 +166,17 @@ function renderList(){
   const wrap=document.getElementById('pos-list-wrap');
   wrap.innerHTML='';
   const all=posData[cWeek]||[];
-  if(!all.length){wrap.innerHTML='<div class="empty"><div class="empty-i">📋</div><div class="empty-t">Žádné POS tento týden</div></div>';return;}
+  if(!all.length){wrap.innerHTML='<div class="empty"><div class="empty-i"><svg class="ic ic-xl"><use href="#ic-notes"/></svg></div><div class="empty-t">Žádné POS tento týden</div></div>';return;}
   const unpl=all.filter(p=>p.d===null&&!p.v);
   if(unpl.length){
     const b=document.createElement('div');b.className='upbanner';b.onclick=showUnplanned;
-    b.innerHTML=`<div class="upb-ico">📌</div><div><div class="upb-t">${unpl.length} POS bez přiřazeného dne</div><div class="upb-s">Klikni pro naplánování</div></div><div style="color:var(--orange);font-size:18px;margin-left:auto">›</div>`;
+    b.innerHTML=`<div class="upb-ico"><svg class="ic ic-lg"><use href="#ic-pin"/></svg></div><div><div class="upb-t">${unpl.length} POS bez přiřazeného dne</div><div class="upb-s">Klikni pro naplánování</div></div><div style="color:var(--orange);font-size:18px;margin-left:auto">›</div>`;
     wrap.appendChild(b);
   }
   const dp=all.filter(p=>p.d===cDay);
   if(!dp.length){
     const e=document.createElement('div');e.className='empty';
-    e.innerHTML=`<div class="empty-i">📅</div><div class="empty-t">Nic naplánováno</div><div class="empty-s">Přiřaď POS z neplánovaných výše.</div>`;
+    e.innerHTML=`<div class="empty-i"><svg class="ic ic-xl"><use href="#ic-calendar"/></svg></div><div class="empty-t">Nic naplánováno</div><div class="empty-s">Přiřaď POS z neplánovaných výše.</div>`;
     wrap.appendChild(e);return;
   }
   const lbl=document.createElement('div');lbl.className='sec-lbl';
@@ -197,16 +196,16 @@ function showUnplanned(){
   unpl.forEach(p=>{wrap.appendChild(makePosCard(p,all.indexOf(p),true));});
 }
 function typTag(p){
-  if(p.typ==='CORN')return`<span class="tag t-corn">🌽 Corn</span>`;
-  if(p.typ==='PETROL')return`<span class="tag t-petrol">⛽ ${p.partner||'PETROL'}</span>`;
+  if(p.typ==='CORN')return`<span class="tag t-corn">Corn</span>`;
+  if(p.typ==='PETROL')return`<span class="tag t-petrol">${p.partner||'PETROL'}</span>`;
   if(p.typ==='KA')return`<span class="tag t-ka">★ ${p.partner||'KA'}</span>`;
   return`<span class="tag t-idt">IDT</span>`;
 }
 function priChip(p){
-  if(p.taskState.some(t=>t.src==='servis'&&!t.done))return`<span class="tag t-svc">🔧 Servis</span>`;
+  if(p.taskState.some(t=>t.src==='servis'&&!t.done))return`<span class="tag t-svc"><svg class="ic ic-sm"><use href="#ic-wrench"/></svg> Servis</span>`;
   const inv=p.inventory||{vnitrni:[],venkovni:[]};
   const invItems=[...(inv.vnitrni||[]),...(inv.venkovni||[])];
-  if(invItems.some(i=>i.s==='miss'))return`<span class="tag" style="background:var(--ol);color:var(--orange)">📦 Chybí</span>`;
+  if(invItems.some(i=>i.s==='miss'))return`<span class="tag" style="background:var(--ol);color:var(--orange)"><svg class="ic ic-sm"><use href="#ic-box"/></svg> Chybí</span>`;
   return'';
 }
 function makePosCard(p,ri,showAssign){
@@ -267,9 +266,9 @@ function openDetail(ri){
   document.getElementById('d-addr').textContent=p.a;
   // chips
   const chips=[];
-  chips.push(`<span class="chip ch-area">📍 ${p.area||'—'}</span>`);
-  if(p.d!==null&&p.d!==undefined) chips.push(`<span class="chip ch-day">📅 ${DAYS[p.d]} ${m.dd[p.d]}</span>`);
-  if(p.taskState.some(t=>t.src==='servis'&&!t.done)) chips.push(`<span class="chip ch-pri1">🔧 Servis</span>`);
+  chips.push(`<span class="chip ch-area"><svg class="ic ic-sm"><use href="#ic-pin"/></svg> ${p.area||'—'}</span>`);
+  if(p.d!==null&&p.d!==undefined) chips.push(`<span class="chip ch-day"><svg class="ic ic-sm"><use href="#ic-calendar"/></svg> ${DAYS[p.d]} ${m.dd[p.d]}</span>`);
+  if(p.taskState.some(t=>t.src==='servis'&&!t.done)) chips.push(`<span class="chip ch-pri1"><svg class="ic ic-sm"><use href="#ic-wrench"/></svg> Servis</span>`);
   document.getElementById('d-chips').innerHTML=chips.join('');
   // info
   document.getElementById('info-area').textContent=(p.area||'—')+' · '+p.k;
@@ -356,15 +355,15 @@ function renderCampaigns(){
   const isCorn=p&&(p.typ==='CORN'||p.kat==='9'||p.k==='9');
   const isOrlen=p&&(p.partner==='Orlen'||p.partner==='ORLEN'||(p.k&&p.k.includes('ORLEN')));
   const html=[
-    ...CAMPAIGNS.losy.map(c=>campCard(c,'losy','🎫 Losy')),
-    ...CAMPAIGNS.loterie.map(c=>campCard(c,'lot','🎰 Loterie')),
-    ...(isOrlen?[{name:'ORLEN — speciální instrukce',dates:'W23–W28',deadline:'2025-07-11',items:['Pouze výměna losů ve folii','Případné doplnění zásobování','Neoznačovat jako rebranding — materiály ve výrobě'],note:'Kompletní rebranding Orlen bude následovat'}].map(c=>campCard(c,'reb','⛽ ORLEN')):[]),
-    ...CAMPAIGNS.rebranding.map(c=>campCard(c,'reb','🔄 Rebranding')),
+    ...CAMPAIGNS.losy.map(c=>campCard(c,'losy','Losy')),
+    ...CAMPAIGNS.loterie.map(c=>campCard(c,'lot','Loterie')),
+    ...(isOrlen?[{name:'ORLEN — speciální instrukce',dates:'W23–W28',deadline:'2025-07-11',items:['Pouze výměna losů ve folii','Případné doplnění zásobování','Neoznačovat jako rebranding — materiály ve výrobě'],note:'Kompletní rebranding Orlen bude následovat'}].map(c=>campCard(c,'reb','ORLEN')):[]),
+    ...CAMPAIGNS.rebranding.map(c=>campCard(c,'reb','Rebranding')),
   ].join('');
   wrap.innerHTML=html;
   if(isCorn){
     wrap.insertAdjacentHTML('afterbegin',`<div style="background:linear-gradient(135deg,#1A3C47,#2d5a6b);border-radius:12px;padding:14px 16px;margin-bottom:8px;border:1px solid rgba(46,205,192,.3)">
-      <div style="font-size:10px;font-weight:800;color:#f0c030;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">🌽 Corn — prioritní kanál</div>
+      <div style="font-size:10px;font-weight:800;color:#f0c030;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Corn — prioritní kanál</div>
       <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:8px">Visibilita na Cornech — červenec</div>
       <div style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:rgba(255,255,255,.8)">
         <div>• Primární pult: nová emise losů dle plánogramu</div>
@@ -385,9 +384,9 @@ function campCard(c,cls,lbl){
   return`<div class="camp-card camp-${cls}"><div class="camp-inner">
     <div class="camp-type">${lbl}</div>
     <div class="camp-name">${c.name}</div>
-    <div class="camp-dates">📅 ${c.dates}</div>
+    <div class="camp-dates"><svg class="ic ic-sm"><use href="#ic-calendar"/></svg> ${c.dates}</div>
     <div class="camp-items">${c.items.map(i=>`<div class="camp-item"><div class="camp-dot"></div>${i}</div>`).join('')}</div>
-    <div class="camp-dl" style="${dlColor}">⏱ Deadline: ${c.deadline.split('-').reverse().join('. ')} · ${dlTxt}</div>
+    <div class="camp-dl" style="${dlColor}"><svg class="ic ic-sm"><use href="#ic-clock"/></svg> Deadline: ${c.deadline.split('-').reverse().join('. ')} · ${dlTxt}</div>
   </div></div>`;
 }
 
@@ -409,7 +408,7 @@ function renderRefs(){
 
   // Channel header badge
   const channelBadge=`<div style="margin:0 12px 8px;padding:10px 14px;background:var(--navy);border-radius:10px;display:flex;align-items:center;gap:10px">
-    <div style="font-size:22px">${p.typ==='CORN'?'🌽':p.typ==='PETROL'?'⛽':p.typ==='KA'?'🏪':'🖼️'}</div>
+    <div style="color:var(--teal)"><svg class="ic ic-lg"><use href="#${p.typ==='CORN'?'ic-flag':p.typ==='PETROL'?'ic-fuel':p.typ==='KA'?'ic-store':'ic-image'}"/></svg></div>
     <div>
       <div style="font-size:12px;font-weight:800;color:var(--teal);text-transform:uppercase;letter-spacing:.8px">
         ${p.typ==='CORN'?'Corn — zvláštní kanál':p.typ==='PETROL'?`Petrol · ${p.partner||''}`:p.typ==='KA'?`KA Partner · ${p.partner||''}`:p.market||'IDT'}
@@ -447,7 +446,7 @@ function renderSupply(p){
   const saved=lsg('supply_'+p.id+'_'+today());
   supplyItems=saved?saved.items:defaults.map(x=>({...x}));
   const hdrBadge=document.getElementById('supply-badge-lbl');
-  if(hdrBadge) hdrBadge.textContent=isCorn?'🌽 Corn — vyžaduje podpis':'Vyžaduje podpis';
+  if(hdrBadge) hdrBadge.textContent=isCorn?'Corn — vyžaduje podpis':'Vyžaduje podpis';
   renderSupplyItems();
   document.getElementById('supply-recv-input').value=saved?saved.receiver:'';
   document.getElementById('sig-done').style.display=saved&&saved.confirmed?'block':'none';
@@ -468,7 +467,7 @@ function renderSupplyItems(){
       ${x.qty>0?`<div style="display:flex;align-items:center;gap:8px;padding:0 14px 10px;border-top:1px solid var(--bg)">
         <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;flex-shrink:0">SAP:</span>
         <span style="flex:1;font-size:12px;font-weight:700;color:var(--navy);font-family:monospace">${x.sap||'—'}</span>
-        <span style="font-size:9px;color:var(--muted)">🔒 pevný kód</span>
+        <span style="font-size:9px;color:var(--muted);display:inline-flex;align-items:center;gap:3px"><svg class="ic ic-sm"><use href="#ic-lock"/></svg> pevný kód</span>
       </div>`:''}
     </div>`).join('');
 }
@@ -503,7 +502,7 @@ function renderTasks(){
   const p=posData[cWeek][cIdx];
   const list=document.getElementById('tasks-list');list.innerHTML='';
   const groups=[
-    {src:'servis',lbl:'🔧 Servis — nejvyšší priorita',cls:'gl-svc'},
+    {src:'servis',lbl:'<svg class="ic ic-sm"><use href="#ic-wrench"/></svg> Servis — nejvyšší priorita',cls:'gl-svc'},
     {src:'template',lbl:`Šablona · ${p.typ==='KA'?p.partner:p.typ==='PETROL'?p.partner:'IDT'}`,cls:'gl-tpl'},
     {src:'on_top',lbl:'On top',cls:'gl-ot'},
     {src:'own',lbl:'Vlastní',cls:'gl-own'},
@@ -541,7 +540,7 @@ function renderPhotos(){
       slot.innerHTML=`<img src="${p.photos[i]}" alt="foto"/><button class="p-rm" onclick="rmPhoto(event,${i})">✕</button>`;
     } else {
       slot.className='pslot';
-      slot.innerHTML=`<div class="p-ico">📷</div><div class="p-lbl">${lbls[i]||'Foto '+(i+1)}</div>`;
+      slot.innerHTML=`<div class="p-ico"><svg class="ic ic-lg"><use href="#ic-camera"/></svg></div><div class="p-lbl">${lbls[i]||'Foto '+(i+1)}</div>`;
       slot.onclick=()=>{pendingSlot=i;document.getElementById('photo-input').click();};
     }
     grid.appendChild(slot);
@@ -615,25 +614,26 @@ function showInvTab(tab, btn) {
 // ══════════════════════════════════════════════════════════════════════════
 // INVENTORY CATALOG — admin-editable list of allowed items
 // ══════════════════════════════════════════════════════════════════════════
+const ic = (name) => `<svg class="ic"><use href="#${name}"/></svg>`;
 const INV_CATALOG_DEFAULT = {
   vnitrni: [
-    {i:'🖥️', n:'Terminál Allwyn'},
-    {i:'🏛️', n:'Totem Allwyn 3prvkový'},
-    {i:'🏛️', n:'Totem Allwyn 4prvkový'},
-    {i:'🏛️', n:'Totem Allwyn B'},
-    {i:'📺', n:'VCU obrazovka'},
-    {i:'💡', n:'ESO výstrč'},
-    {i:'🏛️', n:'Stojan na sázenky (velký)'},
-    {i:'📂', n:'Šanon na losy'},
-    {i:'🟡', n:'Primární pult (losy)'},
-    {i:'🟡', n:'Sekundární pult (losy)'},
-    {i:'🎫', n:'Barketa Rybky'},
-    {i:'📋', n:'Stojka'},
+    {i:ic('ic-monitor'), n:'Terminál Allwyn'},
+    {i:ic('ic-building'), n:'Totem Allwyn 3prvkový'},
+    {i:ic('ic-building'), n:'Totem Allwyn 4prvkový'},
+    {i:ic('ic-building'), n:'Totem Allwyn B'},
+    {i:ic('ic-monitor'), n:'VCU obrazovka'},
+    {i:ic('ic-bulb'), n:'ESO výstrč'},
+    {i:ic('ic-building'), n:'Stojan na sázenky (velký)'},
+    {i:ic('ic-box'), n:'Šanon na losy'},
+    {i:ic('ic-store'), n:'Primární pult (losy)'},
+    {i:ic('ic-store'), n:'Sekundární pult (losy)'},
+    {i:ic('ic-card'), n:'Barketa Rybky'},
+    {i:ic('ic-flag'), n:'Stojka'},
   ],
   venkovni: [
-    {i:'🏢', n:'Venkovní světelné označení'},
-    {i:'🪧', n:'Venkovní výstrč'},
-    {i:'🚩', n:'Venkovní vlajka / banner'},
+    {i:ic('ic-building'), n:'Venkovní světelné označení'},
+    {i:ic('ic-flag'), n:'Venkovní výstrč'},
+    {i:ic('ic-flag'), n:'Venkovní vlajka / banner'},
   ],
 };
 
@@ -914,12 +914,12 @@ function renderAdminDashboard() {
 
   const kpiEl = document.getElementById('dash-kpis');
   if (kpiEl) kpiEl.innerHTML = `
-    <div class="kpi-card"><div class="kpi-icon">✅</div><div class="kpi-val">${completionPct}%</div><div class="kpi-lbl">Plnění týmu dnes</div></div>
-    <div class="kpi-card"><div class="kpi-icon">👥</div><div class="kpi-val">${activeCount}</div><div class="kpi-lbl">Aktivní v terénu</div></div>
-    <div class="kpi-card warn"><div class="kpi-icon">⚠️</div><div class="kpi-val">${behind.length}</div><div class="kpi-lbl">Technici pozadu</div></div>
-    <div class="kpi-card danger"><div class="kpi-icon">🚩</div><div class="kpi-val">${flagsToday}</div><div class="kpi-lbl">Flagy dnes</div></div>
-    <div class="kpi-card"><div class="kpi-icon">🔧</div><div class="kpi-val">${live.servisOpen.length}</div><div class="kpi-lbl">Servisy otevřené</div></div>
-    <div class="kpi-card"><div class="kpi-icon">📍</div><div class="kpi-val">${donePOS}/${totalPOS}</div><div class="kpi-lbl">POS navštíveno (W25)</div></div>
+    <div class="kpi-card"><div class="kpi-icon"><svg class="ic ic-lg"><use href="#ic-check-circle"/></svg></div><div class="kpi-val">${completionPct}%</div><div class="kpi-lbl">Plnění týmu dnes</div></div>
+    <div class="kpi-card"><div class="kpi-icon"><svg class="ic ic-lg"><use href="#ic-team"/></svg></div><div class="kpi-val">${activeCount}</div><div class="kpi-lbl">Aktivní v terénu</div></div>
+    <div class="kpi-card warn"><div class="kpi-icon"><svg class="ic ic-lg"><use href="#ic-warning"/></svg></div><div class="kpi-val">${behind.length}</div><div class="kpi-lbl">Technici pozadu</div></div>
+    <div class="kpi-card danger"><div class="kpi-icon"><svg class="ic ic-lg"><use href="#ic-flag"/></svg></div><div class="kpi-val">${flagsToday}</div><div class="kpi-lbl">Flagy dnes</div></div>
+    <div class="kpi-card"><div class="kpi-icon"><svg class="ic ic-lg"><use href="#ic-wrench"/></svg></div><div class="kpi-val">${live.servisOpen.length}</div><div class="kpi-lbl">Servisy otevřené</div></div>
+    <div class="kpi-card"><div class="kpi-icon"><svg class="ic ic-lg"><use href="#ic-pin"/></svg></div><div class="kpi-val">${donePOS}/${totalPOS}</div><div class="kpi-lbl">POS navštíveno (W25)</div></div>
   `;
 
   // Channel breakdown (IDT / KA / PETROL / CORN jsou oddělené kanály)
@@ -941,46 +941,45 @@ function renderAdminDashboard() {
   const ranked = REAL_DATA.techs.filter(t => t.total).slice().sort((a, b) => (b.done / b.total) - (a.done / a.total));
   const top3 = ranked.slice(0, 3);
   const bottom3 = ranked.slice(-3).reverse();
-  const lbRow = (t, medal) => {
+  const lbRow = (t, rank) => {
     const pct = Math.round(t.done / t.total * 100);
     return `<div class="tr" onclick="showTechDetail('${t.name}')">
-      <div class="tav">${medal}</div>
+      <div class="tav rank">${rank}</div>
       <div class="tinf"><div class="tn">${t.name}</div><div class="ts">${t.done}/${t.total} POS</div></div>
       <div class="tr-right"><div class="mpp" style="font-weight:800;color:${pct >= 70 ? 'var(--green)' : pct < 30 ? 'var(--red)' : 'var(--muted)'}">${pct}%</div></div>
     </div>`;
   };
   const lbEl = document.getElementById('dash-leaderboard');
   if (lbEl) lbEl.innerHTML = `
-    <div class="lb-col"><div class="lb-hdr">🏆 Nejlepší výkon</div>${top3.map((t, i) => lbRow(t, ['🥇', '🥈', '🥉'][i])).join('')}</div>
-    <div class="lb-col"><div class="lb-hdr">🔻 Vyžaduje pozornost</div>${bottom3.map((t, i) => lbRow(t, i + 1)).join('')}</div>
+    <div class="lb-col"><div class="lb-hdr"><svg class="ic ic-sm"><use href="#ic-trophy"/></svg> Nejlepší výkon</div>${top3.map((t, i) => lbRow(t, i + 1)).join('')}</div>
+    <div class="lb-col"><div class="lb-hdr"><svg class="ic ic-sm"><use href="#ic-arrow-down"/></svg> Vyžaduje pozornost</div>${bottom3.map((t, i) => lbRow(t, i + 1)).join('')}</div>
   `;
 
   // AI insighty — syntetizované z reálných dat (bez nutnosti volat AI API)
   const avgPosPerTech = REAL_DATA.techs.length ? Math.round(totalPOS / REAL_DATA.techs.length) : 0;
   const bestChannel = chStats.filter(c => c.list.length).sort((a, b) => b.pct - a.pct)[0];
   const insights = [
-    { icon: '📊', title: 'Route efektivita', text: `Průměrně ${avgPosPerTech} POS na technika za týden, ${activeCount} týmů aktivně v terénu právě teď.` },
-    { icon: '🚀', title: 'Nejlepší kanál', text: bestChannel ? `${bestChannel.ch} má nejvyšší plnění (${bestChannel.pct}%) ze všech kanálů tento týden.` : 'Data se počítají…' },
-    { icon: '🔍', title: 'Anti-fraud kontrola', text: flagsToday ? `${gpsFlags.length} GPS anomálií a ${shortVisits.length} podezřele krátkých návštěv dnes — doporučena kontrola.` : 'Žádné GPS anomálie ani podezřele krátké návštěvy dnes.' },
-    { icon: '🎯', title: 'Predikce dokončení', text: `Při aktuálním tempu tým dokončí týden na ${completionPct}% — ${completionPct >= 70 ? 'na dobré cestě splnit normu.' : 'hrozí nesplnění normy, zvážit prioritizaci.'}` },
+    { icon: 'ic-route', title: 'Route efektivita', text: `Průměrně ${avgPosPerTech} POS na technika za týden, ${activeCount} týmů aktivně v terénu právě teď.` },
+    { icon: 'ic-trophy', title: 'Nejlepší kanál', text: bestChannel ? `${bestChannel.ch} má nejvyšší plnění (${bestChannel.pct}%) ze všech kanálů tento týden.` : 'Data se počítají…' },
+    { icon: 'ic-shield', title: 'Anti-fraud kontrola', text: flagsToday ? `${gpsFlags.length} GPS anomálií a ${shortVisits.length} podezřele krátkých návštěv dnes — doporučena kontrola.` : 'Žádné GPS anomálie ani podezřele krátké návštěvy dnes.' },
+    { icon: 'ic-target', title: 'Predikce dokončení', text: `Při aktuálním tempu tým dokončí týden na ${completionPct}% — ${completionPct >= 70 ? 'na dobré cestě splnit normu.' : 'hrozí nesplnění normy, zvážit prioritizaci.'}` },
   ];
   const insEl = document.getElementById('dash-insights');
   if (insEl) insEl.innerHTML = insights.map(i => `
-    <div class="insight-card"><div class="insight-icon">${i.icon}</div><div class="insight-body"><div class="insight-title">${i.title}</div><div class="insight-text">${i.text}</div></div></div>
-  `).join('');
+    <div class="insight-card"><div class="insight-icon"><svg class="ic"><use href="#${i.icon}"/></svg></div><div class="insight-body"><div class="insight-title">${i.title}</div><div class="insight-text">${i.text}</div></div></div>`).join('');
 
   // Attention feed — servisy, GPS flagy, krátké návštěvy, technici pozadu
   const attnItems = [];
-  live.servisOpen.forEach(p => attnItems.push({ icon: '🔧', sev: 'red', text: `Servis čeká: <strong>${p.n}</strong>` }));
-  gpsFlags.forEach(f => attnItems.push({ icon: '📍', sev: 'red', text: `GPS anomálie: <strong>${f.posName}</strong> · ${f.dist != null ? f.dist.toFixed(1) + 'km' : ''} od POS` }));
-  shortVisits.forEach(v => attnItems.push({ icon: '⏱', sev: 'orange', text: `Krátká návštěva: <strong>${v.posName}</strong> · ${v.dur} min` }));
-  behind.forEach(t => attnItems.push({ icon: '⚠️', sev: 'orange', text: `<strong>${t.name}</strong> je pozadu — ${t.done}/${t.total} POS` }));
+  live.servisOpen.forEach(p => attnItems.push({ icon: 'ic-wrench', sev: 'red', text: `Servis čeká: <strong>${p.n}</strong>` }));
+  gpsFlags.forEach(f => attnItems.push({ icon: 'ic-pin', sev: 'red', text: `GPS anomálie: <strong>${f.posName}</strong> · ${f.dist != null ? f.dist.toFixed(1) + 'km' : ''} od POS` }));
+  shortVisits.forEach(v => attnItems.push({ icon: 'ic-clock', sev: 'orange', text: `Krátká návštěva: <strong>${v.posName}</strong> · ${v.dur} min` }));
+  behind.forEach(t => attnItems.push({ icon: 'ic-warning', sev: 'orange', text: `<strong>${t.name}</strong> je pozadu — ${t.done}/${t.total} POS` }));
 
   const attnEl = document.getElementById('dash-attention');
   if (attnEl) {
     attnEl.innerHTML = attnItems.length
-      ? attnItems.map(a => `<div class="attn-item attn-${a.sev}"><span class="attn-icon">${a.icon}</span><span>${a.text}</span></div>`).join('')
-      : '<div class="empty"><div class="empty-i">✅</div><div class="empty-t">Žádné problémy</div><div class="empty-s">Vše běží podle plánu.</div></div>';
+      ? attnItems.map(a => `<div class="attn-item attn-${a.sev}"><span class="attn-icon"><svg class="ic"><use href="#${a.icon}"/></svg></span><span>${a.text}</span></div>`).join('')
+      : '<div class="empty"><div class="empty-i"><svg class="ic ic-xl"><use href="#ic-check-circle"/></svg></div><div class="empty-t">Žádné problémy</div><div class="empty-s">Vše běží podle plánu.</div></div>';
   }
 }
 
@@ -1088,12 +1087,12 @@ function showTechDetail(name) {
     if (live.dayStart || live.visitLog.length) {
       html += `<div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Dnešní průběh</div>
       <div style="background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);margin-bottom:14px">`;
-      if (live.dayStart) html += `<div class="vrow start"><div class="vtime">▶ ${live.dayStart.time}</div><div class="vname" style="font-weight:700;color:var(--tm)">Začátek pracovní doby</div><div class="vdur"></div><div class="vflag">🟢</div></div>`;
+      if (live.dayStart) html += `<div class="vrow start"><div class="vtime">▶ ${live.dayStart.time}</div><div class="vname" style="font-weight:700;color:var(--tm)">Začátek pracovní doby</div><div class="vdur"></div><div class="vflag"><span class="pdot dot-green"></span></div></div>`;
       live.visitLog.forEach(v => {
-        html += `<div class="vrow ${v.flag==='short'?'short':''}"><div class="vtime">${v.inTime}</div><div class="vname">${v.posName.substring(0,28)}</div><div class="vdur">${v.dur}m</div><div class="vflag">${v.flag==='short'?'🚩':'✓'}</div></div>`;
+        html += `<div class="vrow ${v.flag==='short'?'short':''}"><div class="vtime">${v.inTime}</div><div class="vname">${v.posName.substring(0,28)}</div><div class="vdur">${v.dur}m</div><div class="vflag">${v.flag==='short'?'<svg class="ic ic-sm" style="color:var(--red)"><use href="#ic-flag"/></svg>':'✓'}</div></div>`;
       });
       const active = getActiveTechPos();
-      if (active) html += `<div class="vrow" style="background:var(--tl)"><div class="vtime" style="color:var(--tm)">● Nyní</div><div class="vname" style="color:var(--tm);font-weight:700">${active.n.substring(0,28)}</div><div class="vdur" style="color:var(--tm)">live</div><div class="vflag">📍</div></div>`;
+      if (active) html += `<div class="vrow" style="background:var(--tl)"><div class="vtime" style="color:var(--tm)">● Nyní</div><div class="vname" style="color:var(--tm);font-weight:700">${active.n.substring(0,28)}</div><div class="vdur" style="color:var(--tm)">live</div><div class="vflag"><svg class="ic ic-sm" style="color:var(--teal)"><use href="#ic-pin"/></svg></div></div>`;
       html += `</div>`;
     }
 
@@ -1199,31 +1198,31 @@ function renderAdminAlerts() {
   // Live alerts from technik actions
   live.servisOpen.forEach(p => {
     const st = p.taskState.find(t => t.src === 'servis' && !t.done);
-    alerts.push({ t: 'red', i: '🔧', title: `Servis — ${p.n}`, sub: st.text + (st.note ? ' · ' + st.note : ''), tm: 'Live' });
+    alerts.push({ t: 'red', i: 'ic-wrench', title: `Servis — ${p.n}`, sub: st.text + (st.note ? ' · ' + st.note : ''), tm: 'Live' });
   });
   live.shortVisits.forEach(v => {
-    alerts.push({ t: 'orange', i: '⏱', title: `Krátká návštěva — ${v.posName}`, sub: `Lán Tomáš · ${v.inTime}–${v.outTime} · ${v.dur} min · zkontroluj`, tm: 'Dnes' });
+    alerts.push({ t: 'orange', i: 'ic-clock', title: `Krátká návštěva — ${v.posName}`, sub: `Lán Tomáš · ${v.inTime}–${v.outTime} · ${v.dur} min · zkontroluj`, tm: 'Dnes' });
   });
   if (live.supplies.length === 0 && live.visitLog.length > 2) {
-    alerts.push({ t: 'orange', i: '📦', title: 'Zásobování bez podpisu', sub: 'Lán Tomáš · Žádné zásobování nebylo potvrzeno podpisem', tm: 'Dnes' });
+    alerts.push({ t: 'orange', i: 'ic-box', title: 'Zásobování bez podpisu', sub: 'Lán Tomáš · Žádné zásobování nebylo potvrzeno podpisem', tm: 'Dnes' });
   }
 
   // Static alerts
   alerts.push(
-    { t: 'orange', i: '⚠️', title: 'Brindžák Michal — pouze 6/35 POS', sub: 'Progress 17% · W25 · Výrazně pozadu', tm: 'W25' },
-    { t: 'orange', i: '⚠️', title: 'Dolníček Richard — 6/35 POS', sub: 'Progress 17% · W25 · Doporučeno zkontrolovat', tm: 'W25' },
-    { t: 'green', i: '✓', title: 'Dvořák Petr — 32/35 POS', sub: 'Progress 91% · Očekává dokončení do 17:00', tm: 'W25' },
-    { t: 'green', i: '✓', title: 'Hanuš Robert — 35/35 POS', sub: 'Výborný výkon · W25 dokončen', tm: 'W25' },
+    { t: 'orange', i: 'ic-warning', title: 'Brindžák Michal — pouze 6/35 POS', sub: 'Progress 17% · W25 · Výrazně pozadu', tm: 'W25' },
+    { t: 'orange', i: 'ic-warning', title: 'Dolníček Richard — 6/35 POS', sub: 'Progress 17% · W25 · Doporučeno zkontrolovat', tm: 'W25' },
+    { t: 'green', i: 'ic-check-circle', title: 'Dvořák Petr — 32/35 POS', sub: 'Progress 91% · Očekává dokončení do 17:00', tm: 'W25' },
+    { t: 'green', i: 'ic-check-circle', title: 'Hanuš Robert — 35/35 POS', sub: 'Výborný výkon · W25 dokončen', tm: 'W25' },
   );
 
   // Supplied confirmed — positive alert
   live.supplies.forEach(s => {
-    alerts.push({ t: 'green', i: '✍️', title: `Zásobování potvrzeno — ${s.posName}`, sub: `Podepsal: ${s.receiver} · ${s.at} · Lán Tomáš`, tm: 'Dnes' });
+    alerts.push({ t: 'green', i: 'ic-edit', title: `Zásobování potvrzeno — ${s.posName}`, sub: `Podepsal: ${s.receiver} · ${s.at} · Lán Tomáš`, tm: 'Dnes' });
   });
 
   document.getElementById('adm-alerts-list').innerHTML = alerts.map(a => `
     <div class="alert-row ${a.t}">
-      <div class="ar-ico">${a.i}</div>
+      <div class="ar-ico"><svg class="ic"><use href="#${a.i}"/></svg></div>
       <div class="ar-inf"><div class="ar-t">${a.title}</div><div class="ar-s">${a.sub}</div></div>
       <div class="ar-tm">${a.tm}</div>
     </div>`).join('');
@@ -1259,21 +1258,22 @@ function renderAdminCasy() {
   const ds = live.dayStart || { time: '07:14' };
   const active = getActiveTechPos();
 
-  let html = `<div class="vrow start"><div class="vtime">▶ ${ds.time}</div><div class="vname" style="font-weight:700;color:var(--tm)">Začátek pracovní doby · první check-in</div><div class="vdur"></div><div class="vflag">🟢</div></div>`;
+  let html = `<div class="vrow start"><div class="vtime">▶ ${ds.time}</div><div class="vname" style="font-weight:700;color:var(--tm)">Začátek pracovní doby · první check-in</div><div class="vdur"></div><div class="vflag"><span class="pdot dot-green"></span></div></div>`;
 
   log.forEach(v => {
+    const flagIcon = v.flag === 'short' ? '<svg class="ic ic-sm" style="color:var(--red)"><use href="#ic-flag"/></svg>' : v.flag === 'long' ? '<svg class="ic ic-sm" style="color:var(--orange)"><use href="#ic-warning"/></svg>' : '✓';
     html += `<div class="vrow ${v.flag === 'short' ? 'short' : v.flag === 'long' ? 'long' : ''}">
       <div class="vtime">${v.inTime}</div>
       <div class="vname">${(v.posName || '').substring(0, 30)} <span style="font-size:10px;color:var(--muted)">${v.typ || ''}</span></div>
       <div class="vdur">${v.dur}m</div>
-      <div class="vflag">${v.flag === 'short' ? '🚩' : v.flag === 'long' ? '⚠️' : '✓'}</div>
+      <div class="vflag">${flagIcon}</div>
     </div>`;
   });
 
   if (active) {
     const ci = lsg('ci_' + active.id);
     const elapsed = ci ? Math.floor((Date.now() - ci.inTs) / 60000) : '?';
-    html += `<div class="vrow" style="background:var(--tl)"><div class="vtime" style="color:var(--tm)">● Nyní</div><div class="vname" style="color:var(--tm);font-weight:700">${active.n.substring(0, 28)} <span style="font-size:10px">CHECK-IN</span></div><div class="vdur" style="color:var(--tm)">${elapsed}m+</div><div class="vflag">📍</div></div>`;
+    html += `<div class="vrow" style="background:var(--tl)"><div class="vtime" style="color:var(--tm)">● Nyní</div><div class="vname" style="color:var(--tm);font-weight:700">${active.n.substring(0, 28)} <span style="font-size:10px">CHECK-IN</span></div><div class="vdur" style="color:var(--tm)">${elapsed}m+</div><div class="vflag"><svg class="ic ic-sm" style="color:var(--teal)"><use href="#ic-pin"/></svg></div></div>`;
   }
 
   el.innerHTML = html;
@@ -1388,7 +1388,7 @@ function openEditModal(mode) {
   editModalMode = mode;
   editGroupSel = [];
   editPriority = 'normal';
-  const titles = { group: '✏️ Úkol pro skupinu POS', technik: '✏️ Úkol pro technika', pos: '✏️ Úkol pro konkrétní POS' };
+  const titles = { group: 'Úkol pro skupinu POS', technik: 'Úkol pro technika', pos: 'Úkol pro konkrétní POS' };
   document.getElementById('edit-modal-title').textContent = titles[mode];
   renderEditModalBody(mode);
   document.getElementById('edit-modal').classList.add('open');
@@ -1401,11 +1401,11 @@ function renderEditModalBody(mode) {
   if (mode === 'group') {
     html += `<label class="ef-label">Skupina POS</label>
     <div class="ef-chips" id="ef-groups">
-      <div class="ef-chip on" onclick="toggleGroup('all',this)">🇨🇿 Všechny POS</div>
+      <div class="ef-chip on" onclick="toggleGroup('all',this)">Všechny POS</div>
       <div class="ef-chip" onclick="toggleGroup('IDT',this)">IDT</div>
-      <div class="ef-chip" onclick="toggleGroup('PETROL',this)">⛽ PETROL</div>
+      <div class="ef-chip" onclick="toggleGroup('PETROL',this)">PETROL</div>
       <div class="ef-chip" onclick="toggleGroup('KA',this)">★ KA Partneři</div>
-      <div class="ef-chip" onclick="toggleGroup('CORN',this)">🌽 Corn</div>
+      <div class="ef-chip" onclick="toggleGroup('CORN',this)">Corn</div>
       <div class="ef-chip" onclick="toggleGroup('Albert',this)">Albert</div>
       <div class="ef-chip" onclick="toggleGroup('Tesco',this)">Tesco</div>
       <div class="ef-chip" onclick="toggleGroup('Shell',this)">Shell</div>
@@ -1448,9 +1448,9 @@ function renderEditModalBody(mode) {
 
   <label class="ef-label">Priorita</label>
   <div class="ef-chips" id="ef-priority">
-    <div class="ef-chip" onclick="setPriority('servis',this)" style="background:var(--rl);color:var(--red);border-color:var(--red)">🔴 Servis / Urgentní</div>
-    <div class="ef-chip on orange" onclick="setPriority('high',this)">🟠 Vysoká</div>
-    <div class="ef-chip" onclick="setPriority('normal',this)">🟡 Standardní</div>
+    <div class="ef-chip" onclick="setPriority('servis',this)" style="background:var(--rl);color:var(--red);border-color:var(--red)"><span class="pdot dot-red" style="display:inline-block;margin-right:3px"></span>Servis / Urgentní</div>
+    <div class="ef-chip on orange" onclick="setPriority('high',this)"><span class="pdot dot-orange" style="display:inline-block;margin-right:3px"></span>Vysoká</div>
+    <div class="ef-chip" onclick="setPriority('normal',this)"><span class="pdot dot-yellow" style="display:inline-block;margin-right:3px"></span>Standardní</div>
   </div>
 
   <div class="ef-row" style="margin-top:14px">
@@ -1569,11 +1569,11 @@ function renderTaskFeed() {
     return;
   }
   el.innerHTML = tasks.map(t => {
-    const priIcon = t.priority === 'servis' ? '🔴' : t.priority === 'high' ? '🟠' : '🟡';
+    const priDot = t.priority === 'servis' ? 'dot-red' : t.priority === 'high' ? 'dot-orange' : 'dot-yellow';
     const targetLabel = t.target === 'group' ? `Skupina: ${t.groups.join(', ')}${t.region !== 'all' ? ' · ' + t.region : ''}` : t.target === 'technik' ? `Technik: ${t.technikName}` : `POS: ${t.posId}`;
     const dlLabel = t.deadline ? `· Deadline: ${t.deadline}` : '';
     return `<div class="task-feed-item">
-      <div class="tfi-icon">${priIcon}</div>
+      <div class="tfi-icon"><span class="pdot ${priDot}"></span></div>
       <div class="tfi-body">
         <div class="tfi-title">${t.text}</div>
         <div class="tfi-sub">${targetLabel} ${dlLabel}</div>
@@ -1632,11 +1632,11 @@ function renderSchvaleni() {
 
   // Real items
   items.forEach(({ p, ci, supply, photos, shortVisit, approval }) => {
-    const apprBadge = approval === 'ok' ? '<span class="approval-badge appr-ok">✓ Schváleno</span>' : approval === 'rej' ? '<span class="approval-badge appr-rej">✕ Zamítnuto</span>' : '<span class="approval-badge appr-wait">⏳ Čeká</span>';
+    const apprBadge = approval === 'ok' ? '<span class="approval-badge appr-ok">✓ Schváleno</span>' : approval === 'rej' ? '<span class="approval-badge appr-rej">✕ Zamítnuto</span>' : '<span class="approval-badge appr-wait"><svg class="ic ic-sm"><use href="#ic-clock"/></svg> Čeká</span>';
     const flags = [];
-    if (shortVisit) flags.push('⚠️ Krátká návštěva');
-    if (!photos) flags.push('📷 Bez fotek');
-    if (!supply && (p.typ === 'KA' || p.typ === 'PETROL')) flags.push('📦 Bez zásobování');
+    if (shortVisit) flags.push('<svg class="ic ic-sm"><use href="#ic-warning"/></svg> Krátká návštěva');
+    if (!photos) flags.push('<svg class="ic ic-sm"><use href="#ic-camera"/></svg> Bez fotek');
+    if (!supply && (p.typ === 'KA' || p.typ === 'PETROL')) flags.push('<svg class="ic ic-sm"><use href="#ic-box"/></svg> Bez zásobování');
     html += `<div style="padding:14px;border-bottom:1px solid var(--bg)">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px">
         <div>
@@ -1655,17 +1655,17 @@ function renderSchvaleni() {
 
   // Mock items
   mockVisits.forEach((v, i) => {
-    const apprBadge = v.approval === 'ok' ? '<span class="approval-badge appr-ok">✓ Schváleno</span>' : v.flag === 'short' ? '<span class="approval-badge appr-wait">⚠️ Čeká — krátká</span>' : '<span class="approval-badge appr-wait">⏳ Čeká</span>';
+    const apprBadge = v.approval === 'ok' ? '<span class="approval-badge appr-ok">✓ Schváleno</span>' : v.flag === 'short' ? '<span class="approval-badge appr-wait"><svg class="ic ic-sm"><use href="#ic-warning"/></svg> Čeká — krátká</span>' : '<span class="approval-badge appr-wait"><svg class="ic ic-sm"><use href="#ic-clock"/></svg> Čeká</span>';
     const flags = [];
-    if (v.flag === 'short') flags.push('⚠️ Pouze ' + v.dur + ' min');
-    if (!v.photos) flags.push('📷 Bez fotek');
+    if (v.flag === 'short') flags.push('<svg class="ic ic-sm"><use href="#ic-warning"/></svg> Pouze ' + v.dur + ' min');
+    if (!v.photos) flags.push('<svg class="ic ic-sm"><use href="#ic-camera"/></svg> Bez fotek');
     html += `<div style="padding:14px;border-bottom:1px solid var(--bg)">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px">
         <div>
           <div style="font-size:13px;font-weight:700">${v.posName}</div>
           <div style="font-size:11px;color:var(--muted);margin-top:2px">${v.time} · ${v.dur} min · ${v.photos} fotek · ${v.typ}</div>
           ${flags.length ? `<div style="margin-top:5px">${flags.map(f => `<span style="font-size:10px;font-weight:700;background:var(--ol);color:var(--orange);padding:2px 6px;border-radius:10px;margin-right:4px">${f}</span>`).join('')}</div>` : ''}
-          ${v.supply ? `<div style="margin-top:5px;font-size:11px;color:var(--green)">✍️ Zásobování podepsáno: ${v.supply.receiver}</div>` : ''}
+          ${v.supply ? `<div style="margin-top:5px;font-size:11px;color:var(--green)"><svg class="ic ic-sm"><use href="#ic-edit"/></svg> Zásobování podepsáno: ${v.supply.receiver}</div>` : ''}
         </div>
         ${apprBadge}
       </div>
@@ -1725,11 +1725,11 @@ function getDistanceKm(lat1, lon1, lat2, lon2) {
 function verifyGPS(posLat, posLng, callback) {
   const el = document.getElementById('gps-status');
   if (!navigator.geolocation) {
-    if (el) el.innerHTML = '<span class="gps-badge gps-warn">⚠ GPS nedostupná</span>';
+    if (el) el.innerHTML = '<span class="gps-badge gps-warn"><svg class="ic ic-sm"><use href="#ic-warning"/></svg> GPS nedostupná</span>';
     callback(null, null, null);
     return;
   }
-  if (el) el.innerHTML = '<span class="gps-badge gps-loading">📡 Zjišťuji polohu…</span>';
+  if (el) el.innerHTML = '<span class="gps-badge gps-loading"><svg class="ic ic-sm"><use href="#ic-signal"/></svg> Zjišťuji polohu…</span>';
   navigator.geolocation.getCurrentPosition(
     pos => {
       const lat = pos.coords.latitude;
@@ -1741,15 +1741,15 @@ function verifyGPS(posLat, posLng, callback) {
         } else if (dist < 0.3) {
           el.innerHTML = `<span class="gps-badge gps-ok">✓ Na místě · ${Math.round(dist*1000)}m od POS</span>`;
         } else if (dist < 1) {
-          el.innerHTML = `<span class="gps-badge gps-warn">⚠ ${Math.round(dist*1000)}m od POS</span>`;
+          el.innerHTML = `<span class="gps-badge gps-warn"><svg class="ic ic-sm"><use href="#ic-warning"/></svg> ${Math.round(dist*1000)}m od POS</span>`;
         } else {
-          el.innerHTML = `<span class="gps-badge gps-err">🚩 ${dist.toFixed(1)}km od POS — podezřelé!</span>`;
+          el.innerHTML = `<span class="gps-badge gps-err"><svg class="ic ic-sm"><use href="#ic-flag"/></svg> ${dist.toFixed(1)}km od POS — podezřelé!</span>`;
         }
       }
       callback(lat, lng, dist);
     },
     err => {
-      if (el) el.innerHTML = '<span class="gps-badge gps-warn">⚠ GPS zamítnuta</span>';
+      if (el) el.innerHTML = '<span class="gps-badge gps-warn"><svg class="ic ic-sm"><use href="#ic-warning"/></svg> GPS zamítnuta</span>';
       callback(null, null, null);
     },
     { enableHighAccuracy: true, timeout: 8000 }
@@ -1795,7 +1795,7 @@ renderCheckin = function() {
     if (el) {
       const dist = ci.gpsDist;
       const cls = dist < 0.3 ? 'gps-ok' : dist < 1 ? 'gps-warn' : 'gps-err';
-      const icon = dist < 0.3 ? '✓' : dist < 1 ? '⚠' : '🚩';
+      const icon = dist < 0.3 ? '✓' : dist < 1 ? '<svg class="ic ic-sm"><use href="#ic-warning"/></svg>' : '<svg class="ic ic-sm"><use href="#ic-flag"/></svg>';
       el.innerHTML = `<span class="gps-badge ${cls}">${icon} ${dist < 1 ? Math.round(dist*1000)+'m' : dist.toFixed(1)+'km'} od POS · ${ci.inTime}</span>`;
     }
   }
@@ -1842,7 +1842,7 @@ Napiš přátelský, motivující briefing v češtině. Max 3 věty. Zmiň co j
     const data = await res.json();
     const text = data.content?.[0]?.text || 'Dobrý den! Dnes máš před sebou další den v terénu. Zaměř se na kvalitu, foť vše co osazuješ.';
     if (el) {
-      el.innerHTML = `${text}<span class="ai-badge">✨ AI</span>`;
+      el.innerHTML = `${text}<span class="ai-badge">AI Insight</span>`;
     }
   } catch(e) {
     // Fallback if API not available
@@ -1852,7 +1852,7 @@ Napiš přátelský, motivující briefing v češtině. Max 3 věty. Zmiň co j
       `Dnes priorita: ${svc.length > 0 ? svc[0].n + ' — servis nejdřív!' : 'splnit normu 2 rebrandingy.'} Fotodokumentace je povinná, admin kontroluje každou návštěvu.`,
     ];
     const txt = fallbacks[Math.floor(Math.random()*fallbacks.length)];
-    if (el) el.innerHTML = `${txt}<span class="ai-badge">✨ AI</span>`;
+    if (el) el.innerHTML = `${txt}<span class="ai-badge">AI Insight</span>`;
   }
 }
 
@@ -1865,8 +1865,8 @@ async function generateManagerBriefing() {
   if (!btn || !wrap) return;
 
   btn.disabled = true;
-  btn.innerHTML = '<span>⏳</span> Generuji briefing…';
-  wrap.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">Sestavuji executive summary…<br><br><div class="ai-typing" style="font-size:20px">▋</div></div>';
+  btn.innerHTML = '<svg class="ic"><use href="#ic-clock"/></svg> Generuji briefing…';
+  wrap.innerHTML = '<div class="ai-loading">Sestavuji executive summary…<div class="ai-loading-bar"></div></div>';
 
   const live = getLiveState ? getLiveState() : {};
   const totalPOS = REAL_DATA.techs.reduce((s, t) => s + t.total, 0);
@@ -1901,15 +1901,15 @@ Shrň nejdůležitější fakt, jedno riziko a jedno konkrétní doporučení.`;
   }
 
   btn.disabled = false;
-  btn.innerHTML = '<span>🌅</span> Obnovit briefing';
+  btn.innerHTML = '<svg class="ic"><use href="#ic-calendar"/></svg> Refresh briefing';
 }
 
 function renderBriefingCard(text) {
   return `<div class="ai-report-card">
     <div class="ai-report-hdr" style="background:var(--teal)">
-      <div class="ai-report-hdr-icon">🌅</div>
-      <div class="ai-report-hdr-t" style="color:var(--navy)">Denní briefing pro manažera</div>
-      <div class="ai-report-hdr-badge" style="background:var(--navy);color:var(--teal)">Claude AI</div>
+      <div class="ai-report-hdr-icon"><svg class="ic ic-lg" style="color:var(--navy)"><use href="#ic-calendar"/></svg></div>
+      <div class="ai-report-hdr-t" style="color:var(--navy)">Daily Executive Briefing</div>
+      <div class="ai-report-hdr-badge" style="background:var(--navy);color:var(--teal)">AI Insight</div>
     </div>
     <div class="ai-report-body">${text}</div>
   </div>`;
@@ -1924,8 +1924,8 @@ async function generateAIReport() {
   if (!btn || !wrap) return;
 
   btn.disabled = true;
-  btn.innerHTML = '<span>⏳</span> AI analyzuje data…';
-  wrap.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">Analyzuji výkon 27 techniků…<br><br><div class="ai-typing" style="font-size:20px">▋</div></div>';
+  btn.innerHTML = '<svg class="ic"><use href="#ic-clock"/></svg> Analyzuji data…';
+  wrap.innerHTML = '<div class="ai-loading">Analyzuji výkon 27 techniků…<div class="ai-loading-bar"></div></div>';
 
   const live = getLiveState ? getLiveState() : {};
   const gpsFlags = lsg('gps_flags_' + today(), []);
@@ -1947,10 +1947,10 @@ Krátké návštěvy dnes (<10 min): ${shortVisits.length > 0 ? shortVisits.map(
 Dokončeno dnes: ${live.completedPos?.length || 0} POS
 Otevřené servisy: ${live.servisOpen?.length || 0}
 
-Napiš stručný management report v češtině se sekcemi:
-1. 🚨 Rizika a podezřelé aktivity (kdo je výrazně pozadu, GPS anomálie)
-2. ✅ Pozitivní výkon (kdo exceluje)  
-3. 💡 Doporučení pro manažera
+Napiš stručný management report v češtině se sekcemi (jako čisté textové nadpisy, BEZ emoji):
+1. Rizika a podezřelé aktivity (kdo je výrazně pozadu, GPS anomálie)
+2. Pozitivní výkon (kdo exceluje)
+3. Doporučení pro manažera
 
 Buď konkrétní, zmiňuj jména. Max 300 slov.`;
 
@@ -1974,23 +1974,23 @@ Buď konkrétní, zmiňuj jména. Max 300 slov.`;
   }
 
   btn.disabled = false;
-  btn.innerHTML = '<span>🤖</span> Obnovit analýzu';
+  btn.innerHTML = '<svg class="ic"><use href="#ic-intel"/></svg> Refresh analysis';
 }
 
 function generateMockReport(gpsFlags, shortVisits) {
   const behind = REAL_DATA.techs.filter(t => t.total && t.done/t.total < 0.2);
   const great = REAL_DATA.techs.filter(t => t.total && t.done/t.total > 0.8);
-  return `🚨 **Rizika a podezřelé aktivity**
+  return `Rizika a podezřelé aktivity
 
 ${behind.map(t => `• **${t.name}**: pouze ${t.done}/${t.total} POS (${Math.round(t.done/t.total*100)}%) — výrazně pod normou, doporučena kontrola`).join('\n')}
 ${gpsFlags.length ? gpsFlags.map(f => `• GPS anomálie: check-in **${f.posName}** — ${f.dist?.toFixed(1)}km od adresy POS v ${f.time}`).join('\n') : ''}
 ${shortVisits.length ? shortVisits.map(v => `• Krátká návštěva: **${v.posName}** — pouze ${v.dur} minut`).join('\n') : '• Žádné GPS anomálie ani podezřelé krátké návštěvy dnes'}
 
-✅ **Pozitivní výkon**
+Pozitivní výkon
 
 ${great.map(t => `• **${t.name}**: ${t.done}/${t.total} POS — výborný výkon`).join('\n') || '• Data se načítají…'}
 
-💡 **Doporučení**
+Doporučení
 
 • Kontaktovat techniky s plněním pod 20% a ověřit důvod zpoždění
 • Nastavit minimální dobu návštěvy 15 minut pro IDT a 25 minut pro KA
@@ -2004,29 +2004,29 @@ function renderAIReport(text, gpsFlags, shortVisits) {
   // Format markdown-like text to HTML
   const formatted = text
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/^🚨(.+)$/gm, '<h4>🚨$1</h4>')
-    .replace(/^✅(.+)$/gm, '<h4>✅$1</h4>')
-    .replace(/^💡(.+)$/gm, '<h4>💡$1</h4>')
+    .replace(/^(Rizika a podezřelé aktivity)$/gm, '<h4>$1</h4>')
+    .replace(/^(Pozitivní výkon)$/gm, '<h4>$1</h4>')
+    .replace(/^(Doporučení)$/gm, '<h4>$1</h4>')
     .replace(/^• (.+)$/gm, '<div class="ai-flag-item ai-flag-orange"><span>•</span><span>$1</span></div>')
     .replace(/\n\n/g, '<br>');
 
   wrap.innerHTML = `
     <div class="ai-report-card">
       <div class="ai-report-hdr">
-        <div class="ai-report-hdr-icon">🤖</div>
-        <div class="ai-report-hdr-t">AI Analýza výkonu — W25</div>
-        <div class="ai-report-hdr-badge">Claude AI</div>
+        <div class="ai-report-hdr-icon"><svg class="ic ic-lg" style="color:#fff"><use href="#ic-intel"/></svg></div>
+        <div class="ai-report-hdr-t">Team Performance Analysis — W25</div>
+        <div class="ai-report-hdr-badge">AI Insight</div>
       </div>
       <div class="ai-report-body">${formatted}</div>
     </div>
     ${gpsFlags.length ? `<div class="ai-report-card">
       <div class="ai-report-hdr" style="background:var(--red)">
-        <div class="ai-report-hdr-icon">🚨</div>
+        <div class="ai-report-hdr-icon"><svg class="ic ic-lg" style="color:#fff"><use href="#ic-warning"/></svg></div>
         <div class="ai-report-hdr-t">GPS Anomálie dnes</div>
         <div class="ai-report-hdr-badge" style="background:rgba(255,255,255,.2);color:#fff">${gpsFlags.length} flagů</div>
       </div>
       <div class="ai-report-body">
-        ${gpsFlags.map(f => `<div class="ai-flag-item ai-flag-red"><span>📍</span><span><strong>${f.posName}</strong> · ${f.time} · ${f.dist?.toFixed(2)}km od adresy POS</span></div>`).join('')}
+        ${gpsFlags.map(f => `<div class="ai-flag-item ai-flag-red"><span><svg class="ic ic-sm"><use href="#ic-pin"/></svg></span><span><strong>${f.posName}</strong> · ${f.time} · ${f.dist?.toFixed(2)}km od adresy POS</span></div>`).join('')}
       </div>
     </div>` : ''}
   `;
@@ -2060,8 +2060,8 @@ function renderAdminAlertBanner(p) {
   const msgs = [globalAlert, typAlert].filter(Boolean);
   if (!msgs.length) { el.innerHTML = ''; return; }
   el.innerHTML = msgs.map(m => `
-    <div style="margin:8px 12px 0;padding:10px 14px;background:var(--ol);border-left:3px solid var(--orange);border-radius:0 8px 8px 0;font-size:12px;font-weight:600;color:var(--orange);line-height:1.4">
-      📢 ${m}
+    <div style="margin:8px 12px 0;padding:10px 14px;background:var(--ol);border-left:3px solid var(--orange);border-radius:0 8px 8px 0;font-size:12px;font-weight:600;color:var(--orange);line-height:1.4;display:flex;align-items:flex-start;gap:7px">
+      <svg class="ic ic-sm" style="margin-top:1px"><use href="#ic-bell"/></svg><span>${m}</span>
     </div>`).join('');
 }
 
@@ -2072,10 +2072,10 @@ showAdmPage = function(p, btn) {
   if (p === 'editor') initEditor();
   if (p === 'ai') {
     if (!document.getElementById('mgr-briefing-wrap').innerHTML.trim()) {
-      document.getElementById('mgr-briefing-wrap').innerHTML = '<div class="empty"><div class="empty-i">🌅</div><div class="empty-t">Briefing pro manažera</div><div class="empty-s">Klikni výše a AI sestaví executive summary z dnešních dat.</div></div>';
+      document.getElementById('mgr-briefing-wrap').innerHTML = '<div class="empty"><div class="empty-i"><svg class="ic ic-xl"><use href="#ic-calendar"/></svg></div><div class="empty-t">Daily Executive Briefing</div><div class="empty-s">Klikni výše a AI sestaví executive summary z dnešních dat.</div></div>';
     }
     if (!document.getElementById('ai-report-wrap').innerHTML.trim()) {
-      document.getElementById('ai-report-wrap').innerHTML = '<div class="empty"><div class="empty-i">🤖</div><div class="empty-t">Hloubková analýza výkonu</div><div class="empty-s">Klikni na tlačítko pro spuštění AI analýzy celého týmu.</div></div>';
+      document.getElementById('ai-report-wrap').innerHTML = '<div class="empty"><div class="empty-i"><svg class="ic ic-xl"><use href="#ic-intel"/></svg></div><div class="empty-t">Team Performance Analysis</div><div class="empty-s">Klikni na tlačítko pro spuštění AI analýzy celého týmu.</div></div>';
     }
   }
 };
@@ -2096,7 +2096,7 @@ showBriefing = function() {
   const el = document.getElementById('bf-msg');
   const typing = document.getElementById('bf-typing');
   if (el && typing) {
-    el.innerHTML = '<span class="ai-typing">Generuji personalizovaný briefing</span><span class="ai-badge">✨ AI</span>';
+    el.innerHTML = '<span>Generuji personalizovaný briefing…</span><span class="ai-badge">AI Insight</span>';
     setTimeout(() => generateAIBriefing(), 800);
   }
 };
@@ -2177,7 +2177,7 @@ renderList = function() {
   wrap.innerHTML = '';
   const all = posData[cWeek] || [];
   if (!all.length) {
-    wrap.innerHTML = '<div class="empty"><div class="empty-i">📋</div><div class="empty-t">Žádné POS tento týden</div></div>';
+    wrap.innerHTML = '<div class="empty"><div class="empty-i"><svg class="ic ic-xl"><use href="#ic-notes"/></svg></div><div class="empty-t">Žádné POS tento týden</div></div>';
     return;
   }
 
@@ -2203,7 +2203,7 @@ renderList = function() {
     const banner = document.createElement('div');
     banner.style.cssText = 'margin:8px 12px 0;padding:10px 14px;background:var(--rl);border:1.5px solid var(--red);border-radius:10px;cursor:pointer';
     banner.onclick = () => showOverdue();
-    banner.innerHTML = `<div style="font-size:13px;font-weight:700;color:var(--red)">⏰ ${overdue.length} nesplněných POS z minulých dní</div>
+    banner.innerHTML = `<div style="font-size:13px;font-weight:700;color:var(--red)"><svg class="ic ic-sm"><use href="#ic-clock"/></svg> ${overdue.length} nesplněných POS z minulých dní</div>
       <div style="font-size:11px;color:var(--red);opacity:.8;margin-top:2px">Klikni pro zobrazení — přidej je na dnes nebo zpracuj</div>`;
     wrap.appendChild(banner);
   }
@@ -2213,14 +2213,14 @@ renderList = function() {
     const b = document.createElement('div');
     b.className = 'upbanner';
     b.onclick = showUnplanned;
-    b.innerHTML = `<div class="upb-ico">📌</div><div><div class="upb-t">${unpl.length} POS bez přiřazeného dne</div><div class="upb-s">Klikni pro naplánování</div></div><div style="color:var(--orange);font-size:18px;margin-left:auto">›</div>`;
+    b.innerHTML = `<div class="upb-ico"><svg class="ic ic-lg"><use href="#ic-pin"/></svg></div><div><div class="upb-t">${unpl.length} POS bez přiřazeného dne</div><div class="upb-s">Klikni pro naplánování</div></div><div style="color:var(--orange);font-size:18px;margin-left:auto">›</div>`;
     wrap.appendChild(b);
   }
 
   // Plan button
   const planBtn = document.createElement('div');
   planBtn.style.cssText = 'padding:8px 12px 0';
-  planBtn.innerHTML = `<button onclick="showPlanningView()" style="width:100%;padding:11px;background:var(--navy);color:var(--teal);border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">📋 Naplánovat POS na týden</button>`;
+  planBtn.innerHTML = `<button onclick="showPlanningView()" style="width:100%;padding:11px;background:var(--navy);color:var(--teal);border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"><svg class="ic"><use href="#ic-notes"/></svg> Naplánovat POS na týden</button>`;
   wrap.appendChild(planBtn);
 
   // Day label
@@ -2240,7 +2240,7 @@ renderList = function() {
 
     // Can they add POS from unplanned?
     const canPlan = isCurrentWeek && (isTodaySelected || isFuture(cDay));
-    e.innerHTML = `<div class="empty-i">📅</div>
+    e.innerHTML = `<div class="empty-i"><svg class="ic ic-xl"><use href="#ic-calendar"/></svg></div>
       <div class="empty-t">Nic naplánováno</div>
       <div class="empty-s">${canPlan ? 'Přiřaď POS z neplánovaných výše.' : 'Minulý den — pouze pro přehled.'}</div>`;
     wrap.appendChild(e);
@@ -2366,7 +2366,7 @@ function showAdminPOSDetail(posId) {
     ${history.map(h => `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--bg)">
       <div style="font-size:13px;font-weight:700;min-width:70px">${h.date}</div>
       <div style="flex:1;font-size:12px;color:var(--muted)">${h.technik} · W${h.week} · ${h.time||''}${h.dur?' · '+h.dur+'min':''}</div>
-      <div style="font-size:14px">${h.gpsOk===false?'🚩':h.gpsOk===true?'✓':''}</div>
+      <div style="font-size:14px">${h.gpsOk===false?'<svg class="ic ic-sm" style="color:var(--red)"><use href="#ic-flag"/></svg>':h.gpsOk===true?'✓':''}</div>
     </div>`).join('')}
     </div>`;
   }
@@ -2384,8 +2384,8 @@ function showAdminPOSDetail(posId) {
 
   // Supply confirmed
   if (supply && supply.confirmed) {
-    html += `<div style="background:var(--gl);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:var(--green)">
-      ✍️ Zásobování potvrzeno · ${supply.at} · Přijal: ${supply.receiver}
+    html += `<div style="background:var(--gl);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:var(--green);display:flex;align-items:center;gap:6px">
+      <svg class="ic ic-sm"><use href="#ic-edit"/></svg> Zásobování potvrzeno · ${supply.at} · Přijal: ${supply.receiver}
     </div>`;
   }
 
@@ -2562,7 +2562,7 @@ function showPlanningView() {
     const lbl = document.createElement('div');
     lbl.className = 'sec-lbl';
     lbl.style.color = 'var(--red)';
-    lbl.textContent = `⏰ Nesplněné z minulých dní (${overdue.length})`;
+    lbl.textContent = `Nesplněné z minulých dní (${overdue.length})`;
     wrap.appendChild(lbl);
     overdue.forEach(p => wrap.appendChild(makePlanCard(p, all.indexOf(p))));
   }
@@ -2577,7 +2577,7 @@ function showPlanningView() {
   if (!unpl.length) {
     const e = document.createElement('div');
     e.style.cssText = 'padding:20px;text-align:center;color:var(--muted);font-size:13px';
-    e.innerHTML = 'Všechny POS jsou přiřazené ke dnům. 🎉';
+    e.innerHTML = '<svg class="ic ic-sm" style="color:var(--green);vertical-align:-2px;margin-right:3px"><use href="#ic-check-circle"/></svg>Všechny POS jsou přiřazené ke dnům.';
     wrap.appendChild(e);
   } else {
     unpl.forEach(p => wrap.appendChild(makePlanCard(p, all.indexOf(p))));
@@ -2701,7 +2701,7 @@ function renderEditorCatalog() {
     const items = cat[section] || [];
     el.innerHTML = items.map((item,i) => `
       <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--bg)">
-        <input value="${item.i}" oninput="updateCatalogItem('${section}',${i},'i',this.value)" style="width:40px;text-align:center;border:1.5px solid var(--border);border-radius:8px;padding:6px;font-size:16px;outline:none"/>
+        <div style="width:36px;height:36px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border:1.5px solid var(--border);border-radius:8px;color:var(--teal)">${item.i}</div>
         <input value="${item.n}" oninput="updateCatalogItem('${section}',${i},'n',this.value)" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:13px;outline:none"/>
         <button onclick="deleteCatalogItem('${section}',${i})" style="background:none;border:none;color:var(--red);font-size:16px;cursor:pointer;padding:4px">✕</button>
       </div>`).join('') || '<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px">Žádné položky</div>';
@@ -2715,7 +2715,7 @@ function updateCatalogItem(section, i, field, val) {
 function addCatalogItem(section) {
   const cat = getInvCatalog();
   if (!cat[section]) cat[section] = [];
-  cat[section].push({i: section==='venkovni'?'🏢':'📦', n:'Nová položka'});
+  cat[section].push({i: section==='venkovni'?ic('ic-building'):ic('ic-box'), n:'Nová položka'});
   saveInvCatalog(cat);
   renderEditorCatalog();
 }
@@ -2737,10 +2737,10 @@ renderCampaigns = function() {
   const wrap = document.getElementById('camp-wrap');
   if (!wrap) return;
   const typeColors = {'Losy':'camp-losy','Loterie':'camp-lot','Rebranding':'camp-rebranding'};
-  const typeIcons = {'Losy':'🎫 Losy','Loterie':'🎰 Loterie','Rebranding':'🔄 Rebranding','ORLEN':'⛽ ORLEN','Corn':'🌽 Corn'};
+  const typeLabels = {'Losy':'Losy','Loterie':'Loterie','Rebranding':'Rebranding','ORLEN':'ORLEN','Corn':'Corn'};
   wrap.innerHTML = editorCamps.map(c => {
     const cls = typeColors[c.type] || 'camp-losy';
-    const lbl = typeIcons[c.type] || ('📢 '+c.type);
+    const lbl = typeLabels[c.type] || c.type;
     const items = (c.items||'').split('\n').filter(Boolean);
     let daysLeft = '';
     if (c.deadline) {
@@ -2751,9 +2751,9 @@ renderCampaigns = function() {
     return `<div class="camp-card ${cls}"><div class="camp-inner">
       <div class="camp-type">${lbl}</div>
       <div class="camp-name">${c.name}</div>
-      ${c.dates?`<div class="camp-dates">📅 ${c.dates}</div>`:''}
+      ${c.dates?`<div class="camp-dates"><svg class="ic ic-sm"><use href="#ic-calendar"/></svg> ${c.dates}</div>`:''}
       <div class="camp-items">${items.map(it=>`<div class="camp-item"><div class="camp-dot"></div>${it}</div>`).join('')}</div>
-      ${c.deadline?`<div class="camp-dl">⏱ Deadline: ${c.deadline.split('-').reverse().join('. ')} · ${daysLeft}</div>`:''}
+      ${c.deadline?`<div class="camp-dl"><svg class="ic ic-sm"><use href="#ic-clock"/></svg> Deadline: ${c.deadline.split('-').reverse().join('. ')} · ${daysLeft}</div>`:''}
     </div></div>`;
   }).join('');
 };
