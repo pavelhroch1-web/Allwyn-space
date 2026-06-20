@@ -18,8 +18,9 @@ for(const [w,list] of Object.entries(REAL_DATA.weeks)){
     const rawTyp = p.typ||'IDT';
     const isCornPos = rawTyp==='CORN' || (p.k&&p.k.startsWith('9')) || p.typ==='CORN';
     const typ = isCornPos ? 'CORN' : rawTyp;
+    const withCoords = ensurePosCoords(p);
     return {
-      ...p,
+      ...withCoords,
       typ,
       photos:[],notes:'',
       taskState:[...((TASK_TMPL[typ]||TASK_TMPL[rawTyp]||TASK_TMPL.IDT)).map(t=>({text:t,src:'template',done:p.v}))],
@@ -981,6 +982,47 @@ function renderAdminDashboard() {
       ? attnItems.map(a => `<div class="attn-item attn-${a.sev}"><span class="attn-icon"><svg class="ic"><use href="#${a.icon}"/></svg></span><span>${a.text}</span></div>`).join('')
       : '<div class="empty"><div class="empty-i"><svg class="ic ic-xl"><use href="#ic-check-circle"/></svg></div><div class="empty-t">Žádné problémy</div><div class="empty-s">Vše běží podle plánu.</div></div>';
   }
+
+  renderFleetRouteAnalytics();
+}
+
+// ══════════════════════════════════════════════════════
+// ROUTE INTELLIGENCE — Velín analytika nad RouteEngine
+// ══════════════════════════════════════════════════════
+// Sestaví reálné denní trasy ze všech naplánovaných dní/týdnů — žádná
+// vymyšlená čísla, jen agregace přes existující přiřazení POS->den.
+function buildAllDailyRoutes() {
+  const routes = {};
+  for (const [week, list] of Object.entries(posData)) {
+    const byDay = {};
+    list.forEach(p => {
+      if (p.d === null || p.d === undefined) return;
+      (byDay[p.d] = byDay[p.d] || []).push(p);
+    });
+    Object.entries(byDay).forEach(([day, dayPos]) => {
+      if (dayPos.length > 1) routes[`${week}_${DAYS[day] || day}`] = dayPos;
+    });
+  }
+  return routes;
+}
+
+function renderFleetRouteAnalytics() {
+  const el = document.getElementById('dash-route-kpis');
+  if (!el) return;
+  const routes = buildAllDailyRoutes();
+  const routeCount = Object.keys(routes).length;
+  if (!routeCount) {
+    el.innerHTML = '<div class="empty"><div class="empty-t">Žádné naplánované trasy k analýze</div></div>';
+    return;
+  }
+  const fleet = RouteEngine.analyzeFleet(routes);
+  el.innerHTML = `
+    <div class="kpi-card"><div class="kpi-icon"><svg class="ic ic-lg"><use href="#ic-route"/></svg></div><div class="kpi-val">${routeCount}</div><div class="kpi-lbl">Analyzovaných tras</div></div>
+    <div class="kpi-card warn"><div class="kpi-icon"><svg class="ic ic-lg"><use href="#ic-flag"/></svg></div><div class="kpi-val">${RouteEngine.formatKm(fleet.wastedKm)}</div><div class="kpi-lbl">Zbytečné km (suboptimální pořadí)</div></div>
+    <div class="kpi-card warn"><div class="kpi-icon"><svg class="ic ic-lg"><use href="#ic-clock"/></svg></div><div class="kpi-val">${fleet.wastedHours.toFixed(1)} h</div><div class="kpi-lbl">Ztracené hodiny jízdy</div></div>
+    <div class="kpi-card"><div class="kpi-icon"><svg class="ic ic-lg"><use href="#ic-target"/></svg></div><div class="kpi-val">${fleet.efficiencyScore}%</div><div class="kpi-lbl">Efficiency score</div></div>
+    <div class="kpi-card"><div class="kpi-icon"><svg class="ic ic-lg"><use href="#ic-intel"/></svg></div><div class="kpi-val">${fleet.optimizationPotentialPct}%</div><div class="kpi-lbl">Potenciál optimalizace</div></div>
+  `;
 }
 
 // ══════════════════════════════════════════════════════
@@ -2169,6 +2211,60 @@ function getVisitHistory(posId) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+// ROUTE INTELLIGENCE — denní trasa technika (RouteEngine)
+// ══════════════════════════════════════════════════════════════════════════
+function routeOrderKey(week, day){ return `route_order_${week}_${day}`; }
+function getStoredRouteOrder(week, day){ return lsg(routeOrderKey(week, day)); }
+function setStoredRouteOrder(week, day, ids){ lss(routeOrderKey(week, day), ids); }
+function resetRouteOrder(week, day){ localStorage.removeItem(routeOrderKey(week, day)); renderList(); }
+
+function applyStoredRouteOrder(dayPos, week, day){
+  const ids = getStoredRouteOrder(week, day);
+  if (!ids || !ids.length) return dayPos;
+  const byId = {}; dayPos.forEach(p => byId[p.id] = p);
+  const ordered = ids.map(id => byId[id]).filter(Boolean);
+  dayPos.forEach(p => { if (!ids.includes(p.id)) ordered.push(p); });
+  return ordered;
+}
+
+function optimizeRoute(week, day){
+  const all = posData[week] || [];
+  const dayPos = applyStoredRouteOrder(all.filter(p => p.d === day), week, day);
+  if (dayPos.length < 2) return;
+  const cmp = RouteEngine.compareRoutes(dayPos);
+  setStoredRouteOrder(week, day, cmp.optimizedOrderIds);
+  renderList();
+}
+
+function buildRouteSummaryCard(dayPos, week, day){
+  if (dayPos.length < 2) return null;
+  const cmp = RouteEngine.compareRoutes(dayPos);
+  const hasStoredOrder = !!getStoredRouteOrder(week, day);
+  const showOptimize = cmp.savedKm > 0.5;
+  const el = document.createElement('div');
+  el.style.cssText = 'margin:8px 12px;padding:14px;background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:12px';
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;color:var(--navy);font-weight:700;font-size:13px">
+      <svg class="ic ic-sm" style="color:var(--teal)"><use href="#ic-route"/></svg> Trasa dne · ${dayPos.length} POS
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+      <div><div style="font-size:11px;color:var(--muted)">Jízda</div><div style="font-size:15px;font-weight:700">${RouteEngine.formatKm(cmp.before.drivingKm)}</div><div style="font-size:11px;color:var(--muted)">${RouteEngine.formatHM(cmp.before.drivingMin)}</div></div>
+      <div><div style="font-size:11px;color:var(--muted)">Práce na POS</div><div style="font-size:15px;font-weight:700">${RouteEngine.formatHM(cmp.before.workMin)}</div></div>
+      <div><div style="font-size:11px;color:var(--muted)">Celkem</div><div style="font-size:15px;font-weight:700">${RouteEngine.formatHM(cmp.before.totalMin)}</div></div>
+    </div>
+    ${showOptimize ? `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+      <div style="font-size:12px;color:var(--teal);font-weight:700;display:flex;align-items:center;gap:5px">
+        <svg class="ic ic-sm"><use href="#ic-target"/></svg> Ušetříš ${RouteEngine.formatKm(cmp.savedKm)} · ${RouteEngine.formatHM(cmp.savedMin)}
+      </div>
+      <button onclick="optimizeRoute('${week}',${day})" style="background:var(--teal);color:var(--navy);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0">Optimalizovat trasu</button>
+    </div>` : hasStoredOrder ? `
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:12px;color:var(--muted)">Trasa je optimalizovaná. <a href="#" onclick="event.preventDefault();resetRouteOrder('${week}',${day})" style="color:var(--teal);font-weight:700">Vrátit původní pořadí</a></div>` : ''}
+  `;
+  return el;
+}
+
+// ══════════════════════════════════════════════════════════════════════════
 // PATCH renderList — show today's POS locked, future plannable, overdue flagged
 // ══════════════════════════════════════════════════════════════════════════
 const _origRenderList = renderList;
@@ -2190,8 +2286,8 @@ renderList = function() {
   // Unplanned for this week
   const unpl = all.filter(p => (p.d === null || p.d === undefined) && !p.v);
 
-  // Today's POS
-  const todayPos = all.filter(p => p.d === cDay);
+  // Today's POS (v uloženém pořadí trasy, pokud bylo optimalizováno)
+  const todayPos = applyStoredRouteOrder(all.filter(p => p.d === cDay), cWeek, cDay);
 
   // Header: what day is selected
   const meta = WEEKS_META[cWeek];
@@ -2233,6 +2329,9 @@ renderList = function() {
   const dayLabel = isTodaySelected ? `${DAYS[cDay]} ${dayDate} — DNES` : `${DAYS[cDay]} ${dayDate}`;
   lbl.innerHTML = `<span>${dayLabel} · ${todayPos.length} POS</span>`;
   wrap.appendChild(lbl);
+
+  const routeCard = buildRouteSummaryCard(todayPos, cWeek, cDay);
+  if (routeCard) wrap.appendChild(routeCard);
 
   if (!todayPos.length) {
     const e = document.createElement('div');
