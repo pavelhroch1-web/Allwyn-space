@@ -2588,6 +2588,20 @@ function showAdminPOSDetail(posId) {
       </div>
     </div>`;
 
+  // Frekvence návštěv — odvozeno z reálných dat, ne vymyšlené
+  const isOverdueNow = getOverduePOS(foundWeek).some(op => op.id === p.id);
+  const posModel = PosModel.toPosModel(p, { history, isOverdue: isOverdueNow });
+  if (posModel.daysSinceLastVisit !== null) {
+    const freqColors = { 'on-track': 'var(--green)', 'due-soon': 'var(--orange)', overdue: 'var(--red)' };
+    const freqBg = { 'on-track': 'var(--gl)', 'due-soon': 'var(--ol)', overdue: 'var(--rl)' };
+    let msg = `Tato POS nebyla navštívena ${posModel.daysSinceLastVisit} dní.`;
+    if (posModel.frequencyCompliance === 'overdue') msg += ' Měla by být prioritizována co nejdříve.';
+    else if (posModel.frequencyCompliance === 'due-soon') msg += ' Měla by být prioritizována příští týden.';
+    html += `<div style="background:${freqBg[posModel.frequencyCompliance]||'var(--bg)'};border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:${freqColors[posModel.frequencyCompliance]||'var(--muted)'};font-weight:600">${msg}</div>`;
+  } else {
+    html += `<div style="background:var(--rl);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:var(--red);font-weight:600">Tato POS ještě nebyla nikdy navštívena.</div>`;
+  }
+
   // Visit history
   if (history.length) {
     html += `<div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Historie návštěv</div>
