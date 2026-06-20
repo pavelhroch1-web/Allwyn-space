@@ -511,28 +511,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .attn-red{background:var(--rl)}
 .attn-orange{background:var(--ol)}
 
-/* OPERATIONS INTELLIGENCE — demo polish */
-.oi-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--muted);font-weight:600;margin-bottom:12px}
-.oi-meta b{color:var(--text)}
-.oi-conf{display:inline-flex;align-items:center;gap:5px}
-.oi-conf-bar{width:46px;height:5px;border-radius:3px;background:var(--border);overflow:hidden}
-.oi-conf-fill{height:100%;background:var(--teal)}
-.prio{font-size:9px;font-weight:800;padding:2px 7px;border-radius:10px;text-transform:uppercase;letter-spacing:.4px}
-.prio-high{background:var(--rl);color:var(--red)}
-.prio-med{background:var(--ol);color:var(--orange)}
-.prio-low{background:var(--bl);color:var(--blue)}
-.trend{font-weight:800;font-size:11px}
-.trend-up{color:var(--green)}
-.trend-down{color:var(--red)}
-.trend-flat{color:var(--muted)}
-.oi-section{margin-bottom:14px}
-.oi-section:last-child{margin-bottom:0}
-.oi-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--bg)}
-.oi-row:last-child{border-bottom:none}
-.oi-row-text{font-size:12px;line-height:1.5;flex:1}
-.tech-meta-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
-.tech-meta-row .tag{background:var(--bg);color:var(--muted)}
-
 /* ADMIN EDITOR */
 .ed-subnav{flex-shrink:0;padding:8px 14px;border-radius:8px;background:var(--bg);border:1.5px solid var(--border);font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;white-space:nowrap}
 .ed-subnav.active{background:var(--navy);color:var(--teal);border-color:var(--navy)}
