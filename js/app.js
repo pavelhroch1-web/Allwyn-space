@@ -2812,6 +2812,27 @@ function applyAssignments() {
 // ══════════════════════════════════════════════════════════════════════════
 // REBUILT: PLANNING VIEW — technik picks from week list + overdue
 // ══════════════════════════════════════════════════════════════════════════
+// Multi-select state pro hromadné přiřazení dne (PART 5) — drží se mimo
+// showPlanningView, aby přežilo re-render při zaškrtávání checkboxů.
+let planSelection = new Set();
+
+function togglePlanSelect(id) {
+  if (planSelection.has(id)) planSelection.delete(id); else planSelection.add(id);
+  showPlanningView();
+}
+
+function bulkAssignSelected(day) {
+  if (!planSelection.size) return;
+  const all = posData[cWeek] || [];
+  planSelection.forEach(id => {
+    const p = all.find(x => x.id === id);
+    if (p) { p.d = day; setAssignment(p.id, day); }
+  });
+  planSelection.clear();
+  updateSummary(); renderChips(); renderDayTabs();
+  showPlanningView();
+}
+
 function showPlanningView() {
   const wrap = document.getElementById('pos-list-wrap');
   wrap.innerHTML = '';
@@ -2822,15 +2843,25 @@ function showPlanningView() {
   // Back button
   const back = document.createElement('div');
   back.style.cssText = 'padding:10px 12px 4px';
-  back.innerHTML = `<button onclick="renderList()" style="background:none;border:none;color:var(--td);font-size:13px;font-weight:700;cursor:pointer">← Zpět na denní plán</button>`;
+  back.innerHTML = `<button onclick="planSelection.clear();renderList()" style="background:none;border:none;color:var(--td);font-size:13px;font-weight:700;cursor:pointer">← Zpět na denní plán</button>`;
   wrap.appendChild(back);
 
   // Header
   const hdr = document.createElement('div');
   hdr.style.cssText = 'padding:8px 16px 4px';
   hdr.innerHTML = `<div style="font-size:16px;font-weight:800;color:var(--navy)">Naplánovat POS</div>
-    <div style="font-size:12px;color:var(--muted);margin-top:2px">Vyber které POS pojedeš a přiřaď je ke dnům</div>`;
+    <div style="font-size:12px;color:var(--muted);margin-top:2px">Zaškrtni POS, vyber den a přiřaď je všechny najednou</div>`;
   wrap.appendChild(hdr);
+
+  // Bulk action bar — viditelná jen pokud je něco vybráno
+  if (planSelection.size > 0) {
+    const bar = document.createElement('div');
+    bar.style.cssText = 'position:sticky;top:0;z-index:10;margin:8px 12px;padding:10px 12px;background:var(--navy);border-radius:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap';
+    bar.innerHTML = `<span style="color:#fff;font-size:12px;font-weight:700;margin-right:4px">${planSelection.size} vybráno</span>
+      ${DAYS.map((d, i) => `<button onclick="bulkAssignSelected(${i})" style="font-size:11px;font-weight:700;color:var(--navy);background:var(--teal);border:none;border-radius:7px;padding:6px 10px;cursor:pointer">${d}</button>`).join('')}
+      <button onclick="planSelection.clear();showPlanningView()" style="margin-left:auto;font-size:11px;color:#fff;background:none;border:1px solid rgba(255,255,255,.3);border-radius:7px;padding:6px 10px;cursor:pointer">Zrušit výběr</button>`;
+    wrap.appendChild(bar);
+  }
 
   // Overdue section (current week only)
   const overdue = isCurrentWeek ? getOverduePOS(cWeek) : [];
@@ -2840,14 +2871,17 @@ function showPlanningView() {
     lbl.style.color = 'var(--red)';
     lbl.textContent = `Nesplněné z minulých dní (${overdue.length})`;
     wrap.appendChild(lbl);
-    overdue.forEach(p => wrap.appendChild(makePlanCard(p, all.indexOf(p))));
+    overdue.forEach(p => wrap.appendChild(makePlanCard(p, all.indexOf(p), true)));
   }
 
   // Unplanned section
   const unpl = all.filter(p => (p.d === null || p.d === undefined) && !p.v);
   const lbl2 = document.createElement('div');
   lbl2.className = 'sec-lbl';
-  lbl2.textContent = `Nepřiřazené POS (${unpl.length})`;
+  lbl2.style.display = 'flex';
+  lbl2.style.justifyContent = 'space-between';
+  lbl2.style.paddingRight = '18px';
+  lbl2.innerHTML = `<span>Nepřiřazené POS (${unpl.length})</span>${unpl.length ? `<a href="#" onclick="event.preventDefault();selectAllUnplanned()" style="color:var(--teal);font-weight:700;font-size:11px">Vybrat vše</a>` : ''}`;
   wrap.appendChild(lbl2);
 
   if (!unpl.length) {
@@ -2856,7 +2890,7 @@ function showPlanningView() {
     e.innerHTML = '<svg class="ic ic-sm" style="color:var(--green);vertical-align:-2px;margin-right:3px"><use href="#ic-check-circle"/></svg>Všechny POS jsou přiřazené ke dnům.';
     wrap.appendChild(e);
   } else {
-    unpl.forEach(p => wrap.appendChild(makePlanCard(p, all.indexOf(p))));
+    unpl.forEach(p => wrap.appendChild(makePlanCard(p, all.indexOf(p), true)));
   }
 
   // Already planned section (grouped by day)
@@ -2873,20 +2907,31 @@ function showPlanningView() {
       dlbl.style.cssText = 'padding:6px 16px 2px;font-size:11px;font-weight:700;color:var(--td)';
       dlbl.textContent = `${dname} ${WEEKS_META[cWeek].dd[di]}${di===todayIdx&&isCurrentWeek?' · DNES':''} (${dayPos.length})`;
       wrap.appendChild(dlbl);
-      dayPos.forEach(p => wrap.appendChild(makePlanCard(p, all.indexOf(p))));
+      dayPos.forEach(p => wrap.appendChild(makePlanCard(p, all.indexOf(p), true)));
     });
   }
 }
 
-function makePlanCard(p, ri) {
+function selectAllUnplanned() {
+  const all = posData[cWeek] || [];
+  all.filter(p => (p.d === null || p.d === undefined) && !p.v).forEach(p => planSelection.add(p.id));
+  showPlanningView();
+}
+
+function makePlanCard(p, ri, selectable) {
   const card = document.createElement('div');
   card.className = 'pos-card';
   card.style.cursor = 'default';
   const dayBadge = (p.d !== null && p.d !== undefined)
     ? `<span style="font-size:11px;font-weight:700;color:var(--td);background:var(--tl);padding:3px 9px;border-radius:20px">${DAYS[p.d]} ${WEEKS_META[cWeek].dd[p.d]}</span>`
     : `<span style="font-size:11px;font-weight:700;color:var(--muted);background:var(--bg);padding:3px 9px;border-radius:20px">Nepřiřazeno</span>`;
+  const checked = planSelection.has(p.id);
+  const checkbox = selectable
+    ? `<input type="checkbox" ${checked?'checked':''} onclick="event.stopPropagation();togglePlanSelect('${p.id}')" style="width:20px;height:20px;flex-shrink:0;accent-color:var(--teal);cursor:pointer"/>`
+    : '';
   card.innerHTML = `
     <div class="pci">
+      ${checkbox}
       <div class="pinfo">
         <div class="pname">${p.n}</div>
         <div class="paddr">${p.a}</div>
