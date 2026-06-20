@@ -2908,3 +2908,45 @@ showAdmPage = function(p, btn) {
   }
 };
 
+// ── Landing screen: live stats + ambient network visual ────────────────────
+(function initLandingScreen() {
+  const techCount = REAL_DATA.techs.length;
+  const totalPOS = REAL_DATA.techs.reduce((s, t) => s + (t.total || 0), 0);
+  const techEl = document.getElementById('rs-stat-techs');
+  const posEl = document.getElementById('rs-stat-pos');
+  if (techEl) techEl.textContent = techCount + ' technicians online';
+  if (posEl) posEl.textContent = totalPOS + ' POS monitored';
+
+  const dotsG = document.getElementById('rs-net-dots');
+  const linesG = document.getElementById('rs-net-lines');
+  if (!dotsG || !linesG) return;
+  const pts = [];
+  const cols = 12, rows = 8;
+  for (let i = 0; i < 26; i++) {
+    pts.push({ x: (Math.random() * cols + 0.5) * (1200 / cols), y: (Math.random() * rows + 0.5) * (800 / rows) });
+  }
+  pts.forEach(p => {
+    const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    c.setAttribute('cx', p.x.toFixed(1));
+    c.setAttribute('cy', p.y.toFixed(1));
+    c.setAttribute('r', 2.2);
+    dotsG.appendChild(c);
+  });
+  pts.forEach((p, i) => {
+    let nearest = null, nd = Infinity;
+    pts.forEach((q, j) => {
+      if (i === j) return;
+      const d = (p.x - q.x) ** 2 + (p.y - q.y) ** 2;
+      if (d < nd) { nd = d; nearest = q; }
+    });
+    if (nearest && nd < 280 * 280) {
+      const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      l.setAttribute('x1', p.x.toFixed(1));
+      l.setAttribute('y1', p.y.toFixed(1));
+      l.setAttribute('x2', nearest.x.toFixed(1));
+      l.setAttribute('y2', nearest.y.toFixed(1));
+      linesG.appendChild(l);
+    }
+  });
+})();
+
