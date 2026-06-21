@@ -183,7 +183,7 @@ function showBriefing(){
   ];
   document.getElementById('bf-msg').textContent=msgs[Math.floor(Math.random()*msgs.length)];
   document.getElementById('bf-total').textContent=pos.length;
-  document.getElementById('bf-today').textContent=todayPos.length||7;
+  document.getElementById('bf-today').textContent=todayPos.length;
   document.getElementById('bf-svc').textContent=svc.length;
   document.getElementById('bf-items').innerHTML=[
     {c:'urg',i:'🔧',t:`${svc.length} servisních tiketů — začni jimi, jsou nejvyšší priorita`},
