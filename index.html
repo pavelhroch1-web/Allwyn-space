@@ -442,11 +442,12 @@
         <div class="rf-lbl">Filtr regionu</div>
         <div class="rf-row" id="rf-row">
           <button class="rfb active" onclick="filterRegion('all',this)">Celá ČR</button>
+          <button class="rfb" onclick="filterRegion('RSA',this)">RSA</button>
+          <button class="rfb" onclick="filterRegion('RSB',this)">RSB</button>
+          <button class="rfb" onclick="filterRegion('RSC',this)">RSC</button>
+          <button class="rfb" onclick="filterRegion('RSD',this)">RSD</button>
           <button class="rfb" onclick="filterRegion('RSE',this)">RSE</button>
-          <button class="rfb" onclick="filterRegion('RSZ',this)">RSZ</button>
-          <button class="rfb" onclick="filterRegion('RSJ',this)">RSJ</button>
-          <button class="rfb" onclick="filterRegion('RSM',this)">RSM</button>
-          <button class="rfb" onclick="filterRegion('PHA',this)">Praha</button>
+          <button class="rfb" onclick="filterRegion('RSG',this)">RSG</button>
         </div>
       </div>
       <div class="sgrid">
@@ -618,10 +619,12 @@
 
 <script src="js/data.js"></script>
 <script src="js/geo.js"></script>
+<script src="js/tourplanRaw.js"></script>
+<script src="js/excelImport.js"></script>
+<script src="js/dataProvider.js"></script>
 <script src="js/routeEngine.js"></script>
 <script src="js/posModel.js"></script>
 <script src="js/technicianModel.js"></script>
-<script src="js/demoData.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

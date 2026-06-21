@@ -1,21 +1,20 @@
 // ══════════════════════════════════════════════════════
 // POS DATA MODEL — jeden sdílený model POS pro celou appku
 // ══════════════════════════════════════════════════════
-// Bez DOM závislostí. Berie skutečná POS data (posData z app.js) a vrací
+// Bez DOM závislostí. Berie skutečná POS data (posData z app.js, od importu
+// reálného Tourplan exportu sestavená přes DataProvider/ExcelImport) a vrací
 // kanonickou reprezentaci se VŠEMI poli požadovanými pro Admin POS
 // Management / Velín / Route Engine. Žádné nové vymyšlené hodnoty —
-// jen odvozené z reálných polí (taskState, inventory, d, v, lat/lng…)
-// nebo z jediného reálného technika v datasetu (Lán Tomáš), přiznané
-// jako placeholder dokud nepřijde reálný import více techniků.
+// jen odvozené z reálných polí (taskState, inventory, d, v, lat/lng,
+// assignedTechnician…).
 //
 // Budoucí Excel import: mapování sloupců na kanonická pole — connectorová
 // vrstva se nemění, jen se naplní `IMPORT_COLUMN_MAP` reálnými hlavičkami.
 
 (function(global){
 
-  // ── Dokud neexistuje reálný zdroj přiřazení POS→technik pro víc lidí,
-  // přiznáváme to: jediný reálný technik v datasetu je Lán Tomáš.
-  // NEVYMÝŠLÍME rozdělení území pro ostatních 26 jmen z mock Live dashboardu.
+  // Defenzivní fallback pro vzácný případ POS bez přiřazeného technika
+  // v importu (viz ExcelImport warnings) — ne smyšlené rozdělení území.
   const SOLE_REAL_TECHNICIAN = 'Lán Tomáš';
   const DEFAULT_REGION = 'RSE'; // konzistentní s defaultem použitým jinde v appce
 

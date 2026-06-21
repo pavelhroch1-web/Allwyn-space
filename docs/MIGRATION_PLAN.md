@@ -65,7 +65,7 @@ Modulární webová aplikace, Supabase backend (Postgres + Auth + Storage + Real
 pos (
   id text primary key,              -- číslo terminálu
   nazev text, adresa text,
-  region text,                      -- RSE/RSZ/RSJ/RSM/Praha
+  region text,                      -- RSA/RSB/RSC/RSD/RSE/RSG
   kategorie text,                   -- kód (1AHOLD, 9..., ...)
   kanal text,                       -- IDT | KA | PETROL | CORN
   partner text,                     -- Albert, Shell, ... (nullable)

@@ -8,10 +8,9 @@ let ciTimer=null;
 let sigCanvas=null, sigCtx=null, sigDrawing=false, sigMark=false;
 let supplyItems=[];
 
-// Build POS data with tasks, refs, inventory. Jeden technik (Lán Tomáš) je
-// reálný (REAL_DATA.weeks). Zbylých 26 jmen z REAL_DATA.techs jsou demo
-// technici — DemoData jim vygeneruje reálně tvarovaná POS (deterministicky,
-// žádný Math.random), která projdou stejnou augmentací jako reálná data.
+// Build POS data with tasks, refs, inventory. Všech 27 technici jsou nyní
+// reální (DataProvider → ExcelImport → TOURPLAN_RAW, reálný export
+// Tourplan_week_2028.xlsx) — žádná syntetická generace území.
 function augmentRawPos(p, assignedTechnician){
   // Start with EMPTY plan — technician assigns all days themselves (persisted)
   if(!p.v) p.d = null;
@@ -33,27 +32,27 @@ function augmentRawPos(p, assignedTechnician){
   };
 }
 
-const posData={};
-const POS_WEEK_KEYS = Object.keys(REAL_DATA.weeks);
-for(const [w,list] of Object.entries(REAL_DATA.weeks)){
-  // Jediný reálný technik v datasetu — žádné vymyšlené rozdělení území.
-  posData[w]=list.map(p=>augmentRawPos(p, PosModel.SOLE_REAL_TECHNICIAN));
-}
-
-// Demo technici — 26 jmen z REAL_DATA.techs (vše kromě reálného technika),
-// jejich lat/lng z mock dat slouží jako territorium centroid pro generovaná POS.
-const DEMO_TECHNICIANS_META = REAL_DATA.techs.filter(t => t.name !== PosModel.SOLE_REAL_TECHNICIAN);
-const demoWeeks = DemoData.generateAllDemoTechnicians(DEMO_TECHNICIANS_META, POS_WEEK_KEYS, {
+const POS_WEEK_KEYS = ['23','24','25','26','27','28'];
+const importedWeeks = DataProvider.getPosWeeks(POS_WEEK_KEYS, {
   currentWeek: '25',
   todayIdx: getTodayDayIdx(),
 });
-for(const [w,list] of Object.entries(demoWeeks)){
-  if(!posData[w]) posData[w]=[];
-  posData[w].push(...list.map(p=>augmentRawPos(p, p.assignedTechnician)));
+const posData={};
+for(const w of POS_WEEK_KEYS){
+  posData[w] = (importedWeeks[w]||[]).map(p => augmentRawPos(p, p.assignedTechnician));
 }
 // Add 2 servis tasks for demo
 if(posData['25']&&posData['25'][0]) posData['25'][0].taskState.push({text:'Výměna tiskové hlavy — terminál netiskne',src:'servis',done:false,note:'SRV-2841 · Urgentní · náhradní díl v autě'});
 if(posData['25']&&posData['25'][5]) posData['25'][5].taskState.push({text:'Terminál se nepřipojí k síti',src:'servis',done:false,note:'SRV-2839 · Zkontroluj kabel + SIM'});
+
+// Import summary log (PART 6 — "Show import summary" requirement).
+(function logImportSummary(){
+  const summary = DataProvider.getSummary();
+  const warnings = DataProvider.getWarnings();
+  if(!summary) return;
+  console.log(`[Tourplan import] Importováno: ${summary.technicians} techniků, ${summary.posCount} POS, ${summary.terminalCount} terminálů.`);
+  if(warnings.length) console.log('[Tourplan import] Upozornění:', warnings.join(' | '));
+})();
 
 // ══════════════════════════════════════════════════════
 // TECHNICIANS — jediný zdroj pravdy pro Velín (RULE 1)
@@ -1665,10 +1664,12 @@ function renderEditModalBody(mode) {
     html += `<label class="ef-label">Region (volitelné)</label>
     <div class="ef-chips">
       <div class="ef-chip on" onclick="toggleRegionFilter('all',this)">Celá ČR</div>
+      <div class="ef-chip" onclick="toggleRegionFilter('RSA',this)">RSA</div>
+      <div class="ef-chip" onclick="toggleRegionFilter('RSB',this)">RSB</div>
+      <div class="ef-chip" onclick="toggleRegionFilter('RSC',this)">RSC</div>
+      <div class="ef-chip" onclick="toggleRegionFilter('RSD',this)">RSD</div>
       <div class="ef-chip" onclick="toggleRegionFilter('RSE',this)">RSE</div>
-      <div class="ef-chip" onclick="toggleRegionFilter('RSZ',this)">RSZ</div>
-      <div class="ef-chip" onclick="toggleRegionFilter('RSJ',this)">RSJ</div>
-      <div class="ef-chip" onclick="toggleRegionFilter('RSM',this)">RSM</div>
+      <div class="ef-chip" onclick="toggleRegionFilter('RSG',this)">RSG</div>
     </div>`;
   }
 
@@ -1751,7 +1752,7 @@ function toggleGroup(g, btn) {
 }
 function toggleRegionFilter(r, btn) {
   editRegionFilter = r;
-  document.querySelectorAll('.ef-chips .ef-chip').forEach(c => { if (c.textContent.includes('ČR') || ['RSE','RSZ','RSJ','RSM'].includes(c.textContent)) c.classList.remove('on'); });
+  document.querySelectorAll('.ef-chips .ef-chip').forEach(c => { if (c.textContent.includes('ČR') || ['RSA','RSB','RSC','RSD','RSE','RSG'].includes(c.textContent)) c.classList.remove('on'); });
   btn.classList.add('on');
   updatePosCount();
 }
