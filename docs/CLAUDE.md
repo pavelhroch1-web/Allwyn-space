@@ -116,7 +116,7 @@ Doporučený stack (návrh, ne dogma): frontend buď ponechat vanilla/lehký fra
 
 ## Doménové konstanty (reference)
 
-**Regiony:** RSE, RSZ, RSJ, RSM, Praha
+**Regiony (reálné kódy POS AREA z Tourplan exportu):** RSA (Praha+Kladno), RSB (Brno/jižní Morava+jižní Čechy), RSC (Plzeň/západní Čechy+Karlovy Vary), RSD (Ústí nad Labem/severní Čechy), RSE (Pardubice/Hradec Králové+Zlín), RSG (Ostrava/Olomouc/Moravskoslezský kraj)
 **Dny:** Po, Út, St, Čt, Pá (víkend = bez práce)
 **Priority úkolů:** servis (1, červená) > template (2) > on_top (3) > own (4)
 **KA partneři:** Albert, Tesco, Hruška, Fast, GECO, JIP, JP Servis, KM-Prona, Prim, PEAL, Bonveno, Lagardere, Tobacco DC, EUROBIT (pozastaveno), CSPOINT
