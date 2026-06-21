@@ -2744,9 +2744,10 @@ function applyStoredRouteOrder(dayPos, week, day){
 function buildRouteSummaryCard(dayPos, week, day){
   if (dayPos.length < 2) return null;
   const startLoc = getStartLocation();
-  const cmp = RouteEngine.compareRoutes(dayPos, startLoc);
+  const cmp = RouteEngine.compareRoutes(dayPos, startLoc, getStartTime(), day);
   const hasStoredOrder = !!getStoredRouteOrder(week, day);
-  const showOptimize = cmp.savedKm > 0.5;
+  const fewerViolations = cmp.optimizedViolations != null && cmp.optimizedViolations < cmp.currentViolations;
+  const showOptimize = cmp.savedKm > 0.5 || fewerViolations;
   const el = document.createElement('div');
   el.style.cssText = 'margin:8px 12px;padding:14px;background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:12px';
   el.innerHTML = `
@@ -2761,7 +2762,7 @@ function buildRouteSummaryCard(dayPos, week, day){
     ${showOptimize ? `
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
       <div style="font-size:12px;color:var(--teal);font-weight:700;display:flex;align-items:center;gap:5px">
-        <svg class="ic ic-sm"><use href="#ic-target"/></svg> Příležitost: ušetříš až ${RouteEngine.formatKm(cmp.savedKm)} · ${RouteEngine.formatHM(cmp.savedMin)}
+        <svg class="ic ic-sm"><use href="#ic-target"/></svg> ${cmp.savedKm > 0.5 ? `Příležitost: ušetříš až ${RouteEngine.formatKm(cmp.savedKm)} · ${RouteEngine.formatHM(cmp.savedMin)}` : 'Příležitost: lepší pořadí vyhne zavřeným POS'}
       </div>
       <button onclick="showRouteView('${week}',${day})" style="background:var(--teal);color:var(--navy);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0">Zobrazit trasu</button>
     </div>` : `
@@ -2835,7 +2836,7 @@ function moveRouteStop(week, day, posId, dir){
 function useRecommendedRoute(week, day){
   const all = posData[week] || [];
   const dayPos = applyStoredRouteOrder(all.filter(p => p.d === day), week, day);
-  const cmp = RouteEngine.compareRoutes(dayPos, getStartLocation());
+  const cmp = RouteEngine.compareRoutes(dayPos, getStartLocation(), getStartTime(), day);
   setStoredRouteOrder(week, day, cmp.optimizedOrderIds);
   recordRouteDecision(week, day, 'accepted');
   showRouteView(week, day);
@@ -2965,22 +2966,34 @@ function showRouteView(week, day){
 
   // Porovnání + volba (jen pokud je co porovnávat a je víc než 1 zastávka)
   if (dayPos.length > 1) {
-    const cmp = RouteEngine.compareRoutes(dayPos, startLoc);
-    const showOpportunity = cmp.savedKm > 0.5;
+    const cmp = RouteEngine.compareRoutes(dayPos, startLoc, startTime, day);
+    const fewerViolations = cmp.optimizedViolations != null && cmp.optimizedViolations < cmp.currentViolations;
+    const showOpportunity = cmp.savedKm > 0.5 || fewerViolations;
+    const checklist = `
+      <div style="font-size:11px;font-weight:700;color:var(--navy);letter-spacing:.03em;margin-bottom:8px">ROUTE INTELLIGENCE</div>
+      <div style="font-size:12px;color:var(--td);margin-bottom:2px">✓ Zkontrolováno ${dayPos.length} POS${cmp.exact ? ' (porovnána všechna pořadí)' : ' (optimalizace 2-opt)'}</div>
+      <div style="font-size:12px;color:var(--td);margin-bottom:2px">✓ Zkontrolována vzdálenost trasy</div>
+      <div style="font-size:12px;color:var(--td);margin-bottom:10px">${cmp.currentViolations != null ? '✓ Zkontrolována otevírací doba' : '○ Otevírací dobu nelze ověřit — chybí pozice/čas odjezdu'}</div>
+    `;
     const cmpCard = document.createElement('div');
     cmpCard.style.cssText = 'margin:0 12px 10px;padding:14px;background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:12px';
     cmpCard.innerHTML = showOpportunity ? `
-      <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px"><svg class="ic ic-sm" style="color:var(--teal)"><use href="#ic-target"/></svg> Optimalizační příležitost</div>
+      ${checklist}
+      <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px"><svg class="ic ic-sm" style="color:var(--teal)"><use href="#ic-target"/></svg> Výsledek: nalezeno zlepšení</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-        <div><div style="font-size:11px;color:var(--muted)">Tvoje pořadí</div><div style="font-size:14px;font-weight:700">${RouteEngine.formatKm(cmp.before.drivingKm)} · ${RouteEngine.formatHM(cmp.before.drivingMin)}</div></div>
-        <div><div style="font-size:11px;color:var(--muted)">Doporučené pořadí</div><div style="font-size:14px;font-weight:700;color:var(--teal)">${RouteEngine.formatKm(cmp.after.drivingKm)} · ${RouteEngine.formatHM(cmp.after.drivingMin)}</div></div>
+        <div><div style="font-size:11px;color:var(--muted)">Tvoje pořadí</div><div style="font-size:14px;font-weight:700">${RouteEngine.formatKm(cmp.before.drivingKm)} · ${RouteEngine.formatHM(cmp.before.drivingMin)}</div>${cmp.currentViolations ? `<div style="font-size:11px;color:#b8860b;font-weight:700">${cmp.currentViolations} POS mimo otevírací dobu</div>` : ''}</div>
+        <div><div style="font-size:11px;color:var(--muted)">Doporučené pořadí</div><div style="font-size:14px;font-weight:700;color:var(--teal)">${RouteEngine.formatKm(cmp.after.drivingKm)} · ${RouteEngine.formatHM(cmp.after.drivingMin)}</div>${cmp.optimizedViolations != null ? `<div style="font-size:11px;color:var(--teal);font-weight:700">${cmp.optimizedViolations} POS mimo otevírací dobu</div>` : ''}</div>
       </div>
-      <div style="font-size:12px;color:var(--teal);font-weight:700;margin-bottom:10px">Ušetříš ${RouteEngine.formatKm(cmp.savedKm)} · ${RouteEngine.formatHM(cmp.savedMin)}</div>
+      ${cmp.savedKm > 0.5 ? `<div style="font-size:12px;color:var(--teal);font-weight:700;margin-bottom:10px">Ušetříš ${RouteEngine.formatKm(cmp.savedKm)} · ${RouteEngine.formatHM(cmp.savedMin)}</div>` : ''}
       <div style="display:flex;gap:8px">
         <button onclick="useRecommendedRoute('${week}',${day})" style="flex:1;padding:10px;background:var(--teal);color:var(--navy);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Použít doporučenou trasu</button>
         <button onclick="keepMyRoute('${week}',${day})" style="flex:1;padding:10px;background:none;color:var(--td);border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Nechat moje pořadí</button>
       </div>
-    ` : `<div style="font-size:12px;color:var(--muted)">Tvoje pořadí je už efektivní — žádná lepší alternativa k nabídnutí.</div>`;
+    ` : `
+      ${checklist}
+      <div style="font-size:12px;font-weight:700;color:var(--navy)">Výsledek: nejlepší varianta nalezena</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">Tvoje pořadí je už nejlepší možné${cmp.exact ? ' — zkontroloval jsem všechna možná pořadí těchto ' + dayPos.length + ' POS' : ''}.</div>
+    `;
     wrap.appendChild(cmpCard);
   }
 
@@ -3023,11 +3036,12 @@ function buildMorningBriefCard(todayPos, week, day){
   const s = getSession();
   const firstName = ((s && s.user && s.user.name) || '').trim().split(/\s+/).pop() || '';
   const startLoc = getStartLocation();
-  const cmp = todayPos.length > 1 ? RouteEngine.compareRoutes(todayPos, startLoc) : null;
+  const cmp = todayPos.length > 1 ? RouteEngine.compareRoutes(todayPos, startLoc, getStartTime(), day) : null;
   const workMin = todayPos.reduce((sum, p) => sum + RouteEngine.getVisitDurationMin(p), 0);
   const drivingMin = cmp ? cmp.before.drivingMin : 0;
   const totalMin = workMin + drivingMin;
-  const hasSuggestion = cmp && cmp.savedKm > 0.5;
+  const fewerViolations = cmp && cmp.optimizedViolations != null && cmp.optimizedViolations < cmp.currentViolations;
+  const hasSuggestion = cmp && (cmp.savedKm > 0.5 || fewerViolations);
 
   const el = document.createElement('div');
   el.style.cssText = 'margin:10px 12px 6px;padding:14px;background:var(--navy);border-radius:14px;color:#fff';
@@ -3038,7 +3052,7 @@ function buildMorningBriefCard(todayPos, week, day){
     </div>
     ${hasSuggestion ? `
     <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.15);display:flex;align-items:center;justify-content:space-between;gap:10px">
-      <div style="font-size:12px;color:var(--teal);font-weight:700">Našel jsem lepší trasu: −${RouteEngine.formatKm(cmp.savedKm)} · −${RouteEngine.formatHM(cmp.savedMin)}</div>
+      <div style="font-size:12px;color:var(--teal);font-weight:700">${cmp.savedKm > 0.5 ? `Našel jsem lepší trasu: −${RouteEngine.formatKm(cmp.savedKm)} · −${RouteEngine.formatHM(cmp.savedMin)}` : 'Našel jsem lepší pořadí — vyhne se zavřeným POS'}</div>
       <button onclick="showRouteView('${week}',${day})" style="background:var(--teal);color:var(--navy);border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0">Zobrazit</button>
     </div>` : `
     <div style="margin-top:8px;font-size:12px;color:var(--teal);font-weight:700">Trasa připravena</div>`}

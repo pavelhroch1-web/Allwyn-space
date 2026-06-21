@@ -197,16 +197,25 @@
 
   // ── OPTIMIZATION: nearest neighbor ──────────────────────────────────────
   // startPos: výchozí bod (např. první POS dne nebo poloha technika). Pokud
-  // chybí, použije se první POS ze vstupního pořadí jako start.
+  // je startPos zároveň prvkem posList (stará fleet analytika bez reálného
+  // GPS startu), zůstává jako první zastávka výsledného pořadí — zachování
+  // zpětné kompatibility. Pokud je startPos externí bod (GPS poloha technika,
+  // mimo posList), slouží jen jako kotva pro výpočet vzdáleností a do
+  // výsledného pořadí se NEVKLÁDÁ (dřívější bug: fantomová "zastávka" na
+  // pozici technika navyšovala posCount/workMin v porovnání).
   function nearestNeighborOrder(posList, startPos){
     if (!posList.length) return [];
     const remaining = posList.slice();
-    let current = startPos || remaining.shift();
-    if (startPos) {
-      const idx = remaining.indexOf(startPos);
-      if (idx !== -1) remaining.splice(idx, 1);
+    const startIsPos = startPos && remaining.indexOf(startPos) !== -1;
+    let current = startPos;
+    const order = [];
+    if (startIsPos) {
+      remaining.splice(remaining.indexOf(startPos), 1);
+      order.push(current);
+    } else if (!startPos) {
+      current = remaining.shift();
+      order.push(current);
     }
-    const order = [current];
     while (remaining.length){
       let bestIdx = 0, bestKm = Infinity;
       for (let i = 0; i < remaining.length; i++){
@@ -219,20 +228,103 @@
     return order;
   }
 
+  // ── OPTIMIZATION: cost function ──────────────────────────────────────────
+  // Vzdálenost trasy + penalizace za porušení otevírací doby (pokud je znám
+  // čas odjezdu a den). Penalizace je velká (1000 km/porušení), takže
+  // optimalizace vždy preferuje pořadí bez zavřených POS před pořadím kratším
+  // o pár km, ale s POS mimo otevírací dobu.
+  const HOURS_VIOLATION_PENALTY_KM = 1000;
+  function routeCost(order, startPoint, startTime, dayIdx){
+    const calc = calculateRoute(order, startPoint);
+    let violations = 0;
+    if (startTime != null && dayIdx != null) {
+      violations = checkOpeningHours(order, calc, startTime, dayIdx)
+        .filter(i => i.status === 'too-early' || i.status === 'too-late' || i.status === 'closed-today').length;
+    }
+    return calc.drivingKm + violations * HOURS_VIOLATION_PENALTY_KM;
+  }
+
+  // ── OPTIMIZATION: exact (brute force) pro malé počty zastávek ───────────
+  // Pro denní trasu technika (typicky pár až ~10 POS) je úplné prohledání
+  // všech pořadí výpočetně levné a dává MATEMATICKY NEJLEPŠÍ pořadí — žádná
+  // heuristika, žádné "asi nejlepší". Nad limit přepneme na 2-opt (níže).
+  const EXACT_SEARCH_LIMIT = 8;
+  function permute(arr){
+    if (arr.length <= 1) return [arr];
+    const result = [];
+    for (let i = 0; i < arr.length; i++){
+      const rest = arr.slice(0, i).concat(arr.slice(i + 1));
+      for (const p of permute(rest)) result.push([arr[i], ...p]);
+    }
+    return result;
+  }
+  function exactBestOrder(posList, startPoint, startTime, dayIdx){
+    let best = posList, bestCost = Infinity;
+    for (const perm of permute(posList)){
+      const cost = routeCost(perm, startPoint, startTime, dayIdx);
+      if (cost < bestCost){ bestCost = cost; best = perm; }
+    }
+    return best;
+  }
+
+  // ── OPTIMIZATION: 2-opt lokální vylepšení pro větší počty zastávek ───────
+  // Začne od nearest-neighbor pořadí a opakovaně zkouší obrátit úseky trasy,
+  // dokud nalezne zlepšení (kratší/bez porušení otevírací doby). Standardní
+  // heuristika pro TSP — odstraňuje typické "zacuknutí" nearest-neighbor.
+  function twoOptImprove(initialOrder, startPoint, startTime, dayIdx){
+    let order = initialOrder.slice();
+    let bestCost = routeCost(order, startPoint, startTime, dayIdx);
+    let improved = true;
+    while (improved){
+      improved = false;
+      for (let i = 0; i < order.length - 1; i++){
+        for (let j = i + 1; j < order.length; j++){
+          const candidate = order.slice();
+          const seg = candidate.slice(i, j + 1).reverse();
+          candidate.splice(i, seg.length, ...seg);
+          const cost = routeCost(candidate, startPoint, startTime, dayIdx);
+          if (cost < bestCost - 1e-9){
+            bestCost = cost; order = candidate; improved = true;
+          }
+        }
+      }
+    }
+    return order;
+  }
+
+  // bestOrder(): hlavní vstupní bod optimalizace. Vrací pořadí POS (bez
+  // startPoint v poli — startPoint je jen výchozí bod pro výpočet vzdáleností).
+  function bestOrder(posList, startPoint, startTime, dayIdx){
+    if (posList.length <= 1) return posList.slice();
+    if (posList.length <= EXACT_SEARCH_LIMIT) {
+      return exactBestOrder(posList, startPoint, startTime, dayIdx);
+    }
+    const seeded = nearestNeighborOrder(posList, startPoint).filter(p => posList.indexOf(p) !== -1);
+    return twoOptImprove(seeded, startPoint, startTime, dayIdx);
+  }
+
   // ── COMPARISON: current order vs optimized ───────────────────────────────
-  // startPoint: volitelný reálný start technika. Bez něj se (jako dřív)
-  // porovnává proti prvnímu POS v seznamu — zachováno pro zpětnou kompatibilitu
-  // s fleet analytikou, která start technika ještě nezná.
-  function compareRoutes(posList, startPoint){
+  // startPoint: volitelný reálný start technika. startTime/dayIdx: pokud jsou
+  // známé, optimalizace zohlední i otevírací dobu (ne jen vzdálenost) —
+  // bez nich (např. fleet analytika) se optimalizuje čistě podle vzdálenosti.
+  function compareRoutes(posList, startPoint, startTime, dayIdx){
     const current = calculateRoute(posList, startPoint);
-    const optimizedOrder = nearestNeighborOrder(posList, startPoint || posList[0]);
+    const optimizedOrder = bestOrder(posList, startPoint, startTime, dayIdx);
     const optimized = calculateRoute(optimizedOrder, startPoint);
+    const hasTimeContext = startTime != null && dayIdx != null;
+    const currentViolations = hasTimeContext
+      ? checkOpeningHours(posList, current, startTime, dayIdx).length : null;
+    const optimizedViolations = hasTimeContext
+      ? checkOpeningHours(optimizedOrder, optimized, startTime, dayIdx).length : null;
     return {
       before: current,
       after: optimized,
       savedKm: Math.max(0, current.drivingKm - optimized.drivingKm),
       savedMin: Math.max(0, current.drivingMin - optimized.drivingMin),
       optimizedOrderIds: optimized.order,
+      currentViolations,
+      optimizedViolations,
+      exact: posList.length <= EXACT_SEARCH_LIMIT,
     };
   }
 
