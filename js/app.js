@@ -22,7 +22,14 @@ function augmentRawPos(p, assignedTechnician){
   // Master data (GPS + otevírací doba, samostatný import) má přednost před
   // mock geokódováním podle adresy — ale jen pro POS, která v něm reálně jsou.
   PosMasterData.mergePosMasterData(p, POS_MASTER_MAP[p.id]);
+  const hasRealGps = typeof p.lat === 'number' && typeof p.lng === 'number';
   const withCoords = ensurePosCoords(p);
+  // gpsSource rozlišuje reálné GPS z master importu od mock odhadu podle
+  // adresy — RouteEngine pak odhadnuté POS vyřadí z reálných km/min výpočtů
+  // (žádné fake číslo do trasy/optimalizace), jen je pořád zobrazí na mapě.
+  withCoords.gpsSource = hasRealGps
+    ? 'real'
+    : (typeof withCoords.lat === 'number' ? 'estimated' : 'unknown');
   return {
     ...withCoords,
     typ,
@@ -2925,6 +2932,17 @@ function showRouteView(week, day){
   // přeřazení. Vyžaduje výchozí pozici (jinak nelze spočítat reálný příjezd).
   if (startLoc) {
     const baseCalc = RouteEngine.calculateRoute(dayPos, startLoc);
+
+    if (baseCalc.warnings.length) {
+      const gpsCard = document.createElement('div');
+      gpsCard.style.cssText = 'margin:0 12px 10px;padding:14px;background:#fff7e6;border:1.5px solid #f5c542;border-radius:12px';
+      gpsCard.innerHTML = `
+        <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:6px"><svg class="ic ic-sm" style="color:#b8860b"><use href="#ic-warning"/></svg> Bez reálných GPS</div>
+        <div style="font-size:12px;color:var(--td)">${baseCalc.warnings.length} ${baseCalc.warnings.length===1?'POS nemá':'POS nemá'} reálné GPS z master dat (jen odhad podle adresy) — vyřazeno z výpočtu vzdálenosti a optimalizace. Na mapě se pořád zobrazí, jen jako odhad.</div>
+      `;
+      wrap.appendChild(gpsCard);
+    }
+
     const ohIssues = RouteEngine.checkOpeningHours(dayPos, baseCalc, startTime, day);
     if (ohIssues.length) {
       const ohCard = document.createElement('div');
@@ -2935,6 +2953,8 @@ function showRouteView(week, day){
           ? `<div style="font-size:12px;color:var(--td);margin-bottom:6px">#${iss.posId} ${iss.posName}: příjezd ${iss.arrival}, ale otvírá až v ${iss.opensAt}. Lepší navštívit později.</div>`
           : iss.status === 'too-late'
           ? `<div style="font-size:12px;color:var(--td);margin-bottom:6px">#${iss.posId} ${iss.posName}: příjezd ${iss.arrival}, ale zavírá v ${iss.closesAt}. Lepší navštívit dřív.</div>`
+          : iss.status === 'hours-unknown'
+          ? `<div style="font-size:12px;color:var(--td);margin-bottom:6px">#${iss.posId} ${iss.posName}: příjezd ${iss.arrival} — otevírací dobu neznáme (chybí master data), nelze ověřit.</div>`
           : `<div style="font-size:12px;color:var(--td);margin-bottom:6px">#${iss.posId} ${iss.posName}: dnes zavřeno — příjezd ${iss.arrival} nedává smysl.</div>`
         ).join('')}
         <div style="font-size:11px;color:var(--muted);margin-top:4px">Pořadí si určuješ ty — tohle je jen upozornění, ne automatická změna.</div>

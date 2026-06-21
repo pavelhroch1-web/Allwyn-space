@@ -26,9 +26,6 @@
     priorityIssue: 40,   // urgentní/flagovaný problém
   };
 
-  // Fallback pro POS bez importovaných master dat — konzervativní odhad
-  // (otevřeno celý týden), NIKDY si nevymýšlí zavírací dny bez reálných dat.
-  const DEFAULT_OPENING_HOURS = { from: '08:00', to: '18:00' };
   const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
   // ── HAVERSINE ──────────────────────────────────────────────────────────
@@ -88,14 +85,18 @@
 
   // getOpeningHours(pos, dayIdx) — dayIdx: 0=Po..4=Pá (shoda s app.js DAYS),
   // 5=So, 6=Ne. Bez dayIdx vrací celý týdenní objekt (pro zobrazení v detailu
-  // POS). Vrací null pro den, kdy je POS importem potvrzeno zavřené —
-  // jinak (chybí master data pro ten den) padá na konzervativní výchozí.
+  // POS), nebo null pokud master data chybí úplně.
+  // S dayIdx vrací jednu ze tří hodnot — žádný fake default:
+  //   {from,to} — POS je ten den importem potvrzeno otevřené v tomto okně
+  //   null       — POS je ten den importem potvrzeno ZAVŘENÉ
+  //   'unknown'  — pro POS chybí master data (nelze nic předpokládat)
   function getOpeningHours(pos, dayIdx){
     const hours = pos.openingHours;
     if (dayIdx === undefined || dayIdx === null) return hours || null;
+    if (!hours) return 'unknown';
     const key = DAY_KEYS[dayIdx];
-    if (hours && Object.prototype.hasOwnProperty.call(hours, key)) return hours[key];
-    return DEFAULT_OPENING_HOURS;
+    if (Object.prototype.hasOwnProperty.call(hours, key)) return hours[key];
+    return 'unknown';
   }
 
   function parseHM(hm){
@@ -113,21 +114,31 @@
   // order: array of POS objects in the order they will be visited
   // startPoint: volitelný reálný výchozí bod technika (GPS/domov) — pokud
   // chybí, trasa se počítá tak jako dřív (začíná na order[0] bez "cesty tam").
+  //
+  // POS s pos.gpsSource !== 'real' (odhad z mock geocoderu, ne reálný import)
+  // se do drivingKm/drivingMin NEPOČÍTAJÍ — nejde o reálnou silniční
+  // vzdálenost, takže nesmí vstoupit do čísla, které velín/technik vidí jako
+  // fakt. Pořád jsou ale součástí `order`/posCount (zobrazí se na mapě), jen
+  // jako warning, ne jako tichá chyba ve výpočtu.
   function calculateRoute(order, startPoint){
     if (!order.length) {
-      return { order: [], legs: [], posCount: 0, drivingKm: 0, drivingMin: 0, workMin: 0, totalMin: 0 };
+      return { order: [], legs: [], posCount: 0, drivingKm: 0, drivingMin: 0, workMin: 0, totalMin: 0, warnings: [] };
     }
+    const realOrder = order.filter(p => p.gpsSource === 'real');
+    const warnings = order
+      .filter(p => p.gpsSource !== 'real')
+      .map(p => ({ posId: p.id, reason: 'gps-missing' }));
     const legs = [];
     let drivingKm = 0, drivingMin = 0;
-    if (startPoint) {
-      const startLeg = currentProvider.getLeg(startPoint, order[0]);
-      legs.push({ from: 'start', to: order[0].id, ...startLeg });
+    if (startPoint && realOrder.length) {
+      const startLeg = currentProvider.getLeg(startPoint, realOrder[0]);
+      legs.push({ from: 'start', to: realOrder[0].id, ...startLeg });
       drivingKm += startLeg.distanceKm;
       drivingMin += startLeg.travelTimeMin;
     }
-    for (let i = 1; i < order.length; i++){
-      const leg = currentProvider.getLeg(order[i-1], order[i]);
-      legs.push({ from: order[i-1].id, to: order[i].id, ...leg });
+    for (let i = 1; i < realOrder.length; i++){
+      const leg = currentProvider.getLeg(realOrder[i-1], realOrder[i]);
+      legs.push({ from: realOrder[i-1].id, to: realOrder[i].id, ...leg });
       drivingKm += leg.distanceKm;
       drivingMin += leg.travelTimeMin;
     }
@@ -140,28 +151,36 @@
       drivingMin,
       workMin,
       totalMin: drivingMin + workMin,
+      warnings,
     };
   }
 
   // ── OPENING HOURS CHECK ─────────────────────────────────────────────────
   // checkOpeningHours(order, calcResult, startTime, dayIdx) -> issue[]
   // calcResult musí pocházet z calculateRoute(order, startPoint) se
-  // STEJNÝM startPoint — bez něj legs[0] neodpovídá příjezdu na order[0] a
-  // funkce vrátí [] (nelze spočítat reálný čas příjezdu na první zastávku).
+  // STEJNÝM startPoint a STEJNÝM order — bez něj legs neodpovídají příjezdům.
+  // Pozor: calcResult.legs počítá jen s POS, které mají reálné GPS
+  // (gpsSource==='real') — POS bez reálných GPS nemají spočítaný čas
+  // příjezdu, takže pro ně nelze otevírací dobu vyhodnotit (samostatný GPS
+  // warning to řeší v UI).
   // Asistent, ne kontrola: vrací fakta (kdy POS otvírá/zavírá vs. kdy tam
   // technik dorazí podle SVÉHO pořadí), UI rozhoduje, jak to ukázat.
   function checkOpeningHours(order, calcResult, startTime, dayIdx){
     const startMin = parseHM(startTime);
     if (startMin === null || dayIdx === undefined || dayIdx === null) return [];
-    if (!calcResult || calcResult.legs.length !== order.length) return [];
+    if (!calcResult) return [];
+    const realOrder = order.filter(p => p.gpsSource === 'real');
+    if (calcResult.legs.length !== realOrder.length) return [];
     const issues = [];
     let clockMin = startMin;
     calcResult.legs.forEach((leg, i) => {
       clockMin += leg.travelTimeMin;
-      const pos = order[i];
+      const pos = realOrder[i];
       const hours = getOpeningHours(pos, dayIdx);
       const arrival = formatClock(clockMin);
-      if (!hours) {
+      if (hours === 'unknown') {
+        issues.push({ posId: pos.id, posName: pos.n, arrival, status: 'hours-unknown' });
+      } else if (hours === null) {
         issues.push({ posId: pos.id, posName: pos.n, arrival, status: 'closed-today' });
       } else {
         const openMin = parseHM(hours.from), closeMin = parseHM(hours.to);
