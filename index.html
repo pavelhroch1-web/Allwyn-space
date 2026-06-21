@@ -6,6 +6,7 @@
 <title>Allwyn Space</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -33,6 +34,7 @@
 <symbol id="ic-route" viewBox="0 0 24 24"><circle cx="5.5" cy="6" r="2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="18.5" cy="18" r="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5.5 8v4a4 4 0 0 0 4 4h4a4 4 0 0 0 4-4v-2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
 <symbol id="ic-trophy" viewBox="0 0 24 24"><path d="M7 4h10v4a5 5 0 0 1-10 0z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M7 5H4.5a1 1 0 0 0-1 1.2c.3 1.8 1.5 3.2 3.5 3.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M17 5h2.5a1 1 0 0 1 1 1.2c-.3 1.8-1.5 3.2-3.5 3.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><line x1="12" y1="12.7" x2="12" y2="16" stroke="currentColor" stroke-width="1.6"/><path d="M8.5 20h7l-1-3.3h-5z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
 <symbol id="ic-arrow-down" viewBox="0 0 24 24"><line x1="12" y1="4" x2="12" y2="18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M6.5 13 12 18.5 17.5 13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="ic-upload" viewBox="0 0 24 24"><line x1="12" y1="20" x2="12" y2="6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M6.5 11 12 5.5 17.5 11" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 19.5h16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
 <symbol id="ic-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.6"/><line x1="3.5" y1="9.5" x2="20.5" y2="9.5" stroke="currentColor" stroke-width="1.6"/><line x1="8" y1="3" x2="8" y2="6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><line x1="16" y1="3" x2="16" y2="6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
 <symbol id="ic-shield" viewBox="0 0 24 24"><path d="M12 3.5 19 6.3v5.4c0 5-3 8-7 9.3-4-1.3-7-4.3-7-9.3V6.3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 12l2.2 2.2L15.5 9.7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 <symbol id="ic-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="12" cy="12" r="1.2"/></symbol>
@@ -77,8 +79,8 @@
       <div class="rs-stats">
         <div class="rs-stat"><div class="rs-stat-v" id="rs-stat-pos-v">945</div><div class="rs-stat-l">POS monitored</div></div>
         <div class="rs-stat"><div class="rs-stat-v" id="rs-stat-tech-v">27</div><div class="rs-stat-l">technicians</div></div>
-        <div class="rs-stat"><div class="rs-stat-v">98%</div><div class="rs-stat-l">coverage forecast</div></div>
-        <div class="rs-stat"><div class="rs-stat-v">37h</div><div class="rs-stat-l">route time saved</div></div>
+        <div class="rs-stat"><div class="rs-stat-v" id="rs-stat-cov-v">—</div><div class="rs-stat-l">coverage this week</div></div>
+        <div class="rs-stat"><div class="rs-stat-v" id="rs-stat-saved-v">—</div><div class="rs-stat-l">route time saved</div></div>
       </div>
     </div>
 
@@ -90,9 +92,9 @@
         </svg>
       </div>
       <div class="rs-panel-intel">
-        <div class="rs-intel-row"><span class="rs-intel-dot rs-id-t"></span>Route optimization saved 37h this cycle</div>
-        <div class="rs-intel-row"><span class="rs-intel-dot rs-id-o"></span>12 visits require attention</div>
-        <div class="rs-intel-row"><span class="rs-intel-dot rs-id-g"></span>Coverage forecast: on track</div>
+        <div class="rs-intel-row"><span class="rs-intel-dot rs-id-t"></span><span id="rs-intel-saved">—</span></div>
+        <div class="rs-intel-row"><span class="rs-intel-dot rs-id-o"></span><span id="rs-intel-attention">—</span></div>
+        <div class="rs-intel-row"><span class="rs-intel-dot rs-id-g" id="rs-intel-cov-dot"></span><span id="rs-intel-cov">—</span></div>
       </div>
     </div>
 
@@ -115,7 +117,7 @@
       </div>
     </div>
 
-    <div class="rs-badge">Tourplan W23–W28 · 27 techniků · 945 POS</div>
+    <div class="rs-badge" id="rs-badge">Tourplan W23–W28 · 27 techniků</div>
   </div>
 </div>
 
@@ -366,6 +368,7 @@
     <div class="adm-nav">
       <button class="adm-btn active" onclick="showAdmPage('dashboard',this)"><svg class="ic ic-sm"><use href="#ic-dashboard"/></svg> Dashboard</button>
       <button class="adm-btn" onclick="showAdmPage('posnet',this)"><svg class="ic ic-sm"><use href="#ic-pin"/></svg> POS Síť</button>
+      <button class="adm-btn" onclick="showAdmPage('import',this)"><svg class="ic ic-sm"><use href="#ic-upload"/></svg> Import dat</button>
       <button class="adm-btn" onclick="showAdmPage('live',this)"><svg class="ic ic-sm"><use href="#ic-live"/></svg> Live</button>
       <button class="adm-btn" onclick="showAdmPage('alerts',this)"><svg class="ic ic-sm"><use href="#ic-warning"/></svg> Flagy</button>
       <button class="adm-btn" onclick="showAdmPage('technici',this)"><svg class="ic ic-sm"><use href="#ic-team"/></svg> Technici</button>
@@ -418,6 +421,9 @@
     <div class="adm-page" id="adm-posnet">
       <div class="adm-sh"><div class="adm-st">POS síť</div><div class="adm-sc" id="posnet-count">—</div></div>
       <div class="rf-wrap">
+        <input type="text" id="posnet-search" placeholder="Hledat POS ID, terminál, název nebo adresu…" oninput="setPosNetSearch(this.value)" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--bd);border-radius:10px;font-size:13px;font-family:inherit">
+      </div>
+      <div class="rf-wrap">
         <div class="rf-lbl">Technik</div>
         <div class="rf-row" id="posnet-tech-row"></div>
       </div>
@@ -434,6 +440,25 @@
         <div class="rf-row" id="posnet-status-row"></div>
       </div>
       <div class="cw" id="adm-posnet-list"></div>
+    </div>
+
+    <!-- DATA IMPORT — nahrání reálného Tourplan exportu (PART 2) -->
+    <div class="adm-page" id="adm-import">
+      <div class="adm-sh"><div class="adm-st">Import dat z Tourplan Excel</div><div class="adm-sc" id="import-source-label">—</div></div>
+      <div class="dash-block">
+        <div class="dash-block-t"><svg class="ic"><use href="#ic-upload"/></svg> Nahrát export</div>
+        <p style="font-size:13px;color:var(--muted);margin:0 0 12px">Nahraj Tourplan Excel export (.xlsx/.csv) se sloupci: Terminal ID, POS ID, Typ terminálu, Market, Kategorie, Kategorizace, Název, Ulice, Číslo, Město, Oblast, Technik, Týden.</p>
+        <input type="file" id="import-file-input" accept=".xlsx,.xls,.csv" onchange="handleImportFile(event)" style="font-size:13px">
+        <div id="import-status" style="margin-top:12px;font-size:13px"></div>
+      </div>
+      <div class="dash-block" id="import-preview-block" style="display:none">
+        <div class="dash-block-t"><svg class="ic"><use href="#ic-check-circle"/></svg> Náhled importu</div>
+        <div class="kpi-grid" id="import-preview-kpis"></div>
+        <div id="import-checklist" style="margin:14px 0"></div>
+        <div id="import-warnings" style="margin-bottom:14px"></div>
+        <button class="adm-btn active" id="import-confirm-btn" onclick="confirmImport()">Potvrdit a použít data</button>
+        <button class="adm-btn" onclick="cancelImportPreview()">Zrušit</button>
+      </div>
     </div>
 
     <!-- LIVE -->
