@@ -82,9 +82,61 @@
     if(global.localStorage) global.localStorage.removeItem('tourplanImportOverride');
   }
 
-  function reset(){ cache = null; }
+  function reset(){ cache = null; masterCache = null; }
 
-  const DataProvider = { getPosWeeks, getTechnicianNames, getSummary, getWarnings, getSource, setOverride, clearOverride, reset };
+  // ── POS MASTER DATA (GPS + otevírací doba) — samostatný import, samostatný
+  // cache. Nezávislé na týdenním Tourplan importu výše. ────────────────────
+  let masterCache = null;
+
+  function loadMasterOverride(){
+    try {
+      const raw = global.localStorage && global.localStorage.getItem('posMasterDataOverride');
+      if(!raw) return null;
+      const parsed = JSON.parse(raw);
+      if(Array.isArray(parsed.rows) && parsed.rows.length) return parsed;
+      return null;
+    } catch(e){ return null; }
+  }
+
+  function buildMaster(){
+    const PosMasterData = global.PosMasterData || (typeof require !== 'undefined' && require('./posMasterData.js'));
+    const override = loadMasterOverride();
+    if (!override) return { map: {}, summary: null, warnings: [], source: null };
+    const { map, summary, warnings } = PosMasterData.buildPosMasterMap(override.rows);
+    return { map, summary, warnings, source: { type: 'upload', fileName: override.fileName, importedAt: override.importedAt } };
+  }
+
+  // getPosMasterMap() -> { [posId]: { lat, lng, openingHours } } — prázdná
+  // mapa, pokud Pavel ještě nedodal soubor (žádná smyšlená data).
+  function getPosMasterMap(){
+    if(!masterCache) masterCache = buildMaster();
+    return masterCache.map;
+  }
+
+  function getPosMasterSummary(){
+    if(!masterCache) masterCache = buildMaster();
+    return masterCache.summary;
+  }
+
+  function getPosMasterSource(){
+    if(!masterCache) masterCache = buildMaster();
+    return masterCache.source;
+  }
+
+  function setPosMasterOverride(rows, fileName){
+    if(!global.localStorage) return false;
+    global.localStorage.setItem('posMasterDataOverride', JSON.stringify({ rows, fileName, importedAt: new Date().toISOString() }));
+    return true;
+  }
+
+  function clearPosMasterOverride(){
+    if(global.localStorage) global.localStorage.removeItem('posMasterDataOverride');
+  }
+
+  const DataProvider = {
+    getPosWeeks, getTechnicianNames, getSummary, getWarnings, getSource, setOverride, clearOverride, reset,
+    getPosMasterMap, getPosMasterSummary, getPosMasterSource, setPosMasterOverride, clearPosMasterOverride,
+  };
 
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = DataProvider;

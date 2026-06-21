@@ -520,6 +520,22 @@
         <button class="adm-btn active" id="import-confirm-btn" onclick="confirmImport()">Potvrdit a použít data</button>
         <button class="adm-btn" onclick="cancelImportPreview()">Zrušit</button>
       </div>
+
+      <!-- POS MASTER DATA — samostatný import GPS + otevírací doby, nezávislý na Tourplan výše -->
+      <div class="dash-block">
+        <div class="dash-block-t"><svg class="ic"><use href="#ic-pin"/></svg> Master data POS — GPS &amp; otevírací doba</div>
+        <p style="font-size:13px;color:var(--muted);margin:0 0 12px">Samostatný soubor (.xlsx/.csv), nezávislý na Tourplan exportu výše. Sloupce: POS ID, GPS Lat, GPS Lng, Po, Út, St, Čt, Pá, So, Ne (každý den jako "08:00-18:00" nebo "zavřeno"). Klíčuje se podle POS ID.</p>
+        <input type="file" id="pos-master-file-input" accept=".xlsx,.xls,.csv" onchange="handlePosMasterImportFile(event)" style="font-size:13px">
+        <div id="pos-master-status" style="margin-top:12px;font-size:13px"></div>
+        <div id="pos-master-source-label" style="margin-top:6px;font-size:12px;color:var(--muted)"></div>
+      </div>
+      <div class="dash-block" id="pos-master-preview-block" style="display:none">
+        <div class="dash-block-t"><svg class="ic"><use href="#ic-check-circle"/></svg> Náhled master dat</div>
+        <div class="kpi-grid" id="pos-master-preview-kpis"></div>
+        <div id="pos-master-warnings" style="margin-bottom:14px"></div>
+        <button class="adm-btn active" onclick="confirmPosMasterImport()">Potvrdit a použít data</button>
+        <button class="adm-btn" onclick="cancelPosMasterImportPreview()">Zrušit</button>
+      </div>
     </div>
 
     <!-- LIVE -->
@@ -707,6 +723,7 @@
 <script src="js/geo.js"></script>
 <script src="js/tourplanRaw.js"></script>
 <script src="js/excelImport.js"></script>
+<script src="js/posMasterData.js"></script>
 <script src="js/dataProvider.js"></script>
 <script src="js/routeEngine.js"></script>
 <script src="js/posModel.js"></script>

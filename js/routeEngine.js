@@ -26,7 +26,10 @@
     priorityIssue: 40,   // urgentní/flagovaný problém
   };
 
+  // Fallback pro POS bez importovaných master dat — konzervativní odhad
+  // (otevřeno celý týden), NIKDY si nevymýšlí zavírací dny bez reálných dat.
   const DEFAULT_OPENING_HOURS = { from: '08:00', to: '18:00' };
+  const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
   // ── HAVERSINE ──────────────────────────────────────────────────────────
   function haversineKm(a, b){
@@ -83,8 +86,27 @@
     return VISIT_DURATION_MIN[classifyVisit(pos)];
   }
 
-  function getOpeningHours(pos){
-    return pos.openingHours || DEFAULT_OPENING_HOURS;
+  // getOpeningHours(pos, dayIdx) — dayIdx: 0=Po..4=Pá (shoda s app.js DAYS),
+  // 5=So, 6=Ne. Bez dayIdx vrací celý týdenní objekt (pro zobrazení v detailu
+  // POS). Vrací null pro den, kdy je POS importem potvrzeno zavřené —
+  // jinak (chybí master data pro ten den) padá na konzervativní výchozí.
+  function getOpeningHours(pos, dayIdx){
+    const hours = pos.openingHours;
+    if (dayIdx === undefined || dayIdx === null) return hours || null;
+    const key = DAY_KEYS[dayIdx];
+    if (hours && Object.prototype.hasOwnProperty.call(hours, key)) return hours[key];
+    return DEFAULT_OPENING_HOURS;
+  }
+
+  function parseHM(hm){
+    const m = /^(\d{1,2}):(\d{2})$/.exec(hm || '');
+    if (!m) return null;
+    return Number(m[1]) * 60 + Number(m[2]);
+  }
+  function formatClock(min){
+    const h = Math.floor(min / 60) % 24;
+    const m = Math.round(min % 60);
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
   }
 
   // ── ROUTE CALCULATION ───────────────────────────────────────────────────
@@ -119,6 +141,39 @@
       workMin,
       totalMin: drivingMin + workMin,
     };
+  }
+
+  // ── OPENING HOURS CHECK ─────────────────────────────────────────────────
+  // checkOpeningHours(order, calcResult, startTime, dayIdx) -> issue[]
+  // calcResult musí pocházet z calculateRoute(order, startPoint) se
+  // STEJNÝM startPoint — bez něj legs[0] neodpovídá příjezdu na order[0] a
+  // funkce vrátí [] (nelze spočítat reálný čas příjezdu na první zastávku).
+  // Asistent, ne kontrola: vrací fakta (kdy POS otvírá/zavírá vs. kdy tam
+  // technik dorazí podle SVÉHO pořadí), UI rozhoduje, jak to ukázat.
+  function checkOpeningHours(order, calcResult, startTime, dayIdx){
+    const startMin = parseHM(startTime);
+    if (startMin === null || dayIdx === undefined || dayIdx === null) return [];
+    if (!calcResult || calcResult.legs.length !== order.length) return [];
+    const issues = [];
+    let clockMin = startMin;
+    calcResult.legs.forEach((leg, i) => {
+      clockMin += leg.travelTimeMin;
+      const pos = order[i];
+      const hours = getOpeningHours(pos, dayIdx);
+      const arrival = formatClock(clockMin);
+      if (!hours) {
+        issues.push({ posId: pos.id, posName: pos.n, arrival, status: 'closed-today' });
+      } else {
+        const openMin = parseHM(hours.from), closeMin = parseHM(hours.to);
+        if (clockMin < openMin) {
+          issues.push({ posId: pos.id, posName: pos.n, arrival, status: 'too-early', opensAt: hours.from });
+        } else if (clockMin > closeMin) {
+          issues.push({ posId: pos.id, posName: pos.n, arrival, status: 'too-late', closesAt: hours.to });
+        }
+      }
+      clockMin += getVisitDurationMin(pos);
+    });
+    return issues;
   }
 
   // ── OPTIMIZATION: nearest neighbor ──────────────────────────────────────
@@ -209,6 +264,10 @@
     getVisitDurationMin,
     classifyVisit,
     getOpeningHours,
+    checkOpeningHours,
+    formatClock,
+    parseHM,
+    DAY_KEYS,
     calculateRoute,
     nearestNeighborOrder,
     compareRoutes,

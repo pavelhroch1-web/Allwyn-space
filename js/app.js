@@ -19,6 +19,9 @@ function augmentRawPos(p, assignedTechnician){
   const rawTyp = p.typ||'IDT';
   const isCornPos = rawTyp==='CORN' || (p.k&&p.k.startsWith('9')) || p.typ==='CORN';
   const typ = isCornPos ? 'CORN' : rawTyp;
+  // Master data (GPS + otevírací doba, samostatný import) má přednost před
+  // mock geokódováním podle adresy — ale jen pro POS, která v něm reálně jsou.
+  PosMasterData.mergePosMasterData(p, POS_MASTER_MAP[p.id]);
   const withCoords = ensurePosCoords(p);
   return {
     ...withCoords,
@@ -32,6 +35,11 @@ function augmentRawPos(p, assignedTechnician){
     inventory:JSON.parse(JSON.stringify(INV_DEFAULT[typ]||INV_DEFAULT[rawTyp]||INV_DEFAULT.IDT)),
   };
 }
+
+// POS master data (GPS + otevírací doba po dnech) — samostatný import,
+// nezávislý na týdenním Tourplan importu. Prázdná mapa, dokud Pavel nedodá
+// soubor (žádná smyšlená data za jeho nepřítomnosti).
+const POS_MASTER_MAP = DataProvider.getPosMasterMap();
 
 const POS_WEEK_KEYS = ['23','24','25','26','27','28'];
 const importedWeeks = DataProvider.getPosWeeks(POS_WEEK_KEYS, {
@@ -2775,6 +2783,15 @@ function isStartLocationFresh(){
   const loc = getStartLocation();
   return !!(loc && loc.date === today());
 }
+
+// Čas odjezdu — potřebný pro spočítání reálného příjezdu na zastávky a
+// porovnání s otevírací dobou POS. Technik si ho může upravit, default 08:00.
+function startTimeKey(){
+  const s = getSession();
+  return 'start_time_' + ((s && s.user && s.user.id) || 'default');
+}
+function getStartTime(){ return lsg(startTimeKey()) || '08:00'; }
+function setStartTime(hm){ lss(startTimeKey(), hm); }
 function captureStartLocation(cb){
   const el = document.getElementById('route-start-status');
   if (!navigator.geolocation){
@@ -2874,15 +2891,18 @@ function showRouteView(week, day){
     <div style="font-size:12px;color:var(--muted);margin-top:2px">Pořadí si určuješ ty. Doporučení je jen návrh.</div>`;
   wrap.appendChild(hdr);
 
-  // Výchozí bod
+  // Výchozí bod + čas odjezdu
+  const startTime = getStartTime();
   const startCard = document.createElement('div');
   startCard.style.cssText = 'margin:0 12px 10px;padding:12px;background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:12px';
   startCard.innerHTML = `
-    <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:6px">Odkud dnes vyjíždíš?</div>
+    <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:6px">Odkud a kdy dnes vyjíždíš?</div>
     <div id="route-start-status" style="margin-bottom:8px">${startLoc
       ? `<span class="gps-badge gps-ok">✓ ${isStartLocationFresh() ? 'Dnešní pozice' : 'Uložená pozice'} · ${startLoc.lat.toFixed(3)}, ${startLoc.lng.toFixed(3)}</span>`
       : '<span class="gps-badge gps-warn"><svg class="ic ic-sm"><use href="#ic-warning"/></svg> Pozice nezjištěna</span>'}</div>
-    <button onclick="captureStartLocation(()=>showRouteView('${week}',${day}))" style="width:100%;padding:9px;background:var(--navy);color:var(--teal);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Zjistit moji pozici</button>
+    <button onclick="captureStartLocation(()=>showRouteView('${week}',${day}))" style="width:100%;padding:9px;background:var(--navy);color:var(--teal);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:8px">Zjistit moji pozici</button>
+    <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Čas odjezdu</label>
+    <input type="time" value="${startTime}" onchange="setStartTime(this.value);showRouteView('${week}',${day})" style="width:100%;padding:7px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
   `;
   wrap.appendChild(startCard);
 
@@ -2900,6 +2920,28 @@ function showRouteView(week, day){
   mapWrap.innerHTML = `<div id="route-map" style="height:240px"></div>`;
   wrap.appendChild(mapWrap);
   setTimeout(() => renderRouteMap(dayPos, startLoc), 50);
+
+  // Otevírací doba — jen fakta o příjezdu vs. otevírací době, žádné tiché
+  // přeřazení. Vyžaduje výchozí pozici (jinak nelze spočítat reálný příjezd).
+  if (startLoc) {
+    const baseCalc = RouteEngine.calculateRoute(dayPos, startLoc);
+    const ohIssues = RouteEngine.checkOpeningHours(dayPos, baseCalc, startTime, day);
+    if (ohIssues.length) {
+      const ohCard = document.createElement('div');
+      ohCard.style.cssText = 'margin:0 12px 10px;padding:14px;background:#fff7e6;border:1.5px solid #f5c542;border-radius:12px';
+      ohCard.innerHTML = `
+        <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px"><svg class="ic ic-sm" style="color:#b8860b"><use href="#ic-warning"/></svg> Otevírací doba</div>
+        ${ohIssues.map(iss => iss.status === 'too-early'
+          ? `<div style="font-size:12px;color:var(--td);margin-bottom:6px">#${iss.posId} ${iss.posName}: příjezd ${iss.arrival}, ale otvírá až v ${iss.opensAt}. Lepší navštívit později.</div>`
+          : iss.status === 'too-late'
+          ? `<div style="font-size:12px;color:var(--td);margin-bottom:6px">#${iss.posId} ${iss.posName}: příjezd ${iss.arrival}, ale zavírá v ${iss.closesAt}. Lepší navštívit dřív.</div>`
+          : `<div style="font-size:12px;color:var(--td);margin-bottom:6px">#${iss.posId} ${iss.posName}: dnes zavřeno — příjezd ${iss.arrival} nedává smysl.</div>`
+        ).join('')}
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">Pořadí si určuješ ty — tohle je jen upozornění, ne automatická změna.</div>
+      `;
+      wrap.appendChild(ohCard);
+    }
+  }
 
   // Porovnání + volba (jen pokud je co porovnávat a je víc než 1 zastávka)
   if (dayPos.length > 1) {
@@ -3682,7 +3724,7 @@ showAdmPage = function(p, btn) {
     initEditor();
     showEditorSection('texty', document.querySelector('.ed-subnav'));
   }
-  if (p === 'import') renderImportSourceLabel();
+  if (p === 'import') { renderImportSourceLabel(); renderPosMasterSourceLabel(); }
 };
 
 // ══════════════════════════════════════════════════════
@@ -3782,6 +3824,73 @@ function cancelImportPreview(){
   document.getElementById('import-preview-block').style.display = 'none';
   document.getElementById('import-file-input').value = '';
   document.getElementById('import-status').textContent = '';
+}
+
+// ══════════════════════════════════════════════════════
+// POS MASTER DATA IMPORT — GPS + otevírací doba, samostatné od Tourplan výše
+// ══════════════════════════════════════════════════════
+let pendingPosMasterRows = null, pendingPosMasterFileName = null;
+
+function renderPosMasterSourceLabel(){
+  const el = document.getElementById('pos-master-source-label');
+  if(!el) return;
+  const src = DataProvider.getPosMasterSource();
+  el.textContent = src
+    ? `Aktivní zdroj: nahraný soubor „${src.fileName}“ (${new Date(src.importedAt).toLocaleString('cs-CZ')})`
+    : 'Žádná master data nenahrána — appka používá odhad GPS podle adresy a výchozí otevírací dobu 08:00-18:00.';
+}
+
+function handlePosMasterImportFile(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const statusEl = document.getElementById('pos-master-status');
+  statusEl.textContent = 'Načítám a parsuji soubor…';
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const workbook = XLSX.read(ev.target.result, { type: 'array' });
+      const rows = parseSheetRows(workbook);
+      PosMasterData.validateColumns(rows);
+      const { summary, warnings } = PosMasterData.buildPosMasterMap(rows);
+      pendingPosMasterRows = rows;
+      pendingPosMasterFileName = file.name;
+      renderPosMasterPreview(summary, warnings);
+      statusEl.textContent = `Soubor „${file.name}“ načten — ${rows.length} řádků.`;
+    } catch(err){
+      statusEl.textContent = `Chyba při zpracování souboru: ${err.message}`;
+      document.getElementById('pos-master-preview-block').style.display = 'none';
+      pendingPosMasterRows = null;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function renderPosMasterPreview(summary, warnings){
+  const block = document.getElementById('pos-master-preview-block');
+  block.style.display = 'block';
+  document.getElementById('pos-master-preview-kpis').innerHTML = `
+    <div class="kpi"><div class="kpi-v">${summary.posCount}</div><div class="kpi-l">POS s master daty</div></div>
+    <div class="kpi"><div class="kpi-v">${summary.posCount - summary.missingCoords}</div><div class="kpi-l">s reálným GPS</div></div>
+    <div class="kpi"><div class="kpi-v">${summary.posCount - summary.missingHours}</div><div class="kpi-l">s otevírací dobou</div></div>
+  `;
+  const warnEl = document.getElementById('pos-master-warnings');
+  warnEl.innerHTML = warnings.length
+    ? `<div style="font-size:13px;color:var(--muted)"><strong>Upozornění:</strong><br>${warnings.map(w => `• ${w}`).join('<br>')}</div>`
+    : '';
+}
+
+function confirmPosMasterImport(){
+  if(!pendingPosMasterRows) return;
+  DataProvider.setPosMasterOverride(pendingPosMasterRows, pendingPosMasterFileName);
+  location.reload();
+}
+
+function cancelPosMasterImportPreview(){
+  pendingPosMasterRows = null;
+  pendingPosMasterFileName = null;
+  document.getElementById('pos-master-preview-block').style.display = 'none';
+  document.getElementById('pos-master-file-input').value = '';
+  document.getElementById('pos-master-status').textContent = '';
 }
 
 // ── Landing screen: live stats + ambient background + mini control-center map ──
