@@ -406,11 +406,12 @@ function openDetail(ri){
   // notes
   document.getElementById('notes-ta').value=p.notes||'';
   // reset tabs
-  showDetTab('notes',document.querySelector('.det-tab'));
+  showDetTab('inv',document.querySelector('.det-tab'));
   // render sections
   renderCheckin();
   renderCampaigns();
   renderRefs();
+  renderMerch(p);
   renderSupply(p);
   renderTasks();
   renderPhotos();
@@ -641,7 +642,7 @@ function renderTasks(){
   groups.forEach(({src,lbl,cls})=>{
     const tasks=p.taskState.filter(t=>t.src===src);if(!tasks.length)return;
     const hdr=document.createElement('div');hdr.className='tg-hdr';
-    hdr.innerHTML=`<span class="tg-lbl ${cls}">${lbl}</span>`;list.appendChild(hdr);
+    hdr.innerHTML=`<span class="tg-lbl ${cls}">${lbl}</span><span class="tg-cnt">${tasks.length}</span>`;list.appendChild(hdr);
     tasks.forEach(task=>{
       const ti=p.taskState.indexOf(task);
       const item=document.createElement('div');item.className='titem';
@@ -715,18 +716,21 @@ function renderMerch(p) {
   const el = document.getElementById('merch-items');
   if (!el) return;
   el.innerHTML = merchItems.map((x, i) => `
-    <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--bg);cursor:pointer" onclick="toggleMerch(${i})">
-      <div style="width:22px;height:22px;border-radius:6px;border:2px solid ${x.done?'var(--tm)':'var(--border)'};background:${x.done?'var(--teal)':'#fff'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
-        ${x.done?'<span style="font-size:12px;font-weight:800;color:#fff">✓</span>':''}
+    <div class="inv-item">
+      <div class="inv-info">
+        <div class="inv-n" style="${x.done?'text-decoration:line-through;color:var(--muted)':''}">${x.n}</div>
       </div>
-      <div style="font-size:13px;${x.done?'text-decoration:line-through;color:var(--muted)':''}">${x.n}</div>
+      <div class="inv-btns">
+        <button class="ibtn ibtn-ok ${x.done?'on':''}" onclick="setMerch(${i},true)">✓</button>
+        <button class="ibtn ibtn-miss ${x.done===false?'on':''}" onclick="setMerch(${i},false)">✕</button>
+      </div>
     </div>`).join('') || '<div style="padding:16px;text-align:center;font-size:12px;color:var(--muted)">Žádné merch položky</div>';
 }
 
-function toggleMerch(i) {
+function setMerch(i, done) {
   const p = posData[cWeek][cIdx];
   if (!merchItems[i]) return;
-  merchItems[i].done = !merchItems[i].done;
+  merchItems[i].done = merchItems[i].done === done ? null : done;
   lss('merch_' + p.id + '_' + today(), merchItems);
   renderMerch(p);
 }
