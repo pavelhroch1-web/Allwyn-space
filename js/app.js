@@ -2,6 +2,7 @@
 // STATE
 // ══════════════════════════════════════════════════════
 let cWeek='25', cDay=0, cIdx=null, pendingSlot=null, assigningId=null;
+let cView='list'; // 'list' | 'planning' | 'overdue' — perzistováno přes refresh (PART 6)
 let adminMap=null, adminMarkers=[], adminTechnicians=[];
 let activeRegion='all';
 let ciTimer=null;
@@ -37,13 +38,23 @@ const importedWeeks = DataProvider.getPosWeeks(POS_WEEK_KEYS, {
   currentWeek: '25',
   todayIdx: getTodayDayIdx(),
 });
+// FULL_POS_DATA = POS všech 27 techniků (Velín: dashboard/POS síť/mapa/route
+// intelligence napříč firmou). posData = POS POUZE přihlášeného technika
+// (Lán Tomáš) — jediné reálné přiřazení z Excel sloupce TECHNICIAN, žádné
+// "vidí celou firmu jako svou trasu" (root cause nereálných čísel workloadu).
+const FULL_POS_DATA={};
 const posData={};
 for(const w of POS_WEEK_KEYS){
-  posData[w] = (importedWeeks[w]||[]).map(p => augmentRawPos(p, p.assignedTechnician));
+  FULL_POS_DATA[w] = (importedWeeks[w]||[]).map(p => augmentRawPos(p, p.assignedTechnician));
+  posData[w] = FULL_POS_DATA[w].filter(p => p.assignedTechnician === PosModel.SOLE_REAL_TECHNICIAN);
 }
 // Add 2 servis tasks for demo
 if(posData['25']&&posData['25'][0]) posData['25'][0].taskState.push({text:'Výměna tiskové hlavy — terminál netiskne',src:'servis',done:false,note:'SRV-2841 · Urgentní · náhradní díl v autě'});
 if(posData['25']&&posData['25'][5]) posData['25'][5].taskState.push({text:'Terminál se nepřipojí k síti',src:'servis',done:false,note:'SRV-2839 · Zkontroluj kabel + SIM'});
+
+// Reálná jména techniků odvozená z Excel importu (FULL_POS_DATA), ne z
+// odpojeného demo souboru data.js — žádné paralelní fake datasety.
+const TECHNICIAN_NAMES = Array.from(new Set((FULL_POS_DATA['25']||[]).map(p=>p.assignedTechnician))).sort();
 
 // Import summary log (PART 6 — "Show import summary" requirement).
 (function logImportSummary(){
@@ -62,7 +73,7 @@ if(posData['25']&&posData['25'][5]) posData['25'][5].taskState.push({text:'Termi
 // tohoto týdne přes TechnicianModel — nic se neukládá na technika samotného.
 const CURRENT_OPS_WEEK = '25';
 function deriveAllTechnicians(){
-  return TechnicianModel.deriveTechnicians(posData[CURRENT_OPS_WEEK] || [], { todayIdx: getTodayDayIdx() });
+  return TechnicianModel.deriveTechnicians(FULL_POS_DATA[CURRENT_OPS_WEEK] || [], { todayIdx: getTodayDayIdx() });
 }
 function techDisplayLatLng(t){
   if (t.currentPos && typeof t.currentPos.lat === 'number') return { lat: t.currentPos.lat, lng: t.currentPos.lng };
@@ -82,29 +93,36 @@ function lsg(k,d=null){try{const v=localStorage.getItem(k);return v?JSON.parse(v
 function lss(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
 function today(){return new Date().toISOString().split('T')[0];}
 
+// Perzistuje vybraný týden + aktivní pohled technika (list/planning/overdue),
+// aby F5 zůstal na stejné obrazovce/týdnu (PART 6 — refresh nesmí vracet na landing).
+function saveTechUIState(){ lss('techUiState',{week:cWeek,view:cView}); }
+
 // ══════════════════════════════════════════════════════
 // ROLE
 // ══════════════════════════════════════════════════════
-function enterRole(role){
+function enterRole(role,opts){
+  opts=opts||{};
   document.getElementById('role-screen').style.display='none';
   document.getElementById('switch-btn').style.display='block';
   if(role==='technik'){
     document.getElementById('technik-screen').classList.add('active');
     document.getElementById('admin-screen').style.display='none';
     updateHdrLabel();renderChips();renderDayTabs();renderList();
-    setTimeout(showBriefing,500);
+    if(!opts.skipBriefing) setTimeout(showBriefing,500);
   } else {
     document.getElementById('technik-screen').classList.remove('active');
     document.getElementById('admin-screen').style.display='block';
     renderAdminDashboard();renderAdminLive();renderAdminAlerts();renderAdminTechnici();renderAdminCasy();renderAdminFoto();
     setTimeout(initAdminMap,300);
   }
+  pushRoute();
 }
 function goHome(){
   document.getElementById('role-screen').style.display='flex';
   document.getElementById('switch-btn').style.display='none';
   document.getElementById('technik-screen').classList.remove('active');
   document.getElementById('admin-screen').style.display='none';
+  pushRoute();
 }
 function showAdmPage(p,btn){
   document.querySelectorAll('.adm-page').forEach(x=>x.classList.remove('active'));
@@ -115,7 +133,75 @@ function showAdmPage(p,btn){
   if(p==='casy') renderAdminCasy();
   if(p==='dashboard') renderAdminDashboard();
   if(p==='posnet') renderAdminPosNet();
+  pushRoute();
 }
+
+// ══════════════════════════════════════════════════════
+// ROUTER — hash-based navigace (žádný server, GitHub Pages friendly).
+// Refresh zůstává na stejné obrazovce, Back/Forward přepíná mezi obrazovkami.
+// ══════════════════════════════════════════════════════
+let routeSuspend=false;
+function computeRouteHash(){
+  if(document.getElementById('admin-screen').style.display==='block'){
+    const activePage=document.querySelector('.adm-page.active');
+    const page=activePage?activePage.id.replace('adm-',''):'dashboard';
+    return '#/admin/'+page;
+  }
+  if(document.getElementById('technik-screen').classList.contains('active')){
+    if(document.getElementById('t-detail').style.display==='block'&&cIdx!=null&&posData[cWeek]&&posData[cWeek][cIdx]){
+      return '#/tech/pos/'+cWeek+'/'+posData[cWeek][cIdx].id;
+    }
+    return '#/tech';
+  }
+  return '#/';
+}
+function pushRoute(){
+  if(routeSuspend) return;
+  const h=computeRouteHash();
+  if(location.hash!==h) location.hash=h;
+}
+function applyRoute(){
+  const hash=location.hash||'#/';
+  const parts=hash.replace(/^#\/?/,'').split('/').filter(Boolean);
+  routeSuspend=true;
+  try{
+    if(parts[0]==='admin'){
+      enterRole('admin');
+      const page=parts[1]||'dashboard';
+      const btn=document.querySelector(`[onclick="showAdmPage('${page}',this)"]`);
+      if(btn) showAdmPage(page,btn);
+    } else if(parts[0]==='tech'){
+      if(parts[1]==='pos'&&parts[2]&&parts[3]){
+        enterRole('technik',{skipBriefing:true});
+        const w=parts[2],id=parts[3];
+        if(posData[w]){
+          cWeek=w;cDay=0;updateHdrLabel();renderChips();renderDayTabs();
+          const ri=posData[w].findIndex(p=>p.id===id);
+          if(ri>=0) openDetail(ri);
+        }
+      } else {
+        // Obnov uložený týden + pohled (list/planning/overdue) — refresh musí
+        // zůstat na stejné obrazovce technika, ne resetovat na výchozí týden.
+        // enterRole() interně volá autoSetCurrentDay(), které přepíše cWeek na
+        // aktuální týden — proto musíme uložený týden vynutit AŽ PO enterRole().
+        const saved=lsg('techUiState',null);
+        enterRole('technik',{skipBriefing:true});
+        if(saved&&posData[saved.week]){ cWeek=saved.week; updateHdrLabel(); renderChips(); renderDayTabs(); }
+        document.getElementById('t-detail').style.display='none';
+        document.getElementById('t-list').style.display='block';
+        if(saved&&saved.view==='planning') showPlanningView();
+        else if(saved&&saved.view==='overdue') showOverdue();
+        else renderList();
+      }
+    } else {
+      goHome();
+    }
+  } finally {
+    routeSuspend=false;
+  }
+}
+window.addEventListener('hashchange',applyRoute);
+window.addEventListener('DOMContentLoaded',()=>{ if(location.hash&&location.hash!=='#/') applyRoute(); });
 
 // ══════════════════════════════════════════════════════
 // BRIEFING
@@ -260,7 +346,7 @@ function makePosCard(p,ri,showAssign){
   tags+=priChip(p)+typTag(p);
   const card=document.createElement('div');card.className='pos-card';
   const right=showAssign?`<button class="asgn-btn" onclick="event.stopPropagation();openAssign('${p.id}')">+ Den</button>`:`<div class="parr">›</div>`;
-  card.innerHTML=`${p.v?'<div class="vs"></div>':''}<div class="pci"><div class="pdot ${dotCls}"></div><div class="pinfo"><div class="pname">${p.n}</div><div class="paddr">${p.a}</div><div class="pmeta">${tags}</div></div>${right}</div>`;
+  card.innerHTML=`${p.v?'<div class="vs"></div>':''}<div class="pci"><div class="pdot ${dotCls}"></div><div class="pinfo"><div class="pname">${p.n} <span style="font-weight:600;color:var(--muted);font-size:11px">#${p.id}</span></div><div class="paddr">${p.a}</div><div class="pmeta">${tags}</div></div>${right}</div>`;
   card.onclick=()=>openDetail(ri);
   return card;
 }
@@ -332,6 +418,7 @@ function openDetail(ri){
   document.getElementById('t-list').style.display='none';
   document.getElementById('t-detail').style.display='block';
   window.scrollTo(0,0);
+  pushRoute();
 }
 
 // ══════════════════════════════════════════════════════
@@ -832,6 +919,7 @@ function goBack(){
   document.getElementById('t-list').style.display='block';
   hideAddForm();renderList();window.scrollTo(0,0);
   if(ciTimer){clearInterval(ciTimer);ciTimer=null;}
+  pushRoute();
 }
 function showAddForm(){document.getElementById('add-btn').style.display='none';document.getElementById('add-form').style.display='block';document.getElementById('new-task-input').focus();}
 function hideAddForm(){document.getElementById('add-btn').style.display='block';document.getElementById('add-form').style.display='none';document.getElementById('new-task-input').value='';}
@@ -951,7 +1039,7 @@ function startAdminRefresh() {
 // ══════════════════════════════════════════════════════
 function renderAdminDashboard() {
   const live = getLiveState();
-  const pos = posData['25'] || [];
+  const pos = FULL_POS_DATA['25'] || [];
   const gpsFlags = lsg('gps_flags_' + today(), []);
   const shortVisits = lsg('vlog_' + today(), []).filter(v => v.flag === 'short');
 
@@ -1047,7 +1135,7 @@ function renderAdminDashboard() {
 // nikdy POS více techniků sloučené do jedné fiktivní trasy.
 function buildAllDailyRoutes() {
   const routes = {};
-  const list = posData[CURRENT_OPS_WEEK] || [];
+  const list = FULL_POS_DATA[CURRENT_OPS_WEEK] || [];
   const byTechDay = {};
   list.forEach(p => {
     if (p.d === null || p.d === undefined) return;
@@ -1137,10 +1225,15 @@ function renderPerTechnicianSavings(fleet) {
 // ADMIN — POS MANAGEMENT (POS Síť) — kompletní reálná POS síť
 // ══════════════════════════════════════════════════════
 let posNetFilters = { tech: 'all', region: 'all', channel: 'all', status: 'all' };
+let posNetSearch = '';
+function setPosNetSearch(val) {
+  posNetSearch = (val || '').trim().toLowerCase();
+  renderAdminPosNet();
+}
 
 function getAllPosFlat() {
   const out = [];
-  for (const [week, list] of Object.entries(posData)) {
+  for (const [week, list] of Object.entries(FULL_POS_DATA)) {
     list.forEach(p => out.push({ p, week }));
   }
   // De-dup by POS id — keep first occurrence (POS je v reálných datech jen v 1 týdnu)
@@ -1151,7 +1244,7 @@ function getAllPosFlat() {
 function buildPosNetRows() {
   return getAllPosFlat().map(({ p, week }) => {
     const history = getVisitHistory(p.id);
-    const isOverdue = getOverduePOS(week).some(op => op.id === p.id);
+    const isOverdue = getOverduePOS(week, FULL_POS_DATA).some(op => op.id === p.id);
     return { p, week, model: PosModel.toPosModel(p, { history, isOverdue }) };
   });
 }
@@ -1179,7 +1272,12 @@ function renderAdminPosNet() {
   if (statusRow) statusRow.innerHTML = statusOpts.map(([code, lbl]) =>
     `<button class="rfb ${posNetFilters.status===code?'active':''}" onclick="setPosNetFilter('status','${code}')">${lbl}</button>`).join('');
 
-  const filtered = rows.filter(({ model }) => {
+  const filtered = rows.filter(({ p, model }) => {
+    if (posNetSearch) {
+      const terminalIds = (p.terminals || []).map(t => String(t.id).toLowerCase());
+      const hay = [String(model.posId), model.posName, model.address, ...terminalIds].join(' ').toLowerCase();
+      if (!hay.includes(posNetSearch)) return false;
+    }
     if (posNetFilters.tech !== 'all' && model.assignedTechnician !== posNetFilters.tech) return false;
     if (posNetFilters.region !== 'all' && model.region !== posNetFilters.region) return false;
     if (posNetFilters.channel !== 'all' && model.channel !== posNetFilters.channel) return false;
@@ -1209,7 +1307,7 @@ function renderAdminPosNet() {
   }
   list.innerHTML = filtered.map(({ p, model }) => `
     <div class="tr" style="cursor:pointer" onclick="showAdminPOSDetail('${p.id}')">
-      <div class="tn">${model.posName}</div>
+      <div class="tn">${model.posName} <span style="font-weight:600;color:var(--muted);font-size:11px">#${model.posId}</span></div>
       <div style="flex:1;min-width:0;font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${model.address}</div>
       <div style="font-size:11px;font-weight:700;color:var(--td);flex-shrink:0">${model.channel}</div>
       <div style="font-size:11px;color:var(--muted);flex-shrink:0">${model.region}</div>
@@ -1230,11 +1328,15 @@ function setPosNetFilter(key, val) {
 function renderAdminLive() {
   const activePos = getActiveTechPos();
   adminTechnicians = deriveAllTechnicians();
+  const live = getLiveState();
 
   const done = adminTechnicians.reduce((s, t) => s + t.done, 0);
   const behind = adminTechnicians.filter(t => t.overdue).length;
+  const active = adminTechnicians.filter(t => t.done > 0 && t.done < t.total).length;
+  document.getElementById('adm-active').textContent = active;
   document.getElementById('adm-done-n').textContent = done;
   document.getElementById('adm-behind').textContent = behind;
+  document.getElementById('adm-svc-open').textContent = live.servisOpen.length;
 
   const filtered = activeRegion === 'all' ? adminTechnicians : adminTechnicians.filter(t => t.region === activeRegion);
 
@@ -1262,6 +1364,8 @@ function renderAdminLive() {
 
 function renderAdminTechnici() {
   adminTechnicians = deriveAllTechnicians();
+  const countEl = document.getElementById('adm-technici-count');
+  if (countEl) countEl.textContent = adminTechnicians.length + ' aktivních';
   document.getElementById('adm-all-list').innerHTML = adminTechnicians.map(t => {
     const isLT = t.name === PosModel.SOLE_REAL_TECHNICIAN;
     const badge = t.done === t.total ? '<span class="badge b-done">✓ Hotovo</span>'
@@ -1302,6 +1406,15 @@ function showTechDetail(name) {
         <div style="font-size:12px;color:var(--muted);margin-top:2px">${t.activityLabel} · ${t.total} POS tento týden · ${pct}% splněno</div>
       </div>
     </div>`;
+
+  // Traceability (PART 7) — odkud pochází přiřazení tohoto technika, žádné
+  // "černá skříňka" čísla. Zdroj = DataProvider (baked export nebo reálně
+  // nahraný soubor), týden = CURRENT_OPS_WEEK, počet POS = reálný součet z FULL_POS_DATA.
+  const traceSrc = DataProvider.getSource();
+  const traceSrcLabel = traceSrc ? (traceSrc.type === 'upload' ? `Nahraný soubor „${traceSrc.fileName}“` : `Tourplan export „${traceSrc.fileName}“`) : 'neznámý zdroj';
+  html += `<div style="background:var(--bg);border:1px dashed var(--bd);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:11.5px;color:var(--muted);line-height:1.6">
+    <strong style="color:var(--ink)">Traceability:</strong> ${t.name} → Zdroj: ${traceSrcLabel} → Přiřazeno POS: ${t.total} → Týden: W${CURRENT_OPS_WEEK}
+  </div>`;
 
   // Progress bar
   html += `<div style="background:var(--bg);border-radius:10px;padding:14px;margin-bottom:14px">
@@ -1455,13 +1568,15 @@ function renderAdminAlerts() {
     alerts.push({ t: 'orange', i: 'ic-box', title: 'Zásobování bez podpisu', sub: 'Lán Tomáš · Žádné zásobování nebylo potvrzeno podpisem', tm: 'Dnes' });
   }
 
-  // Static alerts
-  alerts.push(
-    { t: 'orange', i: 'ic-warning', title: 'Brindžák Michal — pouze 6/35 POS', sub: 'Progress 17% · W25 · Výrazně pozadu', tm: 'W25' },
-    { t: 'orange', i: 'ic-warning', title: 'Dolníček Richard — 6/35 POS', sub: 'Progress 17% · W25 · Doporučeno zkontrolovat', tm: 'W25' },
-    { t: 'green', i: 'ic-check-circle', title: 'Dvořák Petr — 32/35 POS', sub: 'Progress 91% · Očekává dokončení do 17:00', tm: 'W25' },
-    { t: 'green', i: 'ic-check-circle', title: 'Hanuš Robert — 35/35 POS', sub: 'Výborný výkon · W25 dokončen', tm: 'W25' },
-  );
+  // Týmové alerty — odvozeno z reálných POS přiřazení (FULL_POS_DATA), žádná
+  // vymyšlená čísla. Pozadu = isOverdue (technicianModel), výborný výkon = pct.
+  const teamTechs = deriveAllTechnicians();
+  teamTechs.filter(t => t.overdue).slice(0, 4).forEach(t => {
+    alerts.push({ t: 'orange', i: 'ic-warning', title: `${t.name} — ${t.done}/${t.total} POS`, sub: `Progress ${t.pct}% · W${CURRENT_OPS_WEEK} · Výrazně pozadu`, tm: `W${CURRENT_OPS_WEEK}` });
+  });
+  teamTechs.filter(t => !t.overdue && t.total > 0 && t.pct >= 90).slice(0, 2).forEach(t => {
+    alerts.push({ t: 'green', i: 'ic-check-circle', title: `${t.name} — ${t.done}/${t.total} POS`, sub: `Progress ${t.pct}% · W${CURRENT_OPS_WEEK} · Výborný výkon`, tm: `W${CURRENT_OPS_WEEK}` });
+  });
 
   // Supplied confirmed — positive alert
   live.supplies.forEach(s => {
@@ -1481,32 +1596,27 @@ function renderAdminAlerts() {
 // ══════════════════════════════════════════════════════
 function renderAdminCasy() {
   const live = getLiveState();
-  const mockLog = [
-    { posName: 'Jiří Kohl, Police nad Metují', typ: 'IDT', inTime: '07:14', outTime: '07:38', dur: 24, flag: 'ok' },
-    { posName: 'Obec Stará Paka', typ: 'IDT', inTime: '08:02', outTime: '08:29', dur: 27, flag: 'ok' },
-    { posName: 'Městys Častolovice', typ: 'IDT', inTime: '09:11', outTime: '09:19', dur: 8, flag: 'short' },
-    { posName: 'Klicperova, Jičín', typ: 'IDT', inTime: '10:05', outTime: '10:33', dur: 28, flag: 'ok' },
-    { posName: 'Shell Hradec Králové', typ: 'PETROL', inTime: '11:20', outTime: '12:05', dur: 45, flag: 'ok' },
-    { posName: 'Albert Nový Bydžov', typ: 'KA', inTime: '13:15', outTime: '13:52', dur: 37, flag: 'ok' },
-    { posName: 'Husova, Jičín', typ: 'IDT', inTime: '14:30', outTime: '14:37', dur: 7, flag: 'short' },
-    { posName: 'Pražská, Jičín', typ: 'IDT', inTime: '15:05', outTime: '15:31', dur: 26, flag: 'ok' },
-  ];
-
-  // Real log takes priority, fill rest with mock
-  const realLog = live.visitLog;
-  const combined = realLog.length ? [...realLog, ...mockLog.slice(realLog.length)] : mockLog;
-  const log = combined.slice(0, 12);
+  // Reálný check-in log technika (Lán Tomáš) — žádný demo/mock fallback.
+  // Pokud dnes ještě nemá check-iny, zobrazí se prázdný stav, ne vymyšlená data.
+  const log = live.visitLog.slice(0, 12);
   const shorts = log.filter(v => v.flag === 'short').length;
-  const avgDur = Math.round(log.reduce((s, v) => s + v.dur, 0) / log.length);
+  const avgDur = log.length ? Math.round(log.reduce((s, v) => s + v.dur, 0) / log.length) : 0;
 
   // Update stats
   document.getElementById('adm-shorts').textContent = shorts;
 
   const el = document.getElementById('adm-casy-list'); if (!el) return;
-  const ds = live.dayStart || { time: '07:14' };
+  const ds = live.dayStart;
   const active = getActiveTechPos();
 
-  let html = `<div class="vrow start"><div class="vtime">▶ ${ds.time}</div><div class="vname" style="font-weight:700;color:var(--tm)">Začátek pracovní doby · první check-in</div><div class="vdur"></div><div class="vflag"><span class="pdot dot-green"></span></div></div>`;
+  if (!ds && !log.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-t">Zatím žádné check-iny dnes</div></div>';
+    const statCards = document.querySelectorAll('#adm-casy .sgrid .scard');
+    if (statCards[2]) { statCards[2].querySelector('.sv').textContent = '—'; }
+    return;
+  }
+
+  let html = ds ? `<div class="vrow start"><div class="vtime">▶ ${ds.time}</div><div class="vname" style="font-weight:700;color:var(--tm)">Začátek pracovní doby · první check-in</div><div class="vdur"></div><div class="vflag"><span class="pdot dot-green"></span></div></div>` : '';
 
   log.forEach(v => {
     const flagIcon = v.flag === 'short' ? '<svg class="ic ic-sm" style="color:var(--red)"><use href="#ic-flag"/></svg>' : v.flag === 'long' ? '<svg class="ic ic-sm" style="color:var(--orange)"><use href="#ic-warning"/></svg>' : '✓';
@@ -1556,8 +1666,8 @@ function renderAdminFoto() {
 // PATCH enterRole — start admin refresh
 // ══════════════════════════════════════════════════════
 const _origEnterRole = enterRole;
-enterRole = function(role) {
-  _origEnterRole(role);
+enterRole = function(role, opts) {
+  _origEnterRole(role, opts);
   if (role === 'admin') startAdminRefresh();
 };
 
@@ -1676,12 +1786,12 @@ function renderEditModalBody(mode) {
   if (mode === 'technik') {
     html += `<label class="ef-label">Technik</label>
     <select class="ef-select" id="ef-technik">
-      ${REAL_DATA.techs.map(t => `<option value="${t.name}">${t.name}</option>`).join('')}
+      ${TECHNICIAN_NAMES.map(n => `<option value="${n}">${n}</option>`).join('')}
     </select>`;
   }
 
   if (mode === 'pos') {
-    const allPos = posData['25'] || [];
+    const allPos = FULL_POS_DATA['25'] || [];
     html += `<label class="ef-label">Vyhledat POS</label>
     <input class="ef-input" id="ef-pos-search" type="text" placeholder="Název nebo ID provozovny…" oninput="filterPosList(this.value)" />
     <div id="ef-pos-list" style="margin-top:8px;max-height:150px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px">
@@ -1763,7 +1873,13 @@ function setPriority(p, btn) {
 }
 function updatePosCount() {
   const el = document.getElementById('ef-pos-count'); if (!el) return;
-  if (editModalMode !== 'group') { el.textContent = editModalMode === 'pos' ? '1 POS' : '35 POS'; return; }
+  if (editModalMode === 'pos') { el.textContent = '1 POS'; return; }
+  if (editModalMode === 'technik') {
+    const techName = document.getElementById('ef-technik')?.value;
+    const count = (FULL_POS_DATA[CURRENT_OPS_WEEK] || []).filter(p => p.assignedTechnician === techName).length;
+    el.textContent = `${count} POS`;
+    return;
+  }
   const all = Object.values(posData).flat();
   const count = all.filter(p => {
     const regionOk = editRegionFilter === 'all' || p.area === editRegionFilter;
@@ -1773,7 +1889,7 @@ function updatePosCount() {
   el.textContent = count + ' POS';
 }
 function filterPosList(q) {
-  const all = posData['25'] || [];
+  const all = FULL_POS_DATA['25'] || [];
   const filtered = q ? all.filter(p => p.n.toLowerCase().includes(q.toLowerCase()) || p.id.includes(q)).slice(0, 8) : all.slice(0, 8);
   document.getElementById('ef-pos-list').innerHTML = filtered.map(p => `<div class="task-feed-item" style="cursor:pointer" onclick="selectPos('${p.id}','${p.n.replace(/'/g,"\\'")}',this)">
     <div class="tfi-body"><div class="tfi-title">${p.n}</div><div class="tfi-sub">${p.a}</div></div>
@@ -2389,8 +2505,11 @@ function isPast(dayIdx) {
 }
 
 // ── OVERDUE: POS from past days not completed → carry forward ─────────────
-function getOverduePOS(weekKey) {
-  const all = posData[weekKey] || [];
+// dataset: volitelný zdroj (default posData = jen přihlášený technik).
+// Velín kontexty (POS Network, Admin POS Detail) musí předat FULL_POS_DATA,
+// jinak by overdue stav viděli jen u POS technika Lán Tomáš.
+function getOverduePOS(weekKey, dataset) {
+  const all = (dataset || posData)[weekKey] || [];
   const tod = getTodayDayIdx();
   if (tod === null) return [];
   return all.filter(p => !p.v && p.d !== null && p.d !== undefined && p.d < tod);
@@ -2478,6 +2597,7 @@ function buildRouteSummaryCard(dayPos, week, day){
 // ══════════════════════════════════════════════════════════════════════════
 const _origRenderList = renderList;
 renderList = function() {
+  cView = 'list'; saveTechUIState();
   const wrap = document.getElementById('pos-list-wrap');
   wrap.innerHTML = '';
   const all = posData[cWeek] || [];
@@ -2565,6 +2685,7 @@ renderList = function() {
 
 // ── Show overdue POS ───────────────────────────────────────────────────────
 function showOverdue() {
+  cView = 'overdue'; saveTechUIState();
   const wrap = document.getElementById('pos-list-wrap');
   wrap.innerHTML = '';
   const all = posData[cWeek] || [];
@@ -2632,7 +2753,7 @@ function showAdminPOSDetail(posId) {
   // Find POS across all weeks
   let foundPos = null;
   let foundWeek = null;
-  for (const [w, list] of Object.entries(posData)) {
+  for (const [w, list] of Object.entries(FULL_POS_DATA)) {
     const p = list.find(x => x.id === posId);
     if (p) { foundPos = p; foundWeek = w; break; }
   }
@@ -2668,7 +2789,7 @@ function showAdminPOSDetail(posId) {
     </div>`;
 
   // Frekvence návštěv — odvozeno z reálných dat, ne vymyšlené
-  const isOverdueNow = getOverduePOS(foundWeek).some(op => op.id === p.id);
+  const isOverdueNow = getOverduePOS(foundWeek, FULL_POS_DATA).some(op => op.id === p.id);
   const posModel = PosModel.toPosModel(p, { history, isOverdue: isOverdueNow });
   if (posModel.daysSinceLastVisit !== null) {
     const freqColors = { 'on-track': 'var(--green)', 'due-soon': 'var(--orange)', overdue: 'var(--red)' };
@@ -2767,7 +2888,7 @@ function closeAdminPOSDrawer() {
 function addAdminPosTask(posId, weekKey) {
   const val = document.getElementById('admin-pos-task-input')?.value.trim();
   if (!val) return;
-  const p = (posData[weekKey]||[]).find(x=>x.id===posId);
+  const p = (FULL_POS_DATA[weekKey]||[]).find(x=>x.id===posId);
   if (!p) return;
   p.taskState.push({text:val, src:'on_top', done:false, note:'Přidáno adminem'});
   const btn = document.querySelector('#admin-pos-sheet button[onclick^="addAdmin"]');
@@ -2776,7 +2897,7 @@ function addAdminPosTask(posId, weekKey) {
 }
 
 function setAdminMaterialStatus(posId, weekKey, section, itemId, status) {
-  const p = (posData[weekKey]||[]).find(x=>x.id===posId);
+  const p = (FULL_POS_DATA[weekKey]||[]).find(x=>x.id===posId);
   if (!p || !p.inventory) return;
   const item = (p.inventory[section]||[]).find(x=>x.id===itemId);
   if (!item) return;
@@ -2786,8 +2907,8 @@ function setAdminMaterialStatus(posId, weekKey, section, itemId, status) {
 
 // ── Make admin live list rows clickable ────────────────────────────────────
 function showTechPOSList(techName) {
-  // Show all POS for this technik in current week (demo: show LT's POS)
-  const all = posData['25'] || [];
+  // POS přiřazené KONKRÉTNÍMU technikovi (filtr přes Excel TECHNICIAN), ne celá firma.
+  const all = (FULL_POS_DATA['25'] || []).filter(p => p.assignedTechnician === techName);
   let html = `<div style="padding:20px 18px 32px">
     <div style="font-size:18px;font-weight:800;margin-bottom:4px">${techName}</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:16px">W25 · ${all.length} POS přiřazeno</div>`;
@@ -2851,10 +2972,10 @@ showAdmPage = function(p, btn) {
 
 // ── Auto init day/week on role enter ──────────────────────────────────────
 const _origEnterRole2 = enterRole;
-enterRole = function(role) {
+enterRole = function(role, opts) {
   autoSetCurrentDay();
   applyAssignments();
-  _origEnterRole2(role);
+  _origEnterRole2(role, opts);
 };
 
 
@@ -2910,6 +3031,7 @@ function bulkAssignSelected(day) {
 }
 
 function showPlanningView() {
+  cView = 'planning'; saveTechUIState();
   const wrap = document.getElementById('pos-list-wrap');
   wrap.innerHTML = '';
   const all = posData[cWeek] || [];
@@ -3009,7 +3131,7 @@ function makePlanCard(p, ri, selectable) {
     <div class="pci">
       ${checkbox}
       <div class="pinfo">
-        <div class="pname">${p.n}</div>
+        <div class="pname">${p.n} <span style="font-weight:600;color:var(--muted);font-size:11px">#${p.id}</span></div>
         <div class="paddr">${p.a}</div>
         <div class="pmeta">${typTag(p)}</div>
       </div>
@@ -3163,7 +3285,107 @@ showAdmPage = function(p, btn) {
     initEditor();
     showEditorSection('texty', document.querySelector('.ed-subnav'));
   }
+  if (p === 'import') renderImportSourceLabel();
 };
+
+// ══════════════════════════════════════════════════════
+// DATA IMPORT — Velín nahrání reálného Tourplan exportu (PART 2)
+// ══════════════════════════════════════════════════════
+// Statický web (GitHub Pages, žádný backend) — nahraný soubor se parsuje
+// čistě v prohlížeči (SheetJS) tou samou ExcelImport.buildPosWeeks() logikou,
+// která dnes zpracovává baked TOURPLAN_RAW. Po potvrzení se uloží do
+// localStorage a appka se reloadne, aby DataProvider načetl nová data jako
+// jediný zdroj pravdy (žádný paralelní fake dataset vedle reálného importu).
+let pendingImportRows = null, pendingImportFileName = null;
+
+function renderImportSourceLabel(){
+  const el = document.getElementById('import-source-label');
+  if(!el) return;
+  const src = DataProvider.getSource();
+  if(!src){ el.textContent = '—'; return; }
+  el.textContent = src.type === 'upload'
+    ? `Aktivní zdroj: nahraný soubor „${src.fileName}“ (${new Date(src.importedAt).toLocaleString('cs-CZ')})`
+    : `Aktivní zdroj: baked export „${src.fileName}“`;
+}
+
+function parseSheetRows(workbook){
+  const sheetName = workbook.SheetNames[0];
+  const sheet = workbook.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' });
+  // Odstraň prázdné řádky a hlavičkový řádek (pokud TERMINAL_ID/POS_ID
+  // nejsou čistě číselné, jde o popisek sloupce, ne reálný řádek dat).
+  const nonEmpty = rows.filter(r => r.some(c => String(c).trim() !== ''));
+  if(nonEmpty.length && nonEmpty[0].length >= 2){
+    const first = nonEmpty[0];
+    if(!/^\d+$/.test(String(first[0]).trim()) || !/^\d+$/.test(String(first[1]).trim())){
+      nonEmpty.shift();
+    }
+  }
+  return nonEmpty;
+}
+
+function handleImportFile(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const statusEl = document.getElementById('import-status');
+  statusEl.textContent = 'Načítám a parsuji soubor…';
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const workbook = XLSX.read(ev.target.result, { type: 'array' });
+      const rows = parseSheetRows(workbook);
+      ExcelImport.validateColumns(rows);
+      const { summary, warnings } = ExcelImport.buildPosWeeks(rows, POS_WEEK_KEYS, { currentWeek: CURRENT_OPS_WEEK, todayIdx: getTodayDayIdx() });
+      pendingImportRows = rows;
+      pendingImportFileName = file.name;
+      renderImportPreview(summary, warnings);
+      statusEl.textContent = `Soubor „${file.name}“ načten — ${rows.length} řádků.`;
+    } catch(err){
+      statusEl.textContent = `Chyba při zpracování souboru: ${err.message}`;
+      document.getElementById('import-preview-block').style.display = 'none';
+      pendingImportRows = null;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function renderImportPreview(summary, warnings){
+  const block = document.getElementById('import-preview-block');
+  block.style.display = 'block';
+  const kpis = document.getElementById('import-preview-kpis');
+  kpis.innerHTML = `
+    <div class="kpi"><div class="kpi-v">${summary.technicians}</div><div class="kpi-l">techniků</div></div>
+    <div class="kpi"><div class="kpi-v">${summary.posCount}</div><div class="kpi-l">POS</div></div>
+    <div class="kpi"><div class="kpi-v">${summary.terminalCount}</div><div class="kpi-l">terminálů</div></div>
+  `;
+  const checks = [
+    { ok: summary.posCount > 0, label: 'POS ID detekována' },
+    { ok: summary.terminalCount > 0, label: 'Terminal ID detekována' },
+    { ok: summary.technicians > 0, label: 'Technici namapováni' },
+    { ok: summary.missingAddress < summary.terminalCount, label: 'Adresy/oblasti detekovány' },
+  ];
+  document.getElementById('import-checklist').innerHTML = checks.map(c =>
+    `<div style="display:flex;align-items:center;gap:8px;font-size:13px;padding:4px 0;color:${c.ok ? 'var(--ok,#16a34a)' : 'var(--danger,#dc2626)'}">${c.ok ? '✓' : '✗'} ${c.label}</div>`
+  ).join('');
+  const warnEl = document.getElementById('import-warnings');
+  warnEl.innerHTML = warnings.length
+    ? `<div style="font-size:13px;color:var(--muted)"><strong>Upozornění:</strong><br>${warnings.map(w => `• ${w}`).join('<br>')}</div>`
+    : '';
+}
+
+function confirmImport(){
+  if(!pendingImportRows) return;
+  DataProvider.setOverride(pendingImportRows, pendingImportFileName);
+  location.reload();
+}
+
+function cancelImportPreview(){
+  pendingImportRows = null;
+  pendingImportFileName = null;
+  document.getElementById('import-preview-block').style.display = 'none';
+  document.getElementById('import-file-input').value = '';
+  document.getElementById('import-status').textContent = '';
+}
 
 // ── Landing screen: live stats + ambient background + mini control-center map ──
 (function initLandingScreen() {
@@ -3172,8 +3394,30 @@ showAdmPage = function(p, btn) {
   const totalPOS = landingTechs.reduce((s, t) => s + (t.total || 0), 0);
   const techEl = document.getElementById('rs-stat-tech-v');
   const posEl = document.getElementById('rs-stat-pos-v');
+  const badgeEl = document.getElementById('rs-badge');
   if (techEl) techEl.textContent = techCount;
   if (posEl) posEl.textContent = totalPOS;
+  if (badgeEl) badgeEl.textContent = `Tourplan W${CURRENT_OPS_WEEK} · ${techCount} techniků · ${totalPOS} POS`;
+
+  // Coverage + route time saved — reálně odvozeno (žádné statické "98%"/"37h").
+  const totalDone = landingTechs.reduce((s, t) => s + (t.done || 0), 0);
+  const covEl = document.getElementById('rs-stat-cov-v');
+  if (covEl) covEl.textContent = totalPOS ? `${Math.round(totalDone / totalPOS * 100)}%` : '—';
+  const savedEl = document.getElementById('rs-stat-saved-v');
+  const routes = buildAllDailyRoutes();
+  const fleet = Object.keys(routes).length ? RouteEngine.analyzeFleet(routes) : null;
+  if (savedEl) savedEl.textContent = fleet ? `${fleet.wastedHours.toFixed(0)}h` : '—';
+
+  const savedIntelEl = document.getElementById('rs-intel-saved');
+  if (savedIntelEl) savedIntelEl.textContent = fleet ? `Route optimization could save ${fleet.wastedHours.toFixed(0)}h this week` : 'No route data this week';
+  const overdueCount = landingTechs.filter(t => t.overdue).length;
+  const attentionEl = document.getElementById('rs-intel-attention');
+  if (attentionEl) attentionEl.textContent = `${overdueCount} technician${overdueCount === 1 ? '' : 's'} behind schedule`;
+  const covPct = totalPOS ? Math.round(totalDone / totalPOS * 100) : 0;
+  const covIntelEl = document.getElementById('rs-intel-cov');
+  const covDotEl = document.getElementById('rs-intel-cov-dot');
+  if (covIntelEl) covIntelEl.textContent = `Coverage this week: ${covPct}% (${covPct >= 70 ? 'on track' : 'behind'})`;
+  if (covDotEl) covDotEl.className = `rs-intel-dot ${covPct >= 70 ? 'rs-id-g' : 'rs-id-o'}`;
 
   function buildNetwork(dotsG, linesG, pts, alertIdx) {
     if (!dotsG || !linesG) return;

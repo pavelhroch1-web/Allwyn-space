@@ -15,13 +15,29 @@
 
   let cache = null;
 
+  // Velín může v "Import dat" nahrát novou Tourplan tabulku (PART 2) — uloží se
+  // do localStorage a od dalšího startu appky nahradí baked TOURPLAN_RAW.
+  // "source" rozlišuje, jestli appka běží na baked exportu, nebo na reálně
+  // nahraném souboru (zobrazeno v UI, žádné tiché přepnutí na fake data).
+  function loadOverride(){
+    try {
+      const raw = global.localStorage && global.localStorage.getItem('tourplanImportOverride');
+      if(!raw) return null;
+      const parsed = JSON.parse(raw);
+      if(Array.isArray(parsed.rows) && parsed.rows.length) return parsed;
+      return null;
+    } catch(e){ return null; }
+  }
+
   function build(opts){
     const ExcelImport = global.ExcelImport || (typeof require !== 'undefined' && require('./excelImport.js'));
-    const rawRows = global.TOURPLAN_RAW || (typeof require !== 'undefined' && require('./tourplanRaw.js'));
+    const override = loadOverride();
+    const rawRows = override ? override.rows : (global.TOURPLAN_RAW || (typeof require !== 'undefined' && require('./tourplanRaw.js')));
+    const source = override ? { type: 'upload', fileName: override.fileName, importedAt: override.importedAt } : { type: 'baked', fileName: 'Tourplan_week_2028.xlsx' };
     const weekKeys = opts.weekKeys;
     const { weeks, summary, warnings } = ExcelImport.buildPosWeeks(rawRows, weekKeys, opts);
     const technicianNames = Array.from(new Set(rawRows.map(r => (r[ExcelImport.COLS.TECHNICIAN] || '').trim()).filter(Boolean)));
-    return { weeks, summary, warnings, technicianNames };
+    return { weeks, summary, warnings, technicianNames, source };
   }
 
   // getPosWeeks(weekKeys, opts) -> { [week]: [posObj...] }
@@ -47,9 +63,28 @@
     return cache ? cache.warnings : [];
   }
 
+  // getSource() -> { type: 'baked'|'upload', fileName, importedAt? } — pro
+  // traceability (PART 7) a "Import dat" stránku (PART 2).
+  function getSource(){
+    return cache ? cache.source : null;
+  }
+
+  // setOverride(rows, fileName) -> uloží reálně nahraná data jako budoucí
+  // zdroj appky (vyžaduje reload, protože FULL_POS_DATA/posData v app.js
+  // jsou const naplněné jednou při startu).
+  function setOverride(rows, fileName){
+    if(!global.localStorage) return false;
+    global.localStorage.setItem('tourplanImportOverride', JSON.stringify({ rows, fileName, importedAt: new Date().toISOString() }));
+    return true;
+  }
+
+  function clearOverride(){
+    if(global.localStorage) global.localStorage.removeItem('tourplanImportOverride');
+  }
+
   function reset(){ cache = null; }
 
-  const DataProvider = { getPosWeeks, getTechnicianNames, getSummary, getWarnings, reset };
+  const DataProvider = { getPosWeeks, getTechnicianNames, getSummary, getWarnings, getSource, setOverride, clearOverride, reset };
 
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = DataProvider;
