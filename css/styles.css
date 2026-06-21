@@ -270,6 +270,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .det-name{font-size:18px;font-weight:800;letter-spacing:-.3px;line-height:1.2}
 .det-addr{font-size:12px;color:rgba(255,255,255,.5);margin-top:5px}
 .det-chips{display:flex;gap:7px;margin-top:11px;flex-wrap:wrap}
+.det-hours{font-size:12px;font-weight:700;margin-top:9px;display:none;align-items:center;gap:6px}
+.det-hours.show{display:flex}
+.det-hours.dh-open{color:var(--teal)}
+.det-hours.dh-closed{color:#ffb84d}
+.det-hours.dh-unknown{color:rgba(255,255,255,.45)}
 .chip{font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;display:flex;align-items:center;gap:4px}
 .ch-area{background:rgba(255,255,255,.1);color:rgba(255,255,255,.8)}
 .ch-day{background:rgba(46,205,192,.2);color:var(--teal)}

@@ -145,6 +145,11 @@
       frequencyCompliance: getFrequencyCompliance(daysSinceLastVisit).code,
       frequencyComplianceLabel: getFrequencyCompliance(daysSinceLastVisit).label,
       materials: getMaterials(p),
+      terminals: p.terminals || [],
+      // Tržby/priorita podle tržeb — schéma připravené, dokud Pavel nedodá
+      // reálná data zůstává null (žádný odhad, viz docs/PROJECT_CONTEXT.md §7.1).
+      salesValue: null,
+      priorityScore: null,
     };
   }
 

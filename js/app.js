@@ -575,7 +575,13 @@ function openDetail(ri){
   chips.push(`<span class="chip ch-area"><svg class="ic ic-sm"><use href="#ic-pin"/></svg> ${p.area||'—'}</span>`);
   if(p.d!==null&&p.d!==undefined) chips.push(`<span class="chip ch-day"><svg class="ic ic-sm"><use href="#ic-calendar"/></svg> ${DAYS[p.d]} ${m.dd[p.d]}</span>`);
   if(p.taskState.some(t=>t.src==='servis'&&!t.done)) chips.push(`<span class="chip ch-pri1"><svg class="ic ic-sm"><use href="#ic-wrench"/></svg> Servis</span>`);
+  if((p.terminals||[]).length) chips.push(`<span class="chip ch-typ"><svg class="ic ic-sm"><use href="#ic-monitor"/></svg> ${p.terminals.length>1?`${p.terminals.length} terminály`:`Terminál ${p.terminals[0].id}`}</span>`);
   document.getElementById('d-chips').innerHTML=chips.join('');
+  // otevírací doba — fakt o tom, co je teď, žádný odhad
+  const dHoursEl=document.getElementById('d-hours');
+  const statusInfo=getOpeningStatusInfo(p);
+  dHoursEl.className='det-hours show '+statusInfo.cls;
+  dHoursEl.innerHTML=`<svg class="ic ic-sm"><use href="#ic-clock"/></svg> ${statusInfo.text}`;
   // info
   document.getElementById('info-area').textContent=(p.area||'—')+' · '+p.k;
   document.getElementById('info-typ').textContent=p.typ==='CORN'?'Corn — zvláštní kanál':p.typ==='KA'?`Klíčový partner · ${p.partner}`:p.typ==='PETROL'?`Petrol · ${p.partner}`:'IDT — Independent Dealer';
@@ -2073,7 +2079,16 @@ function updatePosCount() {
 }
 function filterPosList(q) {
   const all = FULL_POS_DATA['25'] || [];
-  const filtered = q ? all.filter(p => p.n.toLowerCase().includes(q.toLowerCase()) || p.id.includes(q)).slice(0, 8) : all.slice(0, 8);
+  // POS ID je hlavní identifikátor — shody podle ID se zobrazí dřív než shody podle názvu.
+  let filtered;
+  if (q) {
+    const ql = q.toLowerCase();
+    const idMatches = all.filter(p => p.id.includes(q));
+    const nameMatches = all.filter(p => !p.id.includes(q) && p.n.toLowerCase().includes(ql));
+    filtered = idMatches.concat(nameMatches).slice(0, 8);
+  } else {
+    filtered = all.slice(0, 8);
+  }
   document.getElementById('ef-pos-list').innerHTML = filtered.map(p => `<div class="task-feed-item" style="cursor:pointer" onclick="selectPos('${p.id}','${p.n.replace(/'/g,"\\'")}',this)">
     <div class="tfi-body"><div class="tfi-title">${p.n}</div><div class="tfi-sub">${p.a}</div></div>
   </div>`).join('');
@@ -2662,6 +2677,55 @@ function getTodayDayIdx() {
   return d - 1; // Mon=0, Tue=1...Fri=4
 }
 
+// Celotýdenní index (Po=0..Ne=6) — na rozdíl od getTodayDayIdx() nevrací
+// null o víkendu. Potřeba pro "je POS otevřeno právě teď", kde víkend je
+// platný den (RouteEngine.DAY_KEYS i master data otevírací doby ho znají).
+function getFullWeekDayIdx() {
+  return (new Date().getDay() + 6) % 7; // Po=0...Ne=6
+}
+
+// getOpeningStatusInfo(p) -> { text, cls } pro zobrazení "otevřeno/zavřeno
+// právě teď" v detailu POS. Žádný fake default — bez master dat hlásí
+// neznámý stav, neodhaduje 08:00-18:00.
+function getOpeningStatusInfo(p){
+  const dayIdx = getFullWeekDayIdx();
+  const hours = RouteEngine.getOpeningHours(p, dayIdx);
+  if (hours === 'unknown') {
+    return { text: 'Otevírací dobu neznáme', cls: 'dh-unknown' };
+  }
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  if (hours === null) {
+    // dnes zavřeno celý den — najdi nejbližší další otevřený den
+    for (let i = 1; i <= 7; i++) {
+      const nextIdx = (dayIdx + i) % 7;
+      const nextHours = RouteEngine.getOpeningHours(p, nextIdx);
+      if (nextHours && nextHours !== 'unknown') {
+        const dayName = i === 1 ? 'zítra' : ['Po','Út','St','Čt','Pá','So','Ne'][nextIdx];
+        return { text: `Zavřeno — otevírá ${dayName} ${nextHours.from}`, cls: 'dh-closed' };
+      }
+    }
+    return { text: 'Zavřeno', cls: 'dh-closed' };
+  }
+  const openMin = Number(hours.from.slice(0,2))*60 + Number(hours.from.slice(3,5));
+  const closeMin = Number(hours.to.slice(0,2))*60 + Number(hours.to.slice(3,5));
+  if (nowMin >= openMin && nowMin <= closeMin) {
+    return { text: `Otevřeno do ${hours.to}`, cls: 'dh-open' };
+  }
+  if (nowMin < openMin) {
+    return { text: `Zavřeno — otevírá dnes ${hours.from}`, cls: 'dh-closed' };
+  }
+  for (let i = 1; i <= 7; i++) {
+    const nextIdx = (dayIdx + i) % 7;
+    const nextHours = RouteEngine.getOpeningHours(p, nextIdx);
+    if (nextHours && nextHours !== 'unknown') {
+      const dayName = i === 1 ? 'zítra' : ['Po','Út','St','Čt','Pá','So','Ne'][nextIdx];
+      return { text: `Zavřeno — otevírá ${dayName} ${nextHours.from}`, cls: 'dh-closed' };
+    }
+  }
+  return { text: 'Zavřeno', cls: 'dh-closed' };
+}
+
 function getCurrentWeekNum() {
   const d = new Date();
   const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
@@ -3231,7 +3295,19 @@ function showAdminPOSDetail(posId) {
       <div style="font-size:18px;font-weight:800">${p.n}</div>
       <div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:4px">${p.a}</div>
       ${p.partner ? `<div style="margin-top:8px"><span style="font-size:11px;font-weight:700;background:rgba(46,205,192,.2);color:var(--teal);padding:3px 9px;border-radius:20px">★ ${p.partner}</span></div>` : ''}
+      <div style="margin-top:8px;font-size:12px;font-weight:700">${(() => { const s = getOpeningStatusInfo(p); const color = s.cls==='dh-open'?'var(--teal)':s.cls==='dh-closed'?'#ffb84d':'rgba(255,255,255,.45)'; return `<span style="color:${color}">${s.text}</span>`; })()}</div>
     </div>
+
+    <!-- Terminály -->
+    ${(p.terminals||[]).length ? `<div style="background:white;border-radius:10px;padding:13px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.06)">
+      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Terminály (${p.terminals.length})</div>
+      ${p.terminals.map(t => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--bg)">
+        <svg class="ic ic-sm" style="color:var(--muted)"><use href="#ic-monitor"/></svg>
+        <div style="flex:1;font-size:13px;font-weight:700">${t.id}</div>
+        <div style="font-size:11px;color:var(--muted)">${t.type||'—'}</div>
+        <span style="font-size:10px;font-weight:700;color:${t.status==='active'?'var(--green)':'var(--muted)'}">${t.status==='active'?'Aktivní':t.status||'—'}</span>
+      </div>`).join('')}
+    </div>` : ''}
 
     <!-- Last visit summary -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
@@ -3857,7 +3933,7 @@ function renderPosMasterSourceLabel(){
   const src = DataProvider.getPosMasterSource();
   el.textContent = src
     ? `Aktivní zdroj: nahraný soubor „${src.fileName}“ (${new Date(src.importedAt).toLocaleString('cs-CZ')})`
-    : 'Žádná master data nenahrána — appka používá odhad GPS podle adresy a výchozí otevírací dobu 08:00-18:00.';
+    : 'Žádná master data nenahrána — appka pro tyto POS nemá reálné GPS ani otevírací dobu (zobrazí se jako odhad/neznámé, nepočítá se do trasy).';
 }
 
 function handlePosMasterImportFile(e){
@@ -3893,14 +3969,27 @@ function renderPosMasterPreview(summary, warnings){
     <div class="kpi"><div class="kpi-v">${summary.posCount - summary.missingCoords}</div><div class="kpi-l">s reálným GPS</div></div>
     <div class="kpi"><div class="kpi-v">${summary.posCount - summary.missingHours}</div><div class="kpi-l">s otevírací dobou</div></div>
   `;
+  const hasDuplicates = summary.duplicates > 0;
   const warnEl = document.getElementById('pos-master-warnings');
-  warnEl.innerHTML = warnings.length
-    ? `<div style="font-size:13px;color:var(--muted)"><strong>Upozornění:</strong><br>${warnings.map(w => `• ${w}`).join('<br>')}</div>`
-    : '';
+  const otherWarnings = warnings.filter(w => !w.includes('duplicitních'));
+  warnEl.innerHTML = (hasDuplicates
+    ? `<div style="font-size:13px;color:#cc2200;font-weight:700;margin-bottom:8px">⚠ Import zablokován — ${summary.duplicates} duplicitních POS ID (${summary.duplicateIds.slice(0,10).join(', ')}${summary.duplicateIds.length>10?'…':''}). Oprav soubor a nahraj znovu.</div>`
+    : '') +
+    (otherWarnings.length
+      ? `<div style="font-size:13px;color:var(--muted)"><strong>Upozornění:</strong><br>${otherWarnings.map(w => `• ${w}`).join('<br>')}</div>`
+      : '');
+  const confirmBtn = document.getElementById('pos-master-confirm-btn');
+  if (confirmBtn) {
+    confirmBtn.disabled = hasDuplicates;
+    confirmBtn.style.opacity = hasDuplicates ? '0.5' : '1';
+    confirmBtn.style.cursor = hasDuplicates ? 'not-allowed' : 'pointer';
+  }
 }
 
 function confirmPosMasterImport(){
   if(!pendingPosMasterRows) return;
+  const { summary } = PosMasterData.buildPosMasterMap(pendingPosMasterRows);
+  if (summary.duplicates > 0) return; // blokující chyba — tlačítko by mělo být disabled, ale ověř i tady
   DataProvider.setPosMasterOverride(pendingPosMasterRows, pendingPosMasterFileName);
   location.reload();
 }
