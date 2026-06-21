@@ -89,12 +89,20 @@
 
   // ── ROUTE CALCULATION ───────────────────────────────────────────────────
   // order: array of POS objects in the order they will be visited
-  function calculateRoute(order){
+  // startPoint: volitelný reálný výchozí bod technika (GPS/domov) — pokud
+  // chybí, trasa se počítá tak jako dřív (začíná na order[0] bez "cesty tam").
+  function calculateRoute(order, startPoint){
     if (!order.length) {
       return { order: [], legs: [], posCount: 0, drivingKm: 0, drivingMin: 0, workMin: 0, totalMin: 0 };
     }
     const legs = [];
     let drivingKm = 0, drivingMin = 0;
+    if (startPoint) {
+      const startLeg = currentProvider.getLeg(startPoint, order[0]);
+      legs.push({ from: 'start', to: order[0].id, ...startLeg });
+      drivingKm += startLeg.distanceKm;
+      drivingMin += startLeg.travelTimeMin;
+    }
     for (let i = 1; i < order.length; i++){
       const leg = currentProvider.getLeg(order[i-1], order[i]);
       legs.push({ from: order[i-1].id, to: order[i].id, ...leg });
@@ -138,10 +146,13 @@
   }
 
   // ── COMPARISON: current order vs optimized ───────────────────────────────
-  function compareRoutes(posList){
-    const current = calculateRoute(posList);
-    const optimizedOrder = nearestNeighborOrder(posList, posList[0]);
-    const optimized = calculateRoute(optimizedOrder);
+  // startPoint: volitelný reálný start technika. Bez něj se (jako dřív)
+  // porovnává proti prvnímu POS v seznamu — zachováno pro zpětnou kompatibilitu
+  // s fleet analytikou, která start technika ještě nezná.
+  function compareRoutes(posList, startPoint){
+    const current = calculateRoute(posList, startPoint);
+    const optimizedOrder = nearestNeighborOrder(posList, startPoint || posList[0]);
+    const optimized = calculateRoute(optimizedOrder, startPoint);
     return {
       before: current,
       after: optimized,
