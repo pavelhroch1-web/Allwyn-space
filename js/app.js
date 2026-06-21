@@ -63,9 +63,9 @@ for(const w of POS_WEEK_KEYS){
   FULL_POS_DATA[w] = (importedWeeks[w]||[]).map(p => augmentRawPos(p, p.assignedTechnician));
   posData[w] = FULL_POS_DATA[w].filter(p => p.assignedTechnician === PosModel.SOLE_REAL_TECHNICIAN);
 }
-// Add 2 servis tasks for demo
-if(posData['25']&&posData['25'][0]) posData['25'][0].taskState.push({text:'Výměna tiskové hlavy — terminál netiskne',src:'servis',done:false,note:'SRV-2841 · Urgentní · náhradní díl v autě'});
-if(posData['25']&&posData['25'][5]) posData['25'][5].taskState.push({text:'Terminál se nepřipojí k síti',src:'servis',done:false,note:'SRV-2839 · Zkontroluj kabel + SIM'});
+// Servisní úkoly (src:'servis') vznikají jen z reálného zdroje — Jira import
+// (budoucí fáze, viz docs/PROJECT_CONTEXT.md §7) nebo inventory "Chybí" →
+// auto-task. Žádné natvrdo vepsané demo tikety bez reálného zdroje.
 
 // Reálná jména techniků odvozená z Excel importu (FULL_POS_DATA), ne z
 // odpojeného demo souboru data.js — žádné paralelní fake datasety.
@@ -1790,9 +1790,17 @@ function renderAdminCasy() {
   const log = live.visitLog.slice(0, 12);
   const shorts = log.filter(v => v.flag === 'short').length;
   const avgDur = log.length ? Math.round(log.reduce((s, v) => s + v.dur, 0) / log.length) : 0;
+  const avgByChannel = (ch) => {
+    const list = log.filter(v => v.typ === ch);
+    return list.length ? Math.round(list.reduce((s, v) => s + v.dur, 0) / list.length) + 'm' : '—';
+  };
 
-  // Update stats
+  // Update stats — reálný přepočet z dnešního visit logu, žádné natvrdo
+  // zapsané hodnoty (žádný "Lán Tomáš nemá dnes IDT" = vymyšlené číslo).
   document.getElementById('adm-shorts').textContent = shorts;
+  const idtEl = document.getElementById('adm-avg-idt'); if (idtEl) idtEl.textContent = avgByChannel('IDT');
+  const kaEl = document.getElementById('adm-avg-ka'); if (kaEl) kaEl.textContent = avgByChannel('KA');
+  const visitEl = document.getElementById('adm-avg-visit'); if (visitEl) visitEl.textContent = log.length ? avgDur + 'm' : '—';
 
   const el = document.getElementById('adm-casy-list'); if (!el) return;
   const ds = live.dayStart;
@@ -1800,8 +1808,6 @@ function renderAdminCasy() {
 
   if (!ds && !log.length) {
     el.innerHTML = '<div class="empty"><div class="empty-t">Zatím žádné check-iny dnes</div></div>';
-    const statCards = document.querySelectorAll('#adm-casy .sgrid .scard');
-    if (statCards[2]) { statCards[2].querySelector('.sv').textContent = '—'; }
     return;
   }
 
@@ -1824,10 +1830,6 @@ function renderAdminCasy() {
   }
 
   el.innerHTML = html;
-
-  // Update summary stats
-  const statCards = document.querySelectorAll('#adm-casy .sgrid .scard');
-  if (statCards[2]) { statCards[2].querySelector('.sv').textContent = avgDur + 'm'; }
 }
 
 // ══════════════════════════════════════════════════════
@@ -2180,15 +2182,7 @@ function renderSchvaleni() {
     items.push({ p, ci, supply, photos, shortVisit, approval, isReal: true });
   });
 
-  // Mock approved visits for demo
-  const mockVisits = [
-    { posName: 'Jiří Kohl, Police nad Metují', time: '07:14–07:38', dur: 24, typ: 'IDT', photos: 2, supply: null, approval: 'ok' },
-    { posName: 'Obec Stará Paka', time: '08:02–08:29', dur: 27, typ: 'IDT', photos: 2, supply: null, approval: 'ok' },
-    { posName: 'Městys Častolovice', time: '09:11–09:19', dur: 8, typ: 'IDT', photos: 0, supply: null, approval: null, flag: 'short' },
-    { posName: 'Shell Hradec Králové', time: '11:20–12:05', dur: 45, typ: 'PETROL', photos: 3, supply: { receiver: 'Pan Dvořák' }, approval: null },
-  ];
-
-  const waiting = mockVisits.filter(v => !v.approval).length + items.filter(x => !x.approval).length;
+  const waiting = items.filter(x => !x.approval).length;
   const countEl = document.getElementById('schvaleni-count');
   if (countEl) countEl.textContent = waiting + ' čeká';
 
@@ -2217,44 +2211,12 @@ function renderSchvaleni() {
     </div>`;
   });
 
-  // Mock items
-  mockVisits.forEach((v, i) => {
-    const apprBadge = v.approval === 'ok' ? '<span class="approval-badge appr-ok">✓ Schváleno</span>' : v.flag === 'short' ? '<span class="approval-badge appr-wait"><svg class="ic ic-sm"><use href="#ic-warning"/></svg> Čeká — krátká</span>' : '<span class="approval-badge appr-wait"><svg class="ic ic-sm"><use href="#ic-clock"/></svg> Čeká</span>';
-    const flags = [];
-    if (v.flag === 'short') flags.push('<svg class="ic ic-sm"><use href="#ic-warning"/></svg> Pouze ' + v.dur + ' min');
-    if (!v.photos) flags.push('<svg class="ic ic-sm"><use href="#ic-camera"/></svg> Bez fotek');
-    html += `<div style="padding:14px;border-bottom:1px solid var(--bg)">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px">
-        <div>
-          <div style="font-size:13px;font-weight:700">${v.posName}</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:2px">${v.time} · ${v.dur} min · ${v.photos} fotek · ${v.typ}</div>
-          ${flags.length ? `<div style="margin-top:5px">${flags.map(f => `<span style="font-size:10px;font-weight:700;background:var(--ol);color:var(--orange);padding:2px 6px;border-radius:10px;margin-right:4px">${f}</span>`).join('')}</div>` : ''}
-          ${v.supply ? `<div style="margin-top:5px;font-size:11px;color:var(--green)"><svg class="ic ic-sm"><use href="#ic-edit"/></svg> Zásobování podepsáno: ${v.supply.receiver}</div>` : ''}
-        </div>
-        ${apprBadge}
-      </div>
-      ${!v.approval ? `<div style="display:flex;gap:8px">
-        <button onclick="approveMock(${i},'ok',this)" style="flex:1;padding:9px;background:var(--gl);color:var(--green);border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">✓ Schválit</button>
-        <button onclick="approveMock(${i},'rej',this)" style="flex:1;padding:9px;background:var(--rl);color:var(--red);border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">✕ Zamítnout</button>
-      </div>` : ''}
-    </div>`;
-  });
-
   el.innerHTML = html || '<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">Žádné návštěvy ke schválení.</div>';
 }
 
 function approveVisit(posId, decision) {
   lss('approval_' + posId, decision);
   renderSchvaleni();
-}
-function approveMock(idx, decision, btn) {
-  const row = btn.closest('div[style*="padding:14px"]');
-  if (row) {
-    const btnWrap = btn.parentElement;
-    btnWrap.innerHTML = decision === 'ok'
-      ? '<span class="approval-badge appr-ok" style="display:block;text-align:center;padding:9px">✓ Schváleno</span>'
-      : '<span class="approval-badge appr-rej" style="display:block;text-align:center;padding:9px">✕ Zamítnuto</span>';
-  }
 }
 
 // ══════════════════════════════════════════════════════
