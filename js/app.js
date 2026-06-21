@@ -340,7 +340,7 @@ function applyRoute(){
         document.getElementById('t-list').style.display='block';
         if(saved&&saved.view==='planning') showPlanningView();
         else if(saved&&saved.view==='overdue') showOverdue();
-        else renderList();
+        else renderList(); // 'route' view se po refreshu vrací na denní plán (mapa se inicializuje znovu při otevření)
       }
     } else {
       goHome();
@@ -2709,7 +2709,10 @@ function getVisitHistory(posId) {
 function routeOrderKey(week, day){ return `route_order_${week}_${day}`; }
 function getStoredRouteOrder(week, day){ return lsg(routeOrderKey(week, day)); }
 function setStoredRouteOrder(week, day, ids){ lss(routeOrderKey(week, day), ids); }
-function resetRouteOrder(week, day){ localStorage.removeItem(routeOrderKey(week, day)); renderList(); }
+function resetRouteOrder(week, day){
+  localStorage.removeItem(routeOrderKey(week, day));
+  if (cView === 'route') showRouteView(week, day); else renderList();
+}
 
 function applyStoredRouteOrder(dayPos, week, day){
   const ids = getStoredRouteOrder(week, day);
@@ -2720,18 +2723,10 @@ function applyStoredRouteOrder(dayPos, week, day){
   return ordered;
 }
 
-function optimizeRoute(week, day){
-  const all = posData[week] || [];
-  const dayPos = applyStoredRouteOrder(all.filter(p => p.d === day), week, day);
-  if (dayPos.length < 2) return;
-  const cmp = RouteEngine.compareRoutes(dayPos);
-  setStoredRouteOrder(week, day, cmp.optimizedOrderIds);
-  renderList();
-}
-
 function buildRouteSummaryCard(dayPos, week, day){
   if (dayPos.length < 2) return null;
-  const cmp = RouteEngine.compareRoutes(dayPos);
+  const startLoc = getStartLocation();
+  const cmp = RouteEngine.compareRoutes(dayPos, startLoc);
   const hasStoredOrder = !!getStoredRouteOrder(week, day);
   const showOptimize = cmp.savedKm > 0.5;
   const el = document.createElement('div');
@@ -2748,13 +2743,213 @@ function buildRouteSummaryCard(dayPos, week, day){
     ${showOptimize ? `
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
       <div style="font-size:12px;color:var(--teal);font-weight:700;display:flex;align-items:center;gap:5px">
-        <svg class="ic ic-sm"><use href="#ic-target"/></svg> Ušetříš ${RouteEngine.formatKm(cmp.savedKm)} · ${RouteEngine.formatHM(cmp.savedMin)}
+        <svg class="ic ic-sm"><use href="#ic-target"/></svg> Příležitost: ušetříš až ${RouteEngine.formatKm(cmp.savedKm)} · ${RouteEngine.formatHM(cmp.savedMin)}
       </div>
-      <button onclick="optimizeRoute('${week}',${day})" style="background:var(--teal);color:var(--navy);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0">Optimalizovat trasu</button>
-    </div>` : hasStoredOrder ? `
-    <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:12px;color:var(--muted)">Trasa je optimalizovaná. <a href="#" onclick="event.preventDefault();resetRouteOrder('${week}',${day})" style="color:var(--teal);font-weight:700">Vrátit původní pořadí</a></div>` : ''}
+      <button onclick="showRouteView('${week}',${day})" style="background:var(--teal);color:var(--navy);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0">Zobrazit trasu</button>
+    </div>` : `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+      <div style="font-size:12px;color:var(--muted)">${hasStoredOrder ? 'Pořadí upraveno technikem.' : 'Trasa je v aktuálním pořadí.'}</div>
+      <button onclick="showRouteView('${week}',${day})" style="background:none;color:var(--teal);border:1.5px solid var(--teal);border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0">Upravit trasu</button>
+    </div>`}
   `;
   return el;
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// ROUTE INTELLIGENCE — výchozí pozice technika (ráno: GPS nebo uložená výchozí)
+// ══════════════════════════════════════════════════════════════════════════
+function startLocationKey(){
+  const s = getSession();
+  return 'start_location_' + ((s && s.user && s.user.id) || 'default');
+}
+function getStartLocation(){ return lsg(startLocationKey()); }
+function setStartLocation(lat, lng, source){
+  const loc = { lat, lng, source, date: today(), ts: Date.now() };
+  lss(startLocationKey(), loc);
+  return loc;
+}
+function isStartLocationFresh(){
+  const loc = getStartLocation();
+  return !!(loc && loc.date === today());
+}
+function captureStartLocation(cb){
+  const el = document.getElementById('route-start-status');
+  if (!navigator.geolocation){
+    if (el) el.innerHTML = '<span class="gps-badge gps-warn"><svg class="ic ic-sm"><use href="#ic-warning"/></svg> GPS nedostupná</span>';
+    if (cb) cb(null);
+    return;
+  }
+  if (el) el.innerHTML = '<span class="gps-badge gps-loading"><svg class="ic ic-sm"><use href="#ic-signal"/></svg> Zjišťuji polohu…</span>';
+  navigator.geolocation.getCurrentPosition(
+    pos => { const loc = setStartLocation(pos.coords.latitude, pos.coords.longitude, 'gps'); if (cb) cb(loc); },
+    () => { if (el) el.innerHTML = '<span class="gps-badge gps-warn"><svg class="ic ic-sm"><use href="#ic-warning"/></svg> Poloha zamítnuta</span>'; if (cb) cb(null); },
+    { enableHighAccuracy: true, timeout: 8000 }
+  );
+}
+
+// ── Sledování, jestli technik doporučenou trasu použil, nebo si nechal svoje
+// pořadí — pro pozdější analýzu, NIKDY ne pro hodnocení/postih jednotlivce. ──
+function recordRouteDecision(week, day, decision){
+  lss(`route_decision_${week}_${day}`, { decision, ts: Date.now() });
+}
+
+// ── Manuální přeřazení pořadí (nahoru/dolů) ─────────────────────────────────
+function moveRouteStop(week, day, posId, dir){
+  const all = posData[week] || [];
+  const dayPos = applyStoredRouteOrder(all.filter(p => p.d === day), week, day);
+  const idx = dayPos.findIndex(p => p.id === posId);
+  const swapIdx = idx + dir;
+  if (idx < 0 || swapIdx < 0 || swapIdx >= dayPos.length) return;
+  [dayPos[idx], dayPos[swapIdx]] = [dayPos[swapIdx], dayPos[idx]];
+  setStoredRouteOrder(week, day, dayPos.map(p => p.id));
+  showRouteView(week, day);
+}
+
+function useRecommendedRoute(week, day){
+  const all = posData[week] || [];
+  const dayPos = applyStoredRouteOrder(all.filter(p => p.d === day), week, day);
+  const cmp = RouteEngine.compareRoutes(dayPos, getStartLocation());
+  setStoredRouteOrder(week, day, cmp.optimizedOrderIds);
+  recordRouteDecision(week, day, 'accepted');
+  showRouteView(week, day);
+}
+function keepMyRoute(week, day){
+  recordRouteDecision(week, day, 'kept');
+  showRouteView(week, day);
+}
+
+// ── Mapa trasy (Leaflet) — vizuální pomůcka: výchozí bod + zastávky v pořadí + spojnice ──
+let techRouteMap = null;
+function renderRouteMap(dayPos, startLoc){
+  const mapEl = document.getElementById('route-map');
+  if (!mapEl) return;
+  if (techRouteMap) { techRouteMap.remove(); techRouteMap = null; }
+  const stops = dayPos.filter(p => p.lat && p.lng);
+  if (!stops.length) {
+    mapEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">Mapa nedostupná — POS nemají GPS souřadnice.</div>';
+    return;
+  }
+  try {
+    techRouteMap = L.map('route-map', { zoomControl: true, attributionControl: false });
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 18 }).addTo(techRouteMap);
+    const coords = [];
+    if (startLoc) {
+      coords.push([startLoc.lat, startLoc.lng]);
+      const startIcon = L.divIcon({ className: '', html: '<div style="width:26px;height:26px;background:var(--navy);border-radius:50%;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.4)">START</div>', iconSize: [26, 26], iconAnchor: [13, 13] });
+      L.marker([startLoc.lat, startLoc.lng], { icon: startIcon }).addTo(techRouteMap).bindPopup('Tvůj výchozí bod');
+    }
+    stops.forEach((p, i) => {
+      coords.push([p.lat, p.lng]);
+      const icon = L.divIcon({ className: '', html: `<div style="width:26px;height:26px;background:var(--teal);border-radius:50%;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:var(--navy);box-shadow:0 2px 6px rgba(0,0,0,.4)">${i + 1}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] });
+      L.marker([p.lat, p.lng], { icon }).addTo(techRouteMap).bindPopup(`<b>${i + 1}. ${p.n}</b><br>#${p.id}`);
+    });
+    if (coords.length > 1) {
+      L.polyline(coords, { color: '#2ECDC0', weight: 3, opacity: 0.85, dashArray: '6,6' }).addTo(techRouteMap);
+    }
+    techRouteMap.fitBounds(L.latLngBounds(coords), { padding: [28, 28] });
+  } catch (e) { console.warn('Route map init failed', e); }
+}
+
+// ── Dedikovaná obrazovka trasy: výchozí bod + ruční pořadí + mapa + porovnání ──
+function showRouteView(week, day){
+  cView = 'route'; saveTechUIState();
+  const wrap = document.getElementById('pos-list-wrap');
+  wrap.innerHTML = '';
+  const all = posData[week] || [];
+  const dayPos = applyStoredRouteOrder(all.filter(p => p.d === day), week, day);
+  const startLoc = getStartLocation();
+  const meta = WEEKS_META[week];
+
+  const back = document.createElement('div');
+  back.style.cssText = 'padding:10px 12px 4px';
+  back.innerHTML = `<button onclick="renderList()" style="background:none;border:none;color:var(--td);font-size:13px;font-weight:700;cursor:pointer">← Zpět na denní plán</button>`;
+  wrap.appendChild(back);
+
+  const hdr = document.createElement('div');
+  hdr.style.cssText = 'padding:4px 16px 8px';
+  hdr.innerHTML = `<div style="font-size:16px;font-weight:800;color:var(--navy)">Trasa · ${DAYS[day]} ${meta.dd[day]}</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:2px">Pořadí si určuješ ty. Doporučení je jen návrh.</div>`;
+  wrap.appendChild(hdr);
+
+  // Výchozí bod
+  const startCard = document.createElement('div');
+  startCard.style.cssText = 'margin:0 12px 10px;padding:12px;background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:12px';
+  startCard.innerHTML = `
+    <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:6px">Odkud dnes vyjíždíš?</div>
+    <div id="route-start-status" style="margin-bottom:8px">${startLoc
+      ? `<span class="gps-badge gps-ok">✓ ${isStartLocationFresh() ? 'Dnešní pozice' : 'Uložená pozice'} · ${startLoc.lat.toFixed(3)}, ${startLoc.lng.toFixed(3)}</span>`
+      : '<span class="gps-badge gps-warn"><svg class="ic ic-sm"><use href="#ic-warning"/></svg> Pozice nezjištěna</span>'}</div>
+    <button onclick="captureStartLocation(()=>showRouteView('${week}',${day}))" style="width:100%;padding:9px;background:var(--navy);color:var(--teal);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Zjistit moji pozici</button>
+  `;
+  wrap.appendChild(startCard);
+
+  if (dayPos.length < 1) {
+    const e = document.createElement('div');
+    e.className = 'empty';
+    e.innerHTML = `<div class="empty-t">Žádné POS na tento den</div>`;
+    wrap.appendChild(e);
+    return;
+  }
+
+  // Mapa
+  const mapWrap = document.createElement('div');
+  mapWrap.style.cssText = 'margin:0 12px 10px;border-radius:12px;overflow:hidden;border:1.5px solid var(--border)';
+  mapWrap.innerHTML = `<div id="route-map" style="height:240px"></div>`;
+  wrap.appendChild(mapWrap);
+  setTimeout(() => renderRouteMap(dayPos, startLoc), 50);
+
+  // Porovnání + volba (jen pokud je co porovnávat a je víc než 1 zastávka)
+  if (dayPos.length > 1) {
+    const cmp = RouteEngine.compareRoutes(dayPos, startLoc);
+    const showOpportunity = cmp.savedKm > 0.5;
+    const cmpCard = document.createElement('div');
+    cmpCard.style.cssText = 'margin:0 12px 10px;padding:14px;background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:12px';
+    cmpCard.innerHTML = showOpportunity ? `
+      <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px"><svg class="ic ic-sm" style="color:var(--teal)"><use href="#ic-target"/></svg> Optimalizační příležitost</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div><div style="font-size:11px;color:var(--muted)">Tvoje pořadí</div><div style="font-size:14px;font-weight:700">${RouteEngine.formatKm(cmp.before.drivingKm)} · ${RouteEngine.formatHM(cmp.before.drivingMin)}</div></div>
+        <div><div style="font-size:11px;color:var(--muted)">Doporučené pořadí</div><div style="font-size:14px;font-weight:700;color:var(--teal)">${RouteEngine.formatKm(cmp.after.drivingKm)} · ${RouteEngine.formatHM(cmp.after.drivingMin)}</div></div>
+      </div>
+      <div style="font-size:12px;color:var(--teal);font-weight:700;margin-bottom:10px">Ušetříš ${RouteEngine.formatKm(cmp.savedKm)} · ${RouteEngine.formatHM(cmp.savedMin)}</div>
+      <div style="display:flex;gap:8px">
+        <button onclick="useRecommendedRoute('${week}',${day})" style="flex:1;padding:10px;background:var(--teal);color:var(--navy);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Použít doporučenou trasu</button>
+        <button onclick="keepMyRoute('${week}',${day})" style="flex:1;padding:10px;background:none;color:var(--td);border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Nechat moje pořadí</button>
+      </div>
+    ` : `<div style="font-size:12px;color:var(--muted)">Tvoje pořadí je už efektivní — žádná lepší alternativa k nabídnutí.</div>`;
+    wrap.appendChild(cmpCard);
+  }
+
+  if (getStoredRouteOrder(week, day)) {
+    const resetRow = document.createElement('div');
+    resetRow.style.cssText = 'margin:0 12px 6px;font-size:12px;color:var(--muted)';
+    resetRow.innerHTML = `<a href="#" onclick="event.preventDefault();resetRouteOrder('${week}',${day})" style="color:var(--teal);font-weight:700">Vrátit původní pořadí</a>`;
+    wrap.appendChild(resetRow);
+  }
+
+  // Seznam zastávek s ručním přeřazením
+  const lbl = document.createElement('div');
+  lbl.className = 'sec-lbl';
+  lbl.textContent = `Pořadí zastávek (${dayPos.length})`;
+  wrap.appendChild(lbl);
+
+  dayPos.forEach((p, i) => {
+    const row = document.createElement('div');
+    row.className = 'pos-card';
+    row.style.cursor = 'default';
+    row.innerHTML = `
+      <div class="pci">
+        <div style="width:26px;height:26px;border-radius:50%;background:var(--tl);color:var(--navy);font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i + 1}</div>
+        <div class="pinfo">
+          <div class="pname">${p.n} <span style="font-weight:600;color:var(--muted);font-size:11px">#${p.id}</span></div>
+          <div class="paddr">${p.a}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0">
+          <button onclick="moveRouteStop('${week}',${day},'${p.id}',-1)" ${i === 0 ? 'disabled' : ''} style="width:30px;height:26px;border:1px solid var(--border);background:#fff;border-radius:6px;cursor:${i === 0 ? 'default' : 'pointer'};opacity:${i === 0 ? .35 : 1};font-size:13px;font-weight:700">↑</button>
+          <button onclick="moveRouteStop('${week}',${day},'${p.id}',1)" ${i === dayPos.length - 1 ? 'disabled' : ''} style="width:30px;height:26px;border:1px solid var(--border);background:#fff;border-radius:6px;cursor:${i === dayPos.length - 1 ? 'default' : 'pointer'};opacity:${i === dayPos.length - 1 ? .35 : 1};font-size:13px;font-weight:700">↓</button>
+        </div>
+      </div>`;
+    wrap.appendChild(row);
+  });
 }
 
 // ══════════════════════════════════════════════════════════════════════════
