@@ -276,7 +276,7 @@ function enterRole(role,opts){
   } else {
     document.getElementById('technik-screen').classList.remove('active');
     document.getElementById('admin-screen').style.display='block';
-    renderAdminDashboard();renderAdminLive();renderAdminAlerts();renderAdminTechnici();renderAdminCasy();renderAdminFoto();
+    renderAdminDashboard();renderAdminLive();renderAdminAlerts();renderAdminCasy();renderAdminFoto();
     setTimeout(initAdminMap,300);
   }
   pushRoute();
@@ -293,9 +293,7 @@ function showAdmPage(p,btn){
   document.querySelectorAll('.adm-btn').forEach(x=>x.classList.remove('active'));
   document.getElementById('adm-'+p).classList.add('active');
   btn.classList.add('active');
-  if(p==='live'&&!adminMap) setTimeout(initAdminMap,100);
-  if(p==='casy') renderAdminCasy();
-  if(p==='dashboard') renderAdminDashboard();
+  if(p==='dashboard'){ renderAdminDashboard(); renderAdminLive(); renderAdminCasy(); if(!adminMap) setTimeout(initAdminMap,100); }
   if(p==='posnet') renderAdminPosNet();
   pushRoute();
 }
@@ -1542,30 +1540,6 @@ function renderAdminLive() {
       <div class="tinf">
         <div class="tn">${t.name}${isLT ? ' <span style="font-size:9px;background:var(--teal);color:var(--navy);padding:1px 5px;border-radius:10px;font-weight:800">LIVE</span>' : ''}</div>
         <div class="ts">${t.activityLabel}${currentPosLabel}</div>
-      </div>
-      <div class="tr-right">
-        <div class="mp"><div class="mpbg"><div class="mpf ${t.done === t.total ? 'gn' : t.overdue ? 'rd' : ''}" style="width:${t.pct}%"></div></div><div class="mpp">${t.pct}%</div></div>
-        ${badge}
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function renderAdminTechnici() {
-  adminTechnicians = deriveAllTechnicians();
-  const countEl = document.getElementById('adm-technici-count');
-  if (countEl) countEl.textContent = adminTechnicians.length + ' aktivních';
-  document.getElementById('adm-all-list').innerHTML = adminTechnicians.map(t => {
-    const isLT = t.name === PosModel.SOLE_REAL_TECHNICIAN;
-    const badge = t.done === t.total ? '<span class="badge b-done">✓ Hotovo</span>'
-      : t.overdue ? '<span class="badge b-beh">⚠ Pozadu</span>'
-      : t.done > 0 ? '<span class="badge b-act">● Aktivní</span>'
-      : '<span class="badge b-wait">○ Nezačal</span>';
-    return `<div class="tr" onclick="showTechDetail('${t.name}')">
-      <div class="tav ${t.overdue ? 'ov' : ''}" style="${isLT ? 'background:var(--teal);color:var(--navy)' : ''}">${t.initials}</div>
-      <div class="tinf">
-        <div class="tn">${t.name}</div>
-        <div class="ts">${t.activityLabel}</div>
       </div>
       <div class="tr-right">
         <div class="mp"><div class="mpbg"><div class="mpf ${t.done === t.total ? 'gn' : t.overdue ? 'rd' : ''}" style="width:${t.pct}%"></div></div><div class="mpp">${t.pct}%</div></div>
@@ -3451,20 +3425,6 @@ renderAdminLive = function() {
     const name = row.querySelector('.tn')?.textContent?.replace(' LIVE','').trim();
     if (name) row.onclick = () => showTechPOSList(name);
   });
-};
-
-// ── Patch showAdmPage to wire up technici ─────────────────────────────────
-const ____origShowAdmPage = showAdmPage;
-showAdmPage = function(p, btn) {
-  ____origShowAdmPage(p, btn);
-  if (p === 'technici') {
-    setTimeout(() => {
-      document.querySelectorAll('#adm-all-list .tr').forEach(row => {
-        const name = row.querySelector('.tn')?.textContent?.trim();
-        if (name) row.style.cursor = 'pointer', row.onclick = () => showTechPOSList(name);
-      });
-    }, 100);
-  }
 };
 
 // ── Auto init day/week on role enter ──────────────────────────────────────

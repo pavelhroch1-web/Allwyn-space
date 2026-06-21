@@ -512,13 +512,10 @@
   <div class="adm-hdr">
     <div class="adm-logo"><div class="adm-a">a</div><div class="adm-title">allwyn <span>space</span> · velín</div></div>
     <div class="adm-nav">
-      <button class="adm-btn active" onclick="showAdmPage('dashboard',this)"><svg class="ic ic-sm"><use href="#ic-dashboard"/></svg> Dashboard</button>
+      <button class="adm-btn active" onclick="showAdmPage('dashboard',this)"><svg class="ic ic-sm"><use href="#ic-dashboard"/></svg> Velín Home</button>
       <button class="adm-btn" onclick="showAdmPage('posnet',this)"><svg class="ic ic-sm"><use href="#ic-pin"/></svg> POS Síť</button>
       <button class="adm-btn" onclick="showAdmPage('import',this)"><svg class="ic ic-sm"><use href="#ic-upload"/></svg> Import dat</button>
-      <button class="adm-btn" onclick="showAdmPage('live',this)"><svg class="ic ic-sm"><use href="#ic-live"/></svg> Live</button>
       <button class="adm-btn" onclick="showAdmPage('alerts',this)"><svg class="ic ic-sm"><use href="#ic-warning"/></svg> Flagy</button>
-      <button class="adm-btn" onclick="showAdmPage('technici',this)"><svg class="ic ic-sm"><use href="#ic-team"/></svg> Technici</button>
-      <button class="adm-btn" onclick="showAdmPage('casy',this)"><svg class="ic ic-sm"><use href="#ic-clock"/></svg> Časy</button>
       <button class="adm-btn" onclick="showAdmPage('foto',this)"><svg class="ic ic-sm"><use href="#ic-camera"/></svg> Fotky</button>
       <button class="adm-btn" onclick="showAdmPage('redakce',this)"><svg class="ic ic-sm"><use href="#ic-edit"/></svg> Úkoly</button>
       <button class="adm-btn" onclick="showAdmPage('ai',this)"><svg class="ic ic-sm"><use href="#ic-intel"/></svg> Intelligence</button>
@@ -551,6 +548,37 @@
       <div class="kpi-grid" id="dash-kpis"></div>
 
       <div class="dash-block">
+        <div class="dash-block-t"><svg class="ic"><use href="#ic-live"/></svg> Technici v terénu</div>
+        <div class="rf-wrap">
+          <div class="rf-lbl">Filtr regionu</div>
+          <div class="rf-row" id="rf-row">
+            <button class="rfb active" onclick="filterRegion('all',this)">Celá ČR</button>
+            <button class="rfb" onclick="filterRegion('RSA',this)">RSA</button>
+            <button class="rfb" onclick="filterRegion('RSB',this)">RSB</button>
+            <button class="rfb" onclick="filterRegion('RSC',this)">RSC</button>
+            <button class="rfb" onclick="filterRegion('RSD',this)">RSD</button>
+            <button class="rfb" onclick="filterRegion('RSE',this)">RSE</button>
+            <button class="rfb" onclick="filterRegion('RSG',this)">RSG</button>
+          </div>
+        </div>
+        <div class="sgrid">
+          <div class="scard t"><div class="sv" id="adm-active">—</div><div class="sl">Aktivní</div></div>
+          <div class="scard g"><div class="sv" id="adm-done-n">—</div><div class="sl">Splněno dnes</div></div>
+          <div class="scard r"><div class="sv" id="adm-behind">—</div><div class="sl">Pozadu</div></div>
+          <div class="scard o"><div class="sv" id="adm-svc-open">—</div><div class="sl">Servis čeká</div></div>
+        </div>
+        <div class="map-box">
+          <div class="map-hdr">
+            <div class="map-hdr-t">Technici v terénu — W25</div>
+            <div class="live-badge"><div class="live-dot"></div>LIVE</div>
+          </div>
+          <div id="admin-map" style="height:260px"></div>
+        </div>
+        <div class="adm-sh"><div class="adm-st">Aktuální stav</div><div class="adm-sc" id="live-wlbl">Týden 25</div></div>
+        <div class="cw" id="adm-live-list"></div>
+      </div>
+
+      <div class="dash-block">
         <div class="dash-block-t"><svg class="ic"><use href="#ic-route"/></svg> Plnění podle kanálu</div>
         <div id="dash-channels"></div>
       </div>
@@ -558,6 +586,18 @@
       <div class="dash-block">
         <div class="dash-block-t"><svg class="ic"><use href="#ic-trophy"/></svg> Výkon techniků</div>
         <div class="lb-grid" id="dash-leaderboard"></div>
+      </div>
+
+      <div class="dash-block">
+        <div class="dash-block-t"><svg class="ic"><use href="#ic-clock"/></svg> Časy — dnešní přehled</div>
+        <div class="sgrid">
+          <div class="scard t"><div class="sv" id="adm-avg-idt">—</div><div class="sl">Průměr IDT — dnes</div></div>
+          <div class="scard"><div class="sv" id="adm-avg-ka">—</div><div class="sl">Průměr KA — dnes</div></div>
+          <div class="scard g"><div class="sv" id="adm-avg-visit">—</div><div class="sl">Avg. návštěva — dnes</div></div>
+          <div class="scard r"><div class="sv" id="adm-shorts">0</div><div class="sl">Krátké &lt;10m</div></div>
+        </div>
+        <div class="adm-sh"><div class="adm-st">Lán Tomáš — dnešní přehled</div></div>
+        <div class="cw" id="adm-casy-list"></div>
       </div>
 
       <div class="dash-block">
@@ -636,61 +676,11 @@
       </div>
     </div>
 
-    <!-- LIVE -->
-    <div class="adm-page" id="adm-live">
-      <div class="rf-wrap">
-        <div class="rf-lbl">Filtr regionu</div>
-        <div class="rf-row" id="rf-row">
-          <button class="rfb active" onclick="filterRegion('all',this)">Celá ČR</button>
-          <button class="rfb" onclick="filterRegion('RSA',this)">RSA</button>
-          <button class="rfb" onclick="filterRegion('RSB',this)">RSB</button>
-          <button class="rfb" onclick="filterRegion('RSC',this)">RSC</button>
-          <button class="rfb" onclick="filterRegion('RSD',this)">RSD</button>
-          <button class="rfb" onclick="filterRegion('RSE',this)">RSE</button>
-          <button class="rfb" onclick="filterRegion('RSG',this)">RSG</button>
-        </div>
-      </div>
-      <div class="sgrid">
-        <div class="scard t"><div class="sv" id="adm-active">—</div><div class="sl">Aktivní</div></div>
-        <div class="scard g"><div class="sv" id="adm-done-n">—</div><div class="sl">Splněno dnes</div></div>
-        <div class="scard r"><div class="sv" id="adm-behind">—</div><div class="sl">Pozadu</div></div>
-        <div class="scard o"><div class="sv" id="adm-svc-open">—</div><div class="sl">Servis čeká</div></div>
-      </div>
-      <div class="map-box">
-        <div class="map-hdr">
-          <div class="map-hdr-t">Technici v terénu — W25</div>
-          <div class="live-badge"><div class="live-dot"></div>LIVE</div>
-        </div>
-        <div id="admin-map" style="height:260px"></div>
-      </div>
-      <div class="adm-sh"><div class="adm-st">Aktuální stav</div><div class="adm-sc" id="live-wlbl">Týden 25</div></div>
-      <div class="cw" id="adm-live-list"></div>
-    </div>
-
     <!-- ALERTS -->
     <div class="adm-page" id="adm-alerts">
       <div class="adm-sh"><div class="adm-st">Flagy & nesplněné</div></div>
       <div class="cw" id="adm-alerts-list"></div>
     </div>
-
-    <!-- TECHNICI -->
-    <div class="adm-page" id="adm-technici">
-      <div class="adm-sh"><div class="adm-st">Všichni technici</div><div class="adm-sc" id="adm-technici-count">—</div></div>
-      <div class="cw" id="adm-all-list"></div>
-    </div>
-
-    <!-- ČASY -->
-    <div class="adm-page" id="adm-casy">
-      <div class="sgrid">
-        <div class="scard t"><div class="sv" id="adm-avg-idt">—</div><div class="sl">Průměr IDT — dnes</div></div>
-        <div class="scard"><div class="sv" id="adm-avg-ka">—</div><div class="sl">Průměr KA — dnes</div></div>
-        <div class="scard g"><div class="sv" id="adm-avg-visit">—</div><div class="sl">Avg. návštěva — dnes</div></div>
-        <div class="scard r"><div class="sv" id="adm-shorts">0</div><div class="sl">Krátké &lt;10m</div></div>
-      </div>
-      <div class="adm-sh"><div class="adm-st">Lán Tomáš — dnešní přehled</div></div>
-      <div class="cw" id="adm-casy-list"></div>
-    </div>
-
 
     <!-- REDAKČNÍ OKNO -->
     <div class="adm-page" id="adm-redakce">
