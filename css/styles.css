@@ -229,14 +229,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .ch-pri2{background:rgba(224,123,0,.3);color:#ffb84d}
 
 /* CHECK-IN */
-.ci-bar{margin:10px 12px 0;border-radius:12px;padding:13px 16px;display:flex;align-items:center;gap:12px;background:rgba(26,60,71,.06);border:1.5px solid var(--border)}
+.ci-bar{margin:10px 12px 0;border-radius:12px;padding:15px 16px;display:flex;align-items:center;gap:12px;background:rgba(26,60,71,.06);border:1.5px solid var(--border);box-shadow:0 2px 8px rgba(26,60,71,.08)}
 .ci-bar.active{background:linear-gradient(135deg,rgba(26,74,58,.08),rgba(26,60,71,.05));border-color:rgba(46,205,192,.4)}
-.ci-bar.done-ci{background:var(--gl);border-color:var(--green)}
+.ci-bar.done-ci{background:var(--gl);border-color:var(--green);box-shadow:none}
 .ci-ico{font-size:22px;flex-shrink:0}
 .ci-info{flex:1;min-width:0}
 .ci-t{font-size:13px;font-weight:700;color:var(--navy)}
 .ci-s{font-size:11px;color:var(--muted);margin-top:2px}
-.ci-btn{background:var(--teal);color:var(--navy);border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;flex-shrink:0}
+.ci-btn{background:var(--teal);color:var(--navy);border:none;border-radius:9px;padding:10px 18px;font-size:13px;font-weight:800;cursor:pointer;white-space:nowrap;flex-shrink:0}
 .ci-btn.out{background:var(--navy);color:var(--teal)}
 .ci-btn.done{background:var(--green);color:#fff}
 
@@ -256,8 +256,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .camp-dl{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;background:rgba(255,255,255,.1);padding:3px 8px;border-radius:20px}
 
 /* TASK GROUPS */
-.tg-hdr{padding:10px 4px 4px;display:flex;align-items:center}
+.tg-hdr{padding:14px 4px 6px;display:flex;align-items:center;border-top:1px solid var(--bg)}
+.tg-hdr:first-child{border-top:none;padding-top:4px}
 .tg-lbl{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;padding:3px 8px;border-radius:20px}
+.tg-cnt{font-size:10px;font-weight:700;color:var(--muted);margin-left:6px}
 .gl-tpl{background:var(--bl);color:var(--blue)}
 .gl-svc{background:var(--rl);color:var(--red)}
 .gl-ot{background:var(--tl);color:var(--tm)}
