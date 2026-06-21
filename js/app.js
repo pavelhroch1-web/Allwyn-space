@@ -98,6 +98,155 @@ function today(){return new Date().toISOString().split('T')[0];}
 function saveTechUIState(){ lss('techUiState',{week:cWeek,view:cView}); }
 
 // ══════════════════════════════════════════════════════
+// SESSION / IDENTITY — pilot auth (žádné heslo, žádný backend).
+// Tvar připravený na pozdější Microsoft Entra ID / Azure AD SSO:
+// User{id,name,email,role,permissions,region}, uložené jako Session
+// v localStorage (stejný vzor jako techUiState/ci_/supply_…).
+// ══════════════════════════════════════════════════════
+const VELIN_USER = { id:'pavel-hroch', name:'Pavel Hroch', email:null, role:'velin', permissions:['velin'], region:'CZ' };
+let currentViewTechnician = null;
+
+function buildTechnicianUser(name){
+  const t = deriveAllTechnicians().find(x=>x.name===name);
+  return { id:'tech-'+name.replace(/\s+/g,'-').toLowerCase(), name, email:null, role:'technician', permissions:['technician'], region:(t&&t.region)||PosModel.DEFAULT_REGION };
+}
+function getSession(){ return lsg('session',null); }
+function setSession(s){ lss('session',s); renderUserMenus(); }
+function clearSession(){ localStorage.removeItem('session'); }
+
+// Zobecňuje technician filtr (dřív natvrdo SOLE_REAL_TECHNICIAN na řádku
+// posData[w]=... ) — Velín může nahlížet pohled libovolného z 27 reálných
+// techniků z Tourplan importu (FULL_POS_DATA), ne jen jednoho.
+function setViewTechnician(name){
+  currentViewTechnician = name;
+  for (const w of POS_WEEK_KEYS) posData[w] = FULL_POS_DATA[w].filter(p => p.assignedTechnician === name);
+  cWeek = '25'; cDay = 0; cIdx = null;
+}
+
+function loginAsVelin(){
+  setSession({ role:'velin', user:VELIN_USER, viewingAs:null });
+  enterRole('admin');
+  setTimeout(showVelinBriefing,500);
+}
+function loginAsTechnician(name){
+  name = name || PosModel.SOLE_REAL_TECHNICIAN;
+  setViewTechnician(name);
+  setSession({ role:'technician', user:buildTechnicianUser(name), viewingAs:null });
+  enterRole('technik');
+}
+function logout(){
+  clearSession();
+  currentViewTechnician = null;
+  closeAllUserMenus();
+  goHome();
+}
+// Velín náhled technika — "Zobrazit jako technik".
+function viewAsTechnician(name){
+  const s = getSession();
+  if (!s || s.role !== 'velin') return;
+  setViewTechnician(name);
+  s.viewingAs = name;
+  setSession(s);
+  closeViewAsModal();
+  enterRole('technik',{skipBriefing:true});
+}
+function backToVelin(){
+  const s = getSession();
+  if (s){ s.viewingAs = null; setSession(s); }
+  currentViewTechnician = null;
+  enterRole('admin');
+}
+function updateViewAsBanner(){
+  const s = getSession();
+  const banner = document.getElementById('viewas-banner');
+  if (!banner) return;
+  if (s && s.role==='velin' && s.viewingAs){
+    document.getElementById('viewas-name').textContent = s.viewingAs;
+    banner.style.display = 'flex';
+  } else {
+    banner.style.display = 'none';
+  }
+}
+function openViewAsModal(){
+  const list = document.getElementById('viewas-list');
+  if (list) list.innerHTML = TECHNICIAN_NAMES.map(n=>`<button class="viewas-item" onclick="viewAsTechnician('${n.replace(/'/g,"\\'")}')">${n}</button>`).join('');
+  document.getElementById('viewas-modal').classList.add('open');
+  closeAllUserMenus();
+}
+function closeViewAsModal(){ document.getElementById('viewas-modal').classList.remove('open'); }
+
+function toggleUserMenu(which){
+  const dd = document.getElementById('user-dd-'+which);
+  if (!dd) return;
+  const open = dd.classList.contains('open');
+  closeAllUserMenus();
+  if (!open) dd.classList.add('open');
+}
+function closeAllUserMenus(){
+  document.querySelectorAll('.user-dd.open').forEach(x=>x.classList.remove('open'));
+}
+function toggleProfileDetail(which){
+  const el = document.getElementById('user-dd-'+which+'-detail');
+  if (!el) return;
+  if (el.style.display==='none'){
+    const s = getSession();
+    const u = s ? s.user : null;
+    el.innerHTML = u ? `<div>E-mail: ${u.email||'— (z Tourplan importu chybí)'}</div><div>Region: ${u.region||'—'}</div>` : '';
+    el.style.display = 'block';
+  } else {
+    el.style.display = 'none';
+  }
+}
+document.addEventListener('click', (e)=>{
+  if (!e.target.closest('.user-chip')) closeAllUserMenus();
+});
+
+function renderUserMenus(){
+  const s = getSession();
+  updateViewAsBanner();
+  if (!s) return;
+  if (s.role==='velin'){
+    const nameEl = document.getElementById('user-dd-velin-name');
+    if (nameEl) nameEl.textContent = s.user.name;
+  }
+  const techName = (s.role==='technician') ? s.user.name : s.viewingAs;
+  if (techName){
+    const initials = (deriveAllTechnicians().find(t=>t.name===techName)||{}).initials || techName.slice(0,2).toUpperCase();
+    const avEl = document.getElementById('tech-av');
+    const ddNameEl = document.getElementById('user-dd-tech-name');
+    if (avEl) avEl.textContent = initials;
+    if (ddNameEl) ddNameEl.textContent = techName;
+  }
+}
+
+// Velín "Operations Briefing" — analogie technician showBriefing(), ale ze
+// stejných reálných zdrojů jako landing stránka a dashboard (deriveAllTechnicians,
+// RouteEngine.analyzeFleet) — žádné nové vymyšlené číslo.
+function showVelinBriefing(){
+  const techs = deriveAllTechnicians();
+  const totalPos = techs.reduce((s,t)=>s+t.total,0);
+  const activeToday = techs.filter(t=>t.activityCode==='on-pos'||t.activityCode==='done').length;
+  const overdue = techs.filter(t=>t.overdue).length;
+  const routes = buildAllDailyRoutes();
+  const fleet = Object.keys(routes).length ? RouteEngine.analyzeFleet(routes) : null;
+  const now = new Date();
+  document.getElementById('vb-date').textContent = now.toLocaleDateString('cs-CZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  document.getElementById('vb-pos').textContent = totalPos;
+  document.getElementById('vb-active').textContent = activeToday;
+  document.getElementById('vb-overdue').textContent = overdue;
+  document.getElementById('vb-msg').textContent = fleet
+    ? `Route Intelligence: optimalizace trasy by mohla ušetřit ${fleet.wastedHours.toFixed(0)} h jízdy a ${RouteEngine.formatKm(fleet.wastedKm)} tento týden.`
+    : 'Route Intelligence: pro tento týden nemám dostatek dat na odhad úspor.';
+  document.getElementById('velin-briefing').classList.add('open');
+}
+function closeVelinBriefing(){ document.getElementById('velin-briefing').classList.remove('open'); }
+function showVelinRecommendations(){
+  closeVelinBriefing();
+  const btn = document.querySelector(`[onclick="showAdmPage('dashboard',this)"]`);
+  if (btn) showAdmPage('dashboard',btn);
+}
+
+// ══════════════════════════════════════════════════════
 // ROLE
 // ══════════════════════════════════════════════════════
 function enterRole(role,opts){
@@ -201,7 +350,19 @@ function applyRoute(){
   }
 }
 window.addEventListener('hashchange',applyRoute);
-window.addEventListener('DOMContentLoaded',()=>{ if(location.hash&&location.hash!=='#/') applyRoute(); });
+window.addEventListener('DOMContentLoaded',()=>{
+  const s = getSession();
+  if (s && s.role==='technician') setViewTechnician(s.user.name);
+  if (s && s.role==='velin' && s.viewingAs) setViewTechnician(s.viewingAs);
+  if (location.hash && location.hash!=='#/') {
+    applyRoute();
+  } else if (s && s.role==='velin') {
+    enterRole(s.viewingAs ? 'technik' : 'admin', {skipBriefing:true});
+  } else if (s && s.role==='technician') {
+    enterRole('technik', {skipBriefing:true});
+  }
+  renderUserMenus();
+});
 
 // ══════════════════════════════════════════════════════
 // BRIEFING

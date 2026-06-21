@@ -99,19 +99,19 @@
     </div>
 
     <div class="rs-roles">
-      <div class="rs-role-card" onclick="enterRole('technik')">
+      <div class="rs-role-card" onclick="loginAsTechnician()">
         <svg class="rs-role-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5" stroke="currentColor" stroke-width="1.6"/><line x1="10" y1="18.3" x2="14" y2="18.3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
         <div class="rs-role-text">
           <div class="rs-role-title">Technician Workspace</div>
-          <div class="rs-role-desc">Routes · checklists · inventory</div>
+          <div class="rs-role-desc">Přihlásit jako Lán Tomáš · routes · inventory</div>
         </div>
         <span class="rs-role-arrow">→</span>
       </div>
-      <div class="rs-role-card" onclick="enterRole('admin')">
+      <div class="rs-role-card" onclick="loginAsVelin()">
         <svg class="rs-role-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="3.4" stroke="currentColor" stroke-width="1.6"/><circle cx="4" cy="6" r="1.6" stroke="currentColor" stroke-width="1.6"/><circle cx="20" cy="6" r="1.6" stroke="currentColor" stroke-width="1.6"/><circle cx="4" cy="18" r="1.6" stroke="currentColor" stroke-width="1.6"/><circle cx="20" cy="18" r="1.6" stroke="currentColor" stroke-width="1.6"/><line x1="9.6" y1="10.2" x2="5.2" y2="7" stroke="currentColor" stroke-width="1.2"/><line x1="14.4" y1="10.2" x2="18.8" y2="7" stroke="currentColor" stroke-width="1.2"/><line x1="9.6" y1="13.8" x2="5.2" y2="17" stroke="currentColor" stroke-width="1.2"/><line x1="14.4" y1="13.8" x2="18.8" y2="17" stroke="currentColor" stroke-width="1.2"/></svg>
         <div class="rs-role-text">
           <div class="rs-role-title">Operations Control Center</div>
-          <div class="rs-role-desc">Live map · AI insights · risk</div>
+          <div class="rs-role-desc">Přihlásit jako Pavel Hroch · Velín / Řízení terénu</div>
         </div>
         <span class="rs-role-arrow">→</span>
       </div>
@@ -121,10 +121,17 @@
   </div>
 </div>
 
-<button class="switch-btn" id="switch-btn" style="display:none" onclick="goHome()">⇄ Přepnout</button>
+<button class="switch-btn" id="switch-btn" style="display:none" onclick="logout()">⇄ Odhlásit</button>
 
 <!-- ══ TECHNIK ══ -->
 <div class="screen" id="technik-screen">
+
+  <!-- VIEW AS BANNER (Velín náhled technika) -->
+  <div class="viewas-banner" id="viewas-banner" style="display:none">
+    <svg class="ic ic-sm"><use href="#ic-user"/></svg>
+    <span>Zobrazuješ pohled technika: <b id="viewas-name"></b></span>
+    <button onclick="backToVelin()">Zpět do Velínu</button>
+  </div>
 
   <!-- BRIEFING -->
   <div class="briefing-ov" id="briefing">
@@ -150,7 +157,18 @@
     <div class="hdr">
       <div class="hdr-row">
         <div class="hdr-logo"><div class="hdr-a">a</div><div class="hdr-title">allwyn <span>space</span></div></div>
-        <div class="av">LT</div>
+        <div class="user-chip">
+          <div class="av" id="tech-av" onclick="toggleUserMenu('tech')">LT</div>
+          <div class="user-dd" id="user-dd-tech">
+            <div class="user-dd-name" id="user-dd-tech-name">—</div>
+            <div class="user-dd-role">Technik</div>
+            <div class="user-dd-sep"></div>
+            <button class="user-dd-item" onclick="toggleProfileDetail('tech')">Profil</button>
+            <div class="user-dd-detail" id="user-dd-tech-detail" style="display:none"></div>
+            <button class="user-dd-item disabled" disabled>Nastavení <span class="user-dd-soon">brzy</span></button>
+            <button class="user-dd-item" onclick="logout()">Odhlásit</button>
+          </div>
+        </div>
       </div>
       <div class="hdr-sub" id="hdr-week-label">Načítám…</div>
     </div>
@@ -363,6 +381,36 @@
 
 <!-- ══ ADMIN / VELÍN ══ -->
 <div id="admin-screen">
+
+  <!-- OPERATIONS BRIEFING -->
+  <div class="briefing-ov" id="velin-briefing">
+    <div class="briefing-sh">
+      <div class="bf-handle"></div>
+      <div class="bf-hdr">
+        <div class="bf-emoji"><svg class="ic ic-xl"><use href="#ic-dashboard"/></svg></div>
+        <div><div class="bf-title">Dobré ráno, Pavel</div><div class="bf-date" id="vb-date"></div></div>
+      </div>
+      <div class="ai-msg"><span id="vb-msg"></span><span class="ai-badge">AI Insight</span></div>
+      <div class="bf-stats">
+        <div class="bf-stat o"><div class="bf-sv" id="vb-pos">—</div><div class="bf-sl">POS síť</div></div>
+        <div class="bf-stat g"><div class="bf-sv" id="vb-active">—</div><div class="bf-sl">Aktivní dnes</div></div>
+        <div class="bf-stat r"><div class="bf-sv" id="vb-overdue">—</div><div class="bf-sl">Pozadu</div></div>
+      </div>
+      <button class="bf-btn" onclick="showVelinRecommendations()">Zobrazit doporučení →</button>
+    </div>
+  </div>
+
+  <!-- VIEW AS TECHNICIAN MODAL -->
+  <div class="viewas-modal" id="viewas-modal">
+    <div class="viewas-card">
+      <div class="viewas-hdr">
+        <div>Zobrazit jako technik</div>
+        <button class="viewas-close" onclick="closeViewAsModal()">✕</button>
+      </div>
+      <div class="viewas-list" id="viewas-list"></div>
+    </div>
+  </div>
+
   <div class="adm-hdr">
     <div class="adm-logo"><div class="adm-a">a</div><div class="adm-title">allwyn <span>space</span> · velín</div></div>
     <div class="adm-nav">
@@ -378,6 +426,19 @@
       <button class="adm-btn" onclick="showAdmPage('ai',this)"><svg class="ic ic-sm"><use href="#ic-intel"/></svg> Intelligence</button>
       <button class="adm-btn" onclick="showAdmPage('editor',this)"><svg class="ic ic-sm"><use href="#ic-edit"/></svg> Editor</button>
       <button class="adm-btn" onclick="showAdmPage('schvaleni',this)"><svg class="ic ic-sm"><use href="#ic-check-circle"/></svg> Schválení</button>
+    </div>
+    <div class="user-chip">
+      <div class="av" id="velin-av" onclick="toggleUserMenu('velin')">PH</div>
+      <div class="user-dd" id="user-dd-velin">
+        <div class="user-dd-name" id="user-dd-velin-name">Pavel Hroch</div>
+        <div class="user-dd-role">Velín · Řízení terénu</div>
+        <div class="user-dd-sep"></div>
+        <button class="user-dd-item" onclick="toggleProfileDetail('velin')">Profil</button>
+        <div class="user-dd-detail" id="user-dd-velin-detail" style="display:none"></div>
+        <button class="user-dd-item" onclick="openViewAsModal()">Přepnout pohled</button>
+        <button class="user-dd-item disabled" disabled>Nastavení <span class="user-dd-soon">brzy</span></button>
+        <button class="user-dd-item" onclick="logout()">Odhlásit</button>
+      </div>
     </div>
   </div>
   <div class="adm-content">
