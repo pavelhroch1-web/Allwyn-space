@@ -1310,7 +1310,10 @@ function buildAllDailyRoutes() {
   });
   Object.entries(byTechDay).forEach(([key, dayPos]) => {
     const [tech, day] = key.split('|');
-    if (dayPos.length > 1) routes[`${tech}_${CURRENT_OPS_WEEK}_${DAYS[day] || day}`] = dayPos;
+    // Pokud technik svůj den ručně přeřadil, Velín musí porovnávat JEHO
+    // reálné pořadí (ne pořadí z importu) — jinak je baseline fiktivní.
+    const ordered = applyStoredRouteOrder(dayPos, CURRENT_OPS_WEEK, day);
+    if (ordered.length > 1) routes[`${tech}_${CURRENT_OPS_WEEK}_${DAYS[day] || day}`] = ordered;
   });
   return routes;
 }
@@ -2952,6 +2955,35 @@ function showRouteView(week, day){
   });
 }
 
+// ── Ranní souhrn dne — co technika čeká + tichá nabídka lepší trasy ─────────
+// Žádné hodnocení, žádné "promarněné km" — jen podpůrný asistent.
+function buildMorningBriefCard(todayPos, week, day){
+  const s = getSession();
+  const firstName = ((s && s.user && s.user.name) || '').trim().split(/\s+/).pop() || '';
+  const startLoc = getStartLocation();
+  const cmp = todayPos.length > 1 ? RouteEngine.compareRoutes(todayPos, startLoc) : null;
+  const workMin = todayPos.reduce((sum, p) => sum + RouteEngine.getVisitDurationMin(p), 0);
+  const drivingMin = cmp ? cmp.before.drivingMin : 0;
+  const totalMin = workMin + drivingMin;
+  const hasSuggestion = cmp && cmp.savedKm > 0.5;
+
+  const el = document.createElement('div');
+  el.style.cssText = 'margin:10px 12px 6px;padding:14px;background:var(--navy);border-radius:14px;color:#fff';
+  el.innerHTML = `
+    <div style="font-size:15px;font-weight:800">Dobré ráno${firstName ? ', ' + firstName : ''}</div>
+    <div style="font-size:12px;color:rgba(255,255,255,.75);margin-top:6px">
+      Dnes: <strong style="color:#fff">${todayPos.length} POS</strong> naplánováno · Odhad <strong style="color:#fff">${RouteEngine.formatHM(totalMin)}</strong>
+    </div>
+    ${hasSuggestion ? `
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.15);display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <div style="font-size:12px;color:var(--teal);font-weight:700">Našel jsem lepší trasu: −${RouteEngine.formatKm(cmp.savedKm)} · −${RouteEngine.formatHM(cmp.savedMin)}</div>
+      <button onclick="showRouteView('${week}',${day})" style="background:var(--teal);color:var(--navy);border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0">Zobrazit</button>
+    </div>` : `
+    <div style="margin-top:8px;font-size:12px;color:var(--teal);font-weight:700">Trasa připravena</div>`}
+  `;
+  return el;
+}
+
 // ══════════════════════════════════════════════════════════════════════════
 // PATCH renderList — show today's POS locked, future plannable, overdue flagged
 // ══════════════════════════════════════════════════════════════════════════
@@ -2982,6 +3014,11 @@ renderList = function() {
   const meta = WEEKS_META[cWeek];
   const dayDate = meta ? meta.dd[cDay] : '';
   const isTodaySelected = isCurrentWeek && cDay === todayIdx;
+
+  // Ranní souhrn — jen na dnešním pohledu, jen pokud je co naplánováno
+  if (isTodaySelected && todayPos.length > 0) {
+    wrap.appendChild(buildMorningBriefCard(todayPos, cWeek, cDay));
+  }
 
   // Overdue banner (only on today's view in current week)
   if (isTodaySelected && overdue.length > 0) {
