@@ -81,6 +81,55 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   .rs-role-card{flex:1}
 }
 
+/* ── VISION SECTION ── */
+.rs-vision{margin-bottom:18px}
+.rs-quote{font-size:14px;font-weight:600;font-style:italic;color:rgba(255,255,255,.85);line-height:1.5;border-left:2px solid var(--teal);padding:2px 0 2px 14px;margin-bottom:22px}
+
+.rs-vsection{margin-bottom:22px}
+.rs-vtitle{font-size:11px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--teal);margin-bottom:10px}
+
+.rs-problem-grid{display:grid;grid-template-columns:1fr;gap:6px;margin-bottom:10px}
+.rs-problem-item{font-size:12px;color:rgba(255,255,255,.6);background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:8px 10px;position:relative;padding-left:20px}
+.rs-problem-item::before{content:"";position:absolute;left:9px;top:50%;width:5px;height:5px;border-radius:50%;background:var(--orange);transform:translateY(-50%)}
+.rs-vlead{font-size:13px;font-weight:700;color:#fff;margin-top:4px}
+
+.rs-flow{display:flex;flex-direction:column;gap:10px}
+.rs-flow-col{flex:1;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:12px}
+.rs-flow-col-mid{background:linear-gradient(160deg,rgba(46,205,192,.12),rgba(255,255,255,.03));border-color:rgba(46,205,192,.3)}
+.rs-flow-label{font-size:10px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--teal);margin-bottom:6px}
+.rs-flow-items{font-size:11.5px;color:rgba(255,255,255,.65);line-height:1.5}
+.rs-flow-arrow{align-self:center;color:rgba(255,255,255,.3);font-size:16px;transform:rotate(90deg)}
+
+.rs-modules{display:grid;grid-template-columns:1fr;gap:10px}
+.rs-module-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:13px;transition:border-color .2s,background .2s}
+.rs-module-card:hover{border-color:rgba(46,205,192,.3);background:rgba(255,255,255,.06)}
+.rs-module-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.rs-module-icon{color:var(--teal)}
+.rs-module-badge{font-size:8.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;border-radius:20px;padding:3px 8px}
+.rs-badge-live{color:var(--teal);background:rgba(46,205,192,.12);border:1px solid rgba(46,205,192,.3)}
+.rs-badge-vision{color:rgba(255,255,255,.55);background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14)}
+.rs-module-title{font-size:13.5px;font-weight:800;color:#fff;margin-bottom:5px}
+.rs-module-desc{font-size:11.5px;color:rgba(255,255,255,.6);line-height:1.45;margin-bottom:6px}
+.rs-module-goal{font-size:11px;font-weight:600;color:var(--teal);line-height:1.4}
+
+.rs-evo{display:flex;align-items:flex-start;justify-content:space-between;gap:4px}
+.rs-evo-step{flex:1;text-align:center;min-width:0}
+.rs-evo-dot{width:11px;height:11px;border-radius:50%;background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.25);margin:0 auto 8px}
+.rs-evo-dot-live{background:var(--teal);border-color:var(--teal);animation:rsPulseDot 2s ease-in-out infinite}
+.rs-evo-label{font-size:9px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:3px}
+.rs-evo-text{font-size:11.5px;font-weight:700;color:#fff;line-height:1.3}
+.rs-evo-line{flex:0 0 auto;width:24px;height:2px;background:rgba(255,255,255,.15);margin-top:5px}
+
+.rs-cta-lead{font-size:11px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:rgba(255,255,255,.45);text-align:center;margin-bottom:10px}
+
+@media (min-width:760px){
+  .rs-content{max-width:920px}
+  .rs-flow{flex-direction:row;align-items:stretch}
+  .rs-flow-arrow{transform:none;align-self:center}
+  .rs-modules{grid-template-columns:repeat(3,1fr)}
+  .rs-problem-grid{grid-template-columns:repeat(2,1fr)}
+}
+
 /* ── SHARED HDR ── */
 .hdr{background:var(--navy);padding:13px 18px 11px;position:sticky;top:0;z-index:200;box-shadow:0 2px 10px rgba(0,0,0,.25)}
 .hdr-row{display:flex;align-items:center;justify-content:space-between}
