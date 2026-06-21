@@ -85,26 +85,29 @@ function today(){return new Date().toISOString().split('T')[0];}
 // ══════════════════════════════════════════════════════
 // ROLE
 // ══════════════════════════════════════════════════════
-function enterRole(role){
+function enterRole(role,opts){
+  opts=opts||{};
   document.getElementById('role-screen').style.display='none';
   document.getElementById('switch-btn').style.display='block';
   if(role==='technik'){
     document.getElementById('technik-screen').classList.add('active');
     document.getElementById('admin-screen').style.display='none';
     updateHdrLabel();renderChips();renderDayTabs();renderList();
-    setTimeout(showBriefing,500);
+    if(!opts.skipBriefing) setTimeout(showBriefing,500);
   } else {
     document.getElementById('technik-screen').classList.remove('active');
     document.getElementById('admin-screen').style.display='block';
     renderAdminDashboard();renderAdminLive();renderAdminAlerts();renderAdminTechnici();renderAdminCasy();renderAdminFoto();
     setTimeout(initAdminMap,300);
   }
+  pushRoute();
 }
 function goHome(){
   document.getElementById('role-screen').style.display='flex';
   document.getElementById('switch-btn').style.display='none';
   document.getElementById('technik-screen').classList.remove('active');
   document.getElementById('admin-screen').style.display='none';
+  pushRoute();
 }
 function showAdmPage(p,btn){
   document.querySelectorAll('.adm-page').forEach(x=>x.classList.remove('active'));
@@ -115,7 +118,66 @@ function showAdmPage(p,btn){
   if(p==='casy') renderAdminCasy();
   if(p==='dashboard') renderAdminDashboard();
   if(p==='posnet') renderAdminPosNet();
+  pushRoute();
 }
+
+// ══════════════════════════════════════════════════════
+// ROUTER — hash-based navigace (žádný server, GitHub Pages friendly).
+// Refresh zůstává na stejné obrazovce, Back/Forward přepíná mezi obrazovkami.
+// ══════════════════════════════════════════════════════
+let routeSuspend=false;
+function computeRouteHash(){
+  if(document.getElementById('admin-screen').style.display==='block'){
+    const activePage=document.querySelector('.adm-page.active');
+    const page=activePage?activePage.id.replace('adm-',''):'dashboard';
+    return '#/admin/'+page;
+  }
+  if(document.getElementById('technik-screen').classList.contains('active')){
+    if(document.getElementById('t-detail').style.display==='block'&&cIdx!=null&&posData[cWeek]&&posData[cWeek][cIdx]){
+      return '#/tech/pos/'+cWeek+'/'+posData[cWeek][cIdx].id;
+    }
+    return '#/tech';
+  }
+  return '#/';
+}
+function pushRoute(){
+  if(routeSuspend) return;
+  const h=computeRouteHash();
+  if(location.hash!==h) location.hash=h;
+}
+function applyRoute(){
+  const hash=location.hash||'#/';
+  const parts=hash.replace(/^#\/?/,'').split('/').filter(Boolean);
+  routeSuspend=true;
+  try{
+    if(parts[0]==='admin'){
+      enterRole('admin');
+      const page=parts[1]||'dashboard';
+      const btn=document.querySelector(`[onclick="showAdmPage('${page}',this)"]`);
+      if(btn) showAdmPage(page,btn);
+    } else if(parts[0]==='tech'){
+      enterRole('technik',{skipBriefing:true});
+      if(parts[1]==='pos'&&parts[2]&&parts[3]){
+        const w=parts[2],id=parts[3];
+        if(posData[w]){
+          cWeek=w;cDay=0;updateHdrLabel();renderChips();renderDayTabs();
+          const ri=posData[w].findIndex(p=>p.id===id);
+          if(ri>=0) openDetail(ri);
+        }
+      } else {
+        document.getElementById('t-detail').style.display='none';
+        document.getElementById('t-list').style.display='block';
+        renderList();
+      }
+    } else {
+      goHome();
+    }
+  } finally {
+    routeSuspend=false;
+  }
+}
+window.addEventListener('hashchange',applyRoute);
+window.addEventListener('DOMContentLoaded',()=>{ if(location.hash&&location.hash!=='#/') applyRoute(); });
 
 // ══════════════════════════════════════════════════════
 // BRIEFING
@@ -332,6 +394,7 @@ function openDetail(ri){
   document.getElementById('t-list').style.display='none';
   document.getElementById('t-detail').style.display='block';
   window.scrollTo(0,0);
+  pushRoute();
 }
 
 // ══════════════════════════════════════════════════════
@@ -832,6 +895,7 @@ function goBack(){
   document.getElementById('t-list').style.display='block';
   hideAddForm();renderList();window.scrollTo(0,0);
   if(ciTimer){clearInterval(ciTimer);ciTimer=null;}
+  pushRoute();
 }
 function showAddForm(){document.getElementById('add-btn').style.display='none';document.getElementById('add-form').style.display='block';document.getElementById('new-task-input').focus();}
 function hideAddForm(){document.getElementById('add-btn').style.display='block';document.getElementById('add-form').style.display='none';document.getElementById('new-task-input').value='';}
@@ -1230,11 +1294,15 @@ function setPosNetFilter(key, val) {
 function renderAdminLive() {
   const activePos = getActiveTechPos();
   adminTechnicians = deriveAllTechnicians();
+  const live = getLiveState();
 
   const done = adminTechnicians.reduce((s, t) => s + t.done, 0);
   const behind = adminTechnicians.filter(t => t.overdue).length;
+  const active = adminTechnicians.filter(t => t.done > 0 && t.done < t.total).length;
+  document.getElementById('adm-active').textContent = active;
   document.getElementById('adm-done-n').textContent = done;
   document.getElementById('adm-behind').textContent = behind;
+  document.getElementById('adm-svc-open').textContent = live.servisOpen.length;
 
   const filtered = activeRegion === 'all' ? adminTechnicians : adminTechnicians.filter(t => t.region === activeRegion);
 
@@ -1262,6 +1330,8 @@ function renderAdminLive() {
 
 function renderAdminTechnici() {
   adminTechnicians = deriveAllTechnicians();
+  const countEl = document.getElementById('adm-technici-count');
+  if (countEl) countEl.textContent = adminTechnicians.length + ' aktivních';
   document.getElementById('adm-all-list').innerHTML = adminTechnicians.map(t => {
     const isLT = t.name === PosModel.SOLE_REAL_TECHNICIAN;
     const badge = t.done === t.total ? '<span class="badge b-done">✓ Hotovo</span>'
@@ -1556,8 +1626,8 @@ function renderAdminFoto() {
 // PATCH enterRole — start admin refresh
 // ══════════════════════════════════════════════════════
 const _origEnterRole = enterRole;
-enterRole = function(role) {
-  _origEnterRole(role);
+enterRole = function(role, opts) {
+  _origEnterRole(role, opts);
   if (role === 'admin') startAdminRefresh();
 };
 
@@ -2851,10 +2921,10 @@ showAdmPage = function(p, btn) {
 
 // ── Auto init day/week on role enter ──────────────────────────────────────
 const _origEnterRole2 = enterRole;
-enterRole = function(role) {
+enterRole = function(role, opts) {
   autoSetCurrentDay();
   applyAssignments();
-  _origEnterRole2(role);
+  _origEnterRole2(role, opts);
 };
 
 
