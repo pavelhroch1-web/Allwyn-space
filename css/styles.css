@@ -600,6 +600,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .ai-typing{display:inline-block;opacity:.7;animation:aiFade 1.4s ease-in-out infinite}
 @keyframes aiFade{0%,100%{opacity:.55}50%{opacity:1}}
 .ai-badge{font-size:9px;font-weight:800;background:var(--navy);color:var(--teal);padding:3px 8px;border-radius:6px;position:absolute;top:10px;right:10px;letter-spacing:.4px;text-transform:uppercase}
+.ai-badge-static{background:#8A8F98;color:#fff}
 
 .ai-loading{padding:22px 20px;text-align:center;color:var(--muted);font-size:13px}
 .ai-loading-bar{width:160px;height:3px;background:var(--border);border-radius:2px;overflow:hidden;margin:14px auto 0}
@@ -612,6 +613,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .ai-report-hdr-icon{font-size:22px}
 .ai-report-hdr-t{font-size:13px;font-weight:800;color:white;flex:1}
 .ai-report-hdr-badge{font-size:10px;font-weight:800;background:var(--teal);color:var(--navy);padding:3px 8px;border-radius:10px}
+.ai-report-hdr-badge-static{background:#8A8F98;color:#fff}
 .ai-report-body{padding:16px;font-size:13px;line-height:1.7;color:var(--text)}
 .ai-report-body h4{font-size:12px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin:14px 0 6px}
 .ai-report-body h4:first-child{margin-top:0}

@@ -2348,20 +2348,29 @@ Napiš přátelský, motivující briefing v češtině. Max 3 věty. Zmiň co j
       })
     });
     const data = await res.json();
-    const text = data.content?.[0]?.text || 'Dobrý den! Dnes máš před sebou další den v terénu. Zaměř se na kvalitu, foť vše co osazuješ.';
+    const text = data.content?.[0]?.text;
     if (el) {
-      el.innerHTML = `${text}<span class="ai-badge">AI Insight</span>`;
+      if (text) {
+        el.innerHTML = `${text}<span class="ai-badge">AI Insight</span>`;
+      } else {
+        showStaticBriefingTip(el, pos, done, svc);
+      }
     }
   } catch(e) {
-    // Fallback if API not available
-    const fallbacks = [
-      `Tomáši, dnes máš ${pos.length - done} POS zbývajících a ${svc.length} servisní tikety — začni servisy. Nezapomeň fotit před i po osazení a vyžádat podpis při zásobování.`,
-      `Dobrý den! Zlatá rybka jen NOVÁ emise — zkontroluj co máš v autě. Rebranding norma 2 POS/den, pečlivě odstraňuj samolepky Sazka mobil.`,
-      `Dnes priorita: ${svc.length > 0 ? svc[0].n + ' — servis nejdřív!' : 'splnit normu 2 rebrandingy.'} Fotodokumentace je povinná, admin kontroluje každou návštěvu.`,
-    ];
-    const txt = fallbacks[Math.floor(Math.random()*fallbacks.length)];
-    if (el) el.innerHTML = `${txt}<span class="ai-badge">AI Insight</span>`;
+    // AI API nedostupné — ukázat statickou připomínku, NE jako "AI Insight"
+    // (uživatel by jinak věřil, že je to AI generovaný text)
+    if (el) showStaticBriefingTip(el, pos, done, svc);
   }
+}
+
+function showStaticBriefingTip(el, pos, done, svc) {
+  const tips = [
+    `Tomáši, dnes máš ${pos.length - done} POS zbývajících a ${svc.length} servisní tikety — začni servisy. Nezapomeň fotit před i po osazení a vyžádat podpis při zásobování.`,
+    `Dobrý den! Zlatá rybka jen NOVÁ emise — zkontroluj co máš v autě. Rebranding norma 2 POS/den, pečlivě odstraňuj samolepky Sazka mobil.`,
+    `Dnes priorita: ${svc.length > 0 ? svc[0].n + ' — servis nejdřív!' : 'splnit normu 2 rebrandingy.'} Fotodokumentace je povinná, admin kontroluje každou návštěvu.`,
+  ];
+  const txt = tips[Math.floor(Math.random()*tips.length)];
+  el.innerHTML = `${txt}<span class="ai-badge ai-badge-static">Operativní tip</span>`;
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -2403,22 +2412,33 @@ Shrň nejdůležitější fakt, jedno riziko a jedno konkrétní doporučení.`;
     });
     const data = await res.json();
     const text = data.content?.[0]?.text || '';
-    wrap.innerHTML = renderBriefingCard(text);
+    if (text) {
+      wrap.innerHTML = renderBriefingCard(text, false);
+    } else {
+      wrap.innerHTML = renderBriefingCard(buildManagerFallbackBriefing(pct, donePOS, totalPOS, behind, gpsFlags, live), true);
+    }
   } catch (e) {
-    const fallback = `Tým dnes plní ${pct}% týdenní normy (${donePOS}/${totalPOS} POS). ${behind.length ? `${behind.length} technik(ů) je výrazně pozadu (${behind.map(t => t.name).join(', ')}) — doporučuji telefonickou kontrolu ještě dnes.` : 'Žádný technik výrazně nezaostává.'} ${gpsFlags.length ? `Zaznamenáno ${gpsFlags.length} GPS anomálií — prověřit u dotčených POS.` : 'GPS kontrola bez anomálií.'} Doporučení: prioritizovat otevřené servisy (${live.servisOpen?.length || 0}) před koncem dne.`;
-    wrap.innerHTML = renderBriefingCard(fallback);
+    // AI API nedostupné — šablona z reálných dat, ale NE jako "AI Insight"
+    wrap.innerHTML = renderBriefingCard(buildManagerFallbackBriefing(pct, donePOS, totalPOS, behind, gpsFlags, live), true);
   }
 
   btn.disabled = false;
   btn.innerHTML = '<svg class="ic"><use href="#ic-calendar"/></svg> Refresh briefing';
 }
 
-function renderBriefingCard(text) {
+function buildManagerFallbackBriefing(pct, donePOS, totalPOS, behind, gpsFlags, live) {
+  return `Tým dnes plní ${pct}% týdenní normy (${donePOS}/${totalPOS} POS). ${behind.length ? `${behind.length} technik(ů) je výrazně pozadu (${behind.map(t => t.name).join(', ')}) — doporučuji telefonickou kontrolu ještě dnes.` : 'Žádný technik výrazně nezaostává.'} ${gpsFlags.length ? `Zaznamenáno ${gpsFlags.length} GPS anomálií — prověřit u dotčených POS.` : 'GPS kontrola bez anomálií.'} Doporučení: prioritizovat otevřené servisy (${live.servisOpen?.length || 0}) před koncem dne.`;
+}
+
+function renderBriefingCard(text, isFallback) {
+  const badge = isFallback
+    ? `<div class="ai-report-hdr-badge ai-report-hdr-badge-static">Operativní souhrn</div>`
+    : `<div class="ai-report-hdr-badge" style="background:var(--navy);color:var(--teal)">AI Insight</div>`;
   return `<div class="ai-report-card">
     <div class="ai-report-hdr" style="background:var(--teal)">
       <div class="ai-report-hdr-icon"><svg class="ic ic-lg" style="color:var(--navy)"><use href="#ic-calendar"/></svg></div>
       <div class="ai-report-hdr-t" style="color:var(--navy)">Daily Executive Briefing</div>
-      <div class="ai-report-hdr-badge" style="background:var(--navy);color:var(--teal)">AI Insight</div>
+      ${badge}
     </div>
     <div class="ai-report-body">${text}</div>
   </div>`;
@@ -2474,11 +2494,14 @@ Buď konkrétní, zmiňuj jména. Max 300 slov.`;
     });
     const data = await res.json();
     const text = data.content?.[0]?.text || '';
-    renderAIReport(text, gpsFlags, shortVisits);
+    if (text) {
+      renderAIReport(text, gpsFlags, shortVisits, false);
+    } else {
+      renderAIReport(generateMockReport(gpsFlags, shortVisits), gpsFlags, shortVisits, true);
+    }
   } catch(e) {
-    // Fallback mock report
-    const mockReport = generateMockReport(gpsFlags, shortVisits);
-    renderAIReport(mockReport, gpsFlags, shortVisits);
+    // AI API nedostupné — report sestavený přímo z dat, ale NE jako "AI Insight"
+    renderAIReport(generateMockReport(gpsFlags, shortVisits), gpsFlags, shortVisits, true);
   }
 
   btn.disabled = false;
@@ -2506,7 +2529,7 @@ Doporučení
 • GPS ověření aktivní — případné anomálie budou automaticky flagovány`;
 }
 
-function renderAIReport(text, gpsFlags, shortVisits) {
+function renderAIReport(text, gpsFlags, shortVisits, isFallback) {
   const wrap = document.getElementById('ai-report-wrap');
   if (!wrap) return;
 
@@ -2519,12 +2542,16 @@ function renderAIReport(text, gpsFlags, shortVisits) {
     .replace(/^• (.+)$/gm, '<div class="ai-flag-item ai-flag-orange"><span>•</span><span>$1</span></div>')
     .replace(/\n\n/g, '<br>');
 
+  const badge = isFallback
+    ? `<div class="ai-report-hdr-badge ai-report-hdr-badge-static">Souhrn z dat</div>`
+    : `<div class="ai-report-hdr-badge">AI Insight</div>`;
+
   wrap.innerHTML = `
     <div class="ai-report-card">
       <div class="ai-report-hdr">
         <div class="ai-report-hdr-icon"><svg class="ic ic-lg" style="color:#fff"><use href="#ic-intel"/></svg></div>
         <div class="ai-report-hdr-t">Team Performance Analysis — W25</div>
-        <div class="ai-report-hdr-badge">AI Insight</div>
+        ${badge}
       </div>
       <div class="ai-report-body">${formatted}</div>
     </div>
@@ -2602,10 +2629,11 @@ const _origShowBriefing = showBriefing;
 showBriefing = function() {
   _origShowBriefing();
   // Override static message with AI
+  // POZOR: _origShowBriefing() právě přepsal bf-msg.textContent, čímž zničil
+  // dítě #bf-typing z původního HTML markupu — nelze se na něj už spoléhat.
   const el = document.getElementById('bf-msg');
-  const typing = document.getElementById('bf-typing');
-  if (el && typing) {
-    el.innerHTML = '<span>Generuji personalizovaný briefing…</span><span class="ai-badge">AI Insight</span>';
+  if (el) {
+    el.innerHTML = '<span>Generuji personalizovaný briefing…</span><span class="ai-badge ai-badge-static">…</span>';
     setTimeout(() => generateAIBriefing(), 800);
   }
 };
