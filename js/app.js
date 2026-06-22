@@ -221,6 +221,10 @@ function toggleProfileDetail(which){
 }
 document.addEventListener('click', (e)=>{
   if (!e.target.closest('.user-chip')) closeAllUserMenus();
+  if (!e.target.closest('#global-pos-search') && !e.target.closest('#global-pos-search-results')) {
+    const box = document.getElementById('global-pos-search-results');
+    if (box) box.style.display = 'none';
+  }
 });
 
 function renderUserMenus(){
@@ -1523,6 +1527,47 @@ function getAllPosFlat() {
   // De-dup by POS id — keep first occurrence (POS je v reálných datech jen v 1 týdnu)
   const seen = new Set();
   return out.filter(({ p }) => { if (seen.has(p.id)) return false; seen.add(p.id); return true; });
+}
+
+// ── GLOBAL POS SEARCH — Velín nav, hledá podle POS ID (primárně) napříč
+// celou sítí. Přesná shoda POS ID otevírá kartu rovnou, jinak nabídne
+// nejvýš 6 nejbližších shod (ID/název/adresa) k výběru.
+function onGlobalPosSearch(val) {
+  const q = (val || '').trim().toLowerCase();
+  const box = document.getElementById('global-pos-search-results');
+  if (!box) return;
+  if (!q) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  const matches = getAllPosFlat().filter(({ p }) =>
+    String(p.id).toLowerCase().includes(q) || (p.n||'').toLowerCase().includes(q) || (p.a||'').toLowerCase().includes(q)
+  ).slice(0, 6);
+  if (!matches.length) {
+    box.style.display = 'block';
+    box.innerHTML = `<div style="padding:12px 14px;font-size:12px;color:var(--muted)">Žádná POS neodpovídá "${val}"</div>`;
+    return;
+  }
+  box.style.display = 'block';
+  box.innerHTML = matches.map(({ p }) => `
+    <div onclick="selectGlobalPosResult('${p.id}')" style="padding:10px 14px;border-bottom:1px solid var(--bg);cursor:pointer">
+      <div style="font-size:13px;font-weight:700;color:var(--navy)">#${p.id} · ${p.n||'—'}</div>
+      <div style="font-size:11px;color:var(--muted)">${p.a||'—'}</div>
+    </div>`).join('');
+}
+
+function selectGlobalPosResult(posId) {
+  document.getElementById('global-pos-search').value = '';
+  document.getElementById('global-pos-search-results').style.display = 'none';
+  showAdminPOSDetail(posId);
+}
+
+function submitGlobalPosSearch() {
+  const val = (document.getElementById('global-pos-search').value || '').trim();
+  if (!val) return;
+  const exact = getAllPosFlat().find(({ p }) => String(p.id) === val);
+  if (exact) { selectGlobalPosResult(exact.p.id); return; }
+  const matches = getAllPosFlat().filter(({ p }) =>
+    String(p.id).toLowerCase().includes(val.toLowerCase()) || (p.n||'').toLowerCase().includes(val.toLowerCase())
+  );
+  if (matches.length === 1) selectGlobalPosResult(matches[0].p.id);
 }
 
 function buildPosNetRows() {

@@ -512,6 +512,13 @@
       <button class="adm-btn" onclick="showAdmPage('editor',this)"><svg class="ic ic-sm"><use href="#ic-edit"/></svg> Editor</button>
       <button class="adm-btn" onclick="showAdmPage('schvaleni',this)"><svg class="ic ic-sm"><use href="#ic-check-circle"/></svg> Schválení</button>
     </div>
+    <div style="position:relative;flex-shrink:0">
+      <input type="text" id="global-pos-search" placeholder="POS ID, název, adresa…"
+        oninput="onGlobalPosSearch(this.value)"
+        onkeydown="if(event.key==='Enter') submitGlobalPosSearch()"
+        style="width:180px;padding:8px 12px;border-radius:8px;border:1.5px solid rgba(255,255,255,.15);background:rgba(255,255,255,.08);color:#fff;font-size:13px;font-family:inherit;outline:none"/>
+      <div id="global-pos-search-results" style="display:none;position:absolute;top:calc(100% + 6px);right:0;width:280px;background:#fff;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.25);overflow:hidden;z-index:300"></div>
+    </div>
     <div class="user-chip">
       <div class="av" id="velin-av" onclick="toggleUserMenu('velin')">PH</div>
       <div class="user-dd" id="user-dd-velin">
