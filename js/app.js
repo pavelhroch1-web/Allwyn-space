@@ -1146,9 +1146,21 @@ function initAdminMap(){
 // ══════════════════════════════════════════════════════
 // ADMIN — REGION FILTER
 // ══════════════════════════════════════════════════════
+// Ranní pohled = kde dnes zasáhnout. Odpolední pohled = jak dopadl den / podklad
+// pro plánování zítřka. Výběr se pamatuje per browser, ne globálně.
+function setDashView(view){
+  document.querySelectorAll('#dash-view-toggle .rfb').forEach(b=>b.classList.remove('active'));
+  document.getElementById('dvt-' + view)?.classList.add('active');
+  const morning = document.getElementById('dash-view-morning');
+  const afternoon = document.getElementById('dash-view-afternoon');
+  if (morning) morning.style.display = view === 'morning' ? '' : 'none';
+  if (afternoon) afternoon.style.display = view === 'afternoon' ? '' : 'none';
+  lss('dash_view', view);
+}
+
 function filterRegion(region,btn){
   activeRegion=region;
-  document.querySelectorAll('.rfb').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('#rf-row .rfb').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
   renderAdminLive();
   adminMarkers.forEach((m,i)=>{
@@ -1230,6 +1242,11 @@ function startAdminRefresh() {
 // ADMIN — EXECUTIVE DASHBOARD (computed from existing data, no backend)
 // ══════════════════════════════════════════════════════
 function renderAdminDashboard() {
+  if (!document.getElementById('dash-view-morning')?.dataset.inited) {
+    setDashView(lsg('dash_view', 'morning'));
+    const m = document.getElementById('dash-view-morning');
+    if (m) m.dataset.inited = '1';
+  }
   const live = getLiveState();
   const pos = FULL_POS_DATA['25'] || [];
   const gpsFlags = lsg('gps_flags_' + today(), []);
@@ -1285,18 +1302,15 @@ function renderAdminDashboard() {
     <div class="lb-col"><div class="lb-hdr"><svg class="ic ic-sm"><use href="#ic-arrow-down"/></svg> Vyžaduje pozornost — tento týden</div>${bottom3.map((t, i) => lbRow(t, i + 1)).join('')}</div>
   `;
 
-  // AI insighty — syntetizované z reálných dat (bez nutnosti volat AI API)
-  const avgPosPerTech = adminTechnicians.length ? Math.round(totalPOS / adminTechnicians.length) : 0;
-  const bestChannel = chStats.filter(c => c.list.length).sort((a, b) => b.pct - a.pct)[0];
-  const insights = [
-    { icon: 'ic-route', title: 'Route efektivita', text: `Průměrně ${avgPosPerTech} POS na technika za týden, ${activeCount} týmů aktivně v terénu právě teď.` },
-    { icon: 'ic-trophy', title: 'Nejlepší kanál', text: bestChannel ? `${bestChannel.ch} má nejvyšší plnění (${bestChannel.pct}%) ze všech kanálů tento týden.` : 'Data se počítají…' },
-    { icon: 'ic-shield', title: 'Anti-fraud kontrola', text: flagsToday ? `${gpsFlags.length} GPS anomálií a ${shortVisits.length} podezřele krátkých návštěv dnes — doporučena kontrola.` : 'Žádné GPS anomálie ani podezřele krátké návštěvy dnes.' },
-    { icon: 'ic-target', title: 'Predikce dokončení', text: `Při aktuálním tempu tým dokončí týden na ${completionPct}% — ${completionPct >= 70 ? 'na dobré cestě splnit normu.' : 'hrozí nesplnění normy, zvážit prioritizaci.'}` },
-  ];
-  const insEl = document.getElementById('dash-insights');
-  if (insEl) insEl.innerHTML = insights.map(i => `
-    <div class="insight-card"><div class="insight-icon"><svg class="ic"><use href="#${i.icon}"/></svg></div><div class="insight-body"><div class="insight-title">${i.title}</div><div class="insight-text">${i.text}</div></div></div>`).join('');
+  // Stavový řádek — vždy viditelný souhrn, nezávislý na ranní/odpolední záložce
+  const dssActive = document.getElementById('dss-active');
+  const dssBehind = document.getElementById('dss-behind');
+  const dssFlags = document.getElementById('dss-flags');
+  const dssPct = document.getElementById('dss-pct');
+  if (dssActive) dssActive.textContent = activeCount;
+  if (dssBehind) dssBehind.textContent = behind.length;
+  if (dssFlags) dssFlags.textContent = flagsToday;
+  if (dssPct) dssPct.textContent = completionPct + '%';
 
   // Attention feed — servisy, GPS flagy, krátké návštěvy, technici pozadu
   const attnItems = [];

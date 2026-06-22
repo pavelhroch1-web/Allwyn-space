@@ -442,6 +442,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .rfb.active{background:var(--navy);color:var(--teal);border-color:var(--navy)}
 .rfb:hover{border-color:var(--teal)}
 
+/* DASH STATUS STRIP — vždy viditelný souhrn, nad ranní/odpolední záložkou */
+.dash-status-strip{display:flex;gap:8px;margin-bottom:10px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.dash-status-strip::-webkit-scrollbar{display:none}
+.dss-item{flex:1;min-width:78px;background:#fff;border-radius:10px;padding:9px 10px;box-shadow:0 1px 3px rgba(0,0,0,.06);text-align:center}
+.dss-val{display:block;font-size:19px;font-weight:900;letter-spacing:-.5px;color:var(--navy)}
+.dss-lbl{display:block;font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-top:1px}
+.dss-item.dss-warn .dss-val{color:var(--orange)}
+.dss-item.dss-danger .dss-val{color:var(--red)}
+
+/* DASH VIEW TOGGLE (Ranní / Odpolední) */
+#dash-view-toggle{margin-bottom:14px}
+
 /* STAT CARDS */
 .sgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
 .scard{background:#fff;border-radius:12px;padding:14px 16px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
@@ -653,12 +665,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .lb-col .tr{padding:8px 10px}
 .lb-col .tav{width:26px;height:26px;font-size:11px}
 @media (max-width:480px){.lb-grid{grid-template-columns:1fr}}
-
-.insight-grid{display:flex;flex-direction:column;gap:10px}
-.insight-card{display:flex;gap:10px;background:var(--bg);border-radius:10px;padding:12px}
-.insight-icon{flex-shrink:0;color:var(--teal);padding-top:1px}
-.insight-title{font-size:12px;font-weight:800;margin-bottom:2px}
-.insight-text{font-size:12px;color:var(--muted);line-height:1.5}
 
 .attn-item{display:flex;align-items:flex-start;gap:8px;padding:11px 14px;border-bottom:1px solid var(--bg);font-size:12px;line-height:1.4}
 .attn-item:last-child{border-bottom:none}
