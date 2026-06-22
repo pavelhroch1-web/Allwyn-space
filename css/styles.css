@@ -326,7 +326,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .tchk.on{background:var(--teal);border-color:var(--td)}
 .tchk.on::after{content:'✓';font-size:12px;font-weight:800;color:#fff}
 .ttxt{flex:1;font-size:14px;line-height:1.4}
-.ttxt.done{text-decoration:line-through;color:var(--muted)}
+.ttxt.done{color:var(--muted)}
 .tnote{padding:0 14px 10px 48px;font-size:11px;color:var(--muted);border-top:1px solid var(--bg)}
 
 /* ADD TASK */

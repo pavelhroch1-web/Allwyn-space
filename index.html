@@ -749,6 +749,7 @@
         <button class="ed-subnav active" onclick="showEditorSection('texty',this)"><svg class="ic ic-sm"><use href="#ic-edit"/></svg> Texty</button>
         <button class="ed-subnav" onclick="showEditorSection('kampane',this)"><svg class="ic ic-sm"><use href="#ic-target"/></svg> Kampaně</button>
         <button class="ed-subnav" onclick="showEditorSection('inventory',this)"><svg class="ic ic-sm"><use href="#ic-box"/></svg> Inventory katalog</button>
+        <button class="ed-subnav" onclick="showEditorSection('ukoly',this)"><svg class="ic ic-sm"><use href="#ic-check-circle"/></svg> Úkoly na místě</button>
       </div>
 
       <!-- TEXTY -->
@@ -803,6 +804,30 @@
         <div style="padding:12px;background:var(--tl);border-radius:10px;font-size:12px;color:var(--tm);line-height:1.5;margin-top:8px;display:flex;gap:6px">
           <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-bulb"/></svg>
           <span>Technici vybírají inventory POUZE z tohoto katalogu.</span>
+        </div>
+      </div>
+
+      <!-- ÚKOLY NA MÍSTĚ — šablona checklistu per kanál -->
+      <div id="ed-sec-ukoly" style="display:none">
+        <div class="adm-sh" style="margin-bottom:10px"><div class="adm-st">IDT</div>
+          <button onclick="addTaskTemplateItem('IDT')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Úkol</button>
+        </div>
+        <div class="editor-card" id="ed-task-IDT"></div>
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">PETROL</div>
+          <button onclick="addTaskTemplateItem('PETROL')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Úkol</button>
+        </div>
+        <div class="editor-card" id="ed-task-PETROL"></div>
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">KA</div>
+          <button onclick="addTaskTemplateItem('KA')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Úkol</button>
+        </div>
+        <div class="editor-card" id="ed-task-KA"></div>
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">CORN</div>
+          <button onclick="addTaskTemplateItem('CORN')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Úkol</button>
+        </div>
+        <div class="editor-card" id="ed-task-CORN"></div>
+        <div style="padding:12px;background:var(--tl);border-radius:10px;font-size:12px;color:var(--tm);line-height:1.5;margin-top:8px;display:flex;gap:6px">
+          <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-bulb"/></svg>
+          <span>Úprava platí pro nově sestavená/naimportovaná POS. Už rozjeté POS s úkoly z dřívější šablony se nepřepisují zpětně.</span>
         </div>
       </div>
     </div>

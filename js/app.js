@@ -45,7 +45,7 @@ function augmentRawPos(p, assignedTechnician){
     area: withCoords.area || PosModel.DEFAULT_REGION,
     region: withCoords.area || PosModel.DEFAULT_REGION,
     photos:[],notes:'',
-    taskState:[...((TASK_TMPL[typ]||TASK_TMPL[rawTyp]||TASK_TMPL.IDT)).map(t=>({text:t,src:'template',done:p.v}))],
+    taskState:[...((getTaskTemplates()[typ]||getTaskTemplates()[rawTyp]||getTaskTemplates().IDT)).map(t=>({text:t,src:'template',done:p.v}))],
     refs:(REFS[typ]||REFS[rawTyp]||REFS.IDT),
     inventory:JSON.parse(JSON.stringify(INV_DEFAULT[typ]||INV_DEFAULT[rawTyp]||INV_DEFAULT.IDT)),
   };
@@ -3746,7 +3746,7 @@ function makePlanCard(p, ri, selectable) {
 // EDITOR SECTIONS (texty / kampaně / inventory katalog)
 // ══════════════════════════════════════════════════════════════════════════
 function showEditorSection(sec, btn) {
-  ['texty','kampane','inventory'].forEach(s => {
+  ['texty','kampane','inventory','ukoly'].forEach(s => {
     const el = document.getElementById('ed-sec-' + s);
     if (el) el.style.display = s === sec ? 'block' : 'none';
   });
@@ -3754,6 +3754,7 @@ function showEditorSection(sec, btn) {
   if (btn) btn.classList.add('active');
   if (sec === 'kampane') renderEditorCampaigns();
   if (sec === 'inventory') renderEditorCatalog();
+  if (sec === 'ukoly') renderEditorTaskTemplates();
 }
 
 // ── EDITABLE CAMPAIGNS ─────────────────────────────────────────────────────
@@ -3839,6 +3840,47 @@ function deleteCatalogItem(section, i) {
   cat[section].splice(i,1);
   saveInvCatalog(cat);
   renderEditorCatalog();
+}
+
+// ── EDITABLE TASK TEMPLATES — "Úkoly na místě" šablona per kanál (IDT/
+// PETROL/KA/CORN). Velín edituje, technik vidí výsledek v checklistu na POS.
+// Stejný override pattern jako kampaně/inventory katalog výše — beze
+// zásahu do TASK_TMPL konstanty, jen lsg/lss override nad ní.
+function getTaskTemplates() {
+  return lsg('editor_task_templates') || JSON.parse(JSON.stringify(TASK_TMPL));
+}
+function saveTaskTemplates(t) { lss('editor_task_templates', t); }
+
+function renderEditorTaskTemplates() {
+  const tpl = getTaskTemplates();
+  Object.keys(TASK_TMPL).forEach(channel => {
+    const el = document.getElementById('ed-task-' + channel);
+    if (!el) return;
+    const items = tpl[channel] || [];
+    el.innerHTML = items.map((text,i) => `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--bg)">
+        <input value="${text}" oninput="updateTaskTemplateItem('${channel}',${i},this.value)" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:13px;outline:none"/>
+        <button onclick="deleteTaskTemplateItem('${channel}',${i})" style="background:none;border:none;color:var(--red);font-size:16px;cursor:pointer;padding:4px">✕</button>
+      </div>`).join('') || '<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px">Žádné úkoly</div>';
+  });
+}
+function updateTaskTemplateItem(channel, i, val) {
+  const tpl = getTaskTemplates();
+  tpl[channel][i] = val;
+  saveTaskTemplates(tpl);
+}
+function addTaskTemplateItem(channel) {
+  const tpl = getTaskTemplates();
+  if (!tpl[channel]) tpl[channel] = [];
+  tpl[channel].push('Nový úkol');
+  saveTaskTemplates(tpl);
+  renderEditorTaskTemplates();
+}
+function deleteTaskTemplateItem(channel, i) {
+  const tpl = getTaskTemplates();
+  tpl[channel].splice(i,1);
+  saveTaskTemplates(tpl);
+  renderEditorTaskTemplates();
 }
 
 // ── Patch renderCampaigns to use editor campaigns ──────────────────────────
