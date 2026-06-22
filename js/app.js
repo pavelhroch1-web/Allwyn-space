@@ -24,12 +24,20 @@ function augmentRawPos(p, assignedTechnician){
   PosMasterData.mergePosMasterData(p, POS_MASTER_MAP[p.id]);
   const hasRealGps = typeof p.lat === 'number' && typeof p.lng === 'number';
   const withCoords = ensurePosCoords(p);
-  // gpsSource rozlišuje reálné GPS z master importu od mock odhadu podle
-  // adresy — RouteEngine pak odhadnuté POS vyřadí z reálných km/min výpočtů
-  // (žádné fake číslo do trasy/optimalizace), jen je pořád zobrazí na mapě.
+  // gpsSource rozlišuje TŘI úrovně přesnosti GPS:
+  // 'real'   — souřadnice z master GPS importu (přesná adresa POS)
+  // 'town'   — chybí master import, ale mock geocoder našel obec v reálném
+  //            slovníku CZ_TOWN_COORDS (js/geo.js) — souřadnice jsou reálné
+  //            (centrum obce odvozené z reálné adresy), jen ne přesná adresa.
+  // 'region' — obec se ve slovníku nenašla, souřadnice jsou deterministický
+  //            odhad kolem centroidu regionu — skutečný odhad, ne reálná data.
+  // RouteEngine počítá km/min z 'real' i 'town' (obojí reálná data), 'region'
+  // vyřadí z výpočtů a jen zobrazí na mapě s varováním.
   withCoords.gpsSource = hasRealGps
     ? 'real'
-    : (typeof withCoords.lat === 'number' ? 'estimated' : 'unknown');
+    : (typeof withCoords.lat === 'number'
+        ? (withCoords.gpsTownMatched ? 'town' : 'region')
+        : 'unknown');
   return {
     ...withCoords,
     typ,

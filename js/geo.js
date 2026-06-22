@@ -333,7 +333,7 @@ function geocodeAddress(address, areaCode){
   const key = normalizeTownKey(last);
   if(CZ_TOWN_COORDS[key]){
     const [lat,lng] = CZ_TOWN_COORDS[key];
-    return {lat, lng};
+    return {lat, lng, matched: true};
   }
   const centroid = (areaCode && REGION_AREA_CENTROID[areaCode]) || REGION_CENTROID;
   // fallback: deterministický rozptyl okolo centroidu regionu, odvozený z adresy
@@ -342,17 +342,22 @@ function geocodeAddress(address, areaCode){
   return {
     lat: centroid[0] + (u1*2-1)*REGION_SPREAD_DEG,
     lng: centroid[1] + (u2*2-1)*REGION_SPREAD_DEG,
+    matched: false,
   };
 }
 
 /**
  * Doplní pos.lat/pos.lng pokud chybí. Idempotentní.
+ * pos.gpsTownMatched: true = souřadnice obce ze slovníku (reálná data odvozená
+ * z reálné adresy), false = regionální fallback odhad (skutečný odhad bez
+ * vazby na konkrétní obec).
  */
 function ensurePosCoords(pos){
   if(typeof pos.lat==='number' && typeof pos.lng==='number') return pos;
   const c = geocodeAddress(pos.a, pos.area);
   pos.lat = c.lat;
   pos.lng = c.lng;
+  pos.gpsTownMatched = c.matched;
   return pos;
 }
 

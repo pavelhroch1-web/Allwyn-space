@@ -115,18 +115,23 @@
   // startPoint: volitelný reálný výchozí bod technika (GPS/domov) — pokud
   // chybí, trasa se počítá tak jako dřív (začíná na order[0] bez "cesty tam").
   //
-  // POS s pos.gpsSource !== 'real' (odhad z mock geocoderu, ne reálný import)
-  // se do drivingKm/drivingMin NEPOČÍTAJÍ — nejde o reálnou silniční
-  // vzdálenost, takže nesmí vstoupit do čísla, které velín/technik vidí jako
-  // fakt. Pořád jsou ale součástí `order`/posCount (zobrazí se na mapě), jen
-  // jako warning, ne jako tichá chyba ve výpočtu.
+  // hasUsableGps: 'real' (master GPS import) i 'town' (mock geocoder našel
+  // obec v reálném slovníku CZ_TOWN_COORDS — souřadnice jsou reálná data
+  // odvozená z reálné adresy, ne vymyšlené číslo) vstupují do
+  // drivingKm/drivingMin. Jen 'region' (skutečný odhad bez vazby na
+  // konkrétní obec) a 'unknown' se NEPOČÍTAJÍ — u nich by šlo o fake číslo
+  // v trase/optimalizaci. Pořád jsou součástí `order`/posCount (zobrazí se
+  // na mapě), jen jako warning, ne jako tichá chyba ve výpočtu.
+  function hasUsableGps(p){
+    return p.gpsSource === 'real' || p.gpsSource === 'town';
+  }
   function calculateRoute(order, startPoint){
     if (!order.length) {
       return { order: [], legs: [], posCount: 0, drivingKm: 0, drivingMin: 0, workMin: 0, totalMin: 0, warnings: [] };
     }
-    const realOrder = order.filter(p => p.gpsSource === 'real');
+    const realOrder = order.filter(hasUsableGps);
     const warnings = order
-      .filter(p => p.gpsSource !== 'real')
+      .filter(p => !hasUsableGps(p))
       .map(p => ({ posId: p.id, reason: 'gps-missing' }));
     const legs = [];
     let drivingKm = 0, drivingMin = 0;
@@ -159,17 +164,17 @@
   // checkOpeningHours(order, calcResult, startTime, dayIdx) -> issue[]
   // calcResult musí pocházet z calculateRoute(order, startPoint) se
   // STEJNÝM startPoint a STEJNÝM order — bez něj legs neodpovídají příjezdům.
-  // Pozor: calcResult.legs počítá jen s POS, které mají reálné GPS
-  // (gpsSource==='real') — POS bez reálných GPS nemají spočítaný čas
-  // příjezdu, takže pro ně nelze otevírací dobu vyhodnotit (samostatný GPS
-  // warning to řeší v UI).
+  // Pozor: calcResult.legs počítá jen s POS s použitelným GPS (viz
+  // hasUsableGps výše — 'real' i 'town') — POS bez použitelného GPS nemají
+  // spočítaný čas příjezdu, takže pro ně nelze otevírací dobu vyhodnotit
+  // (samostatný GPS warning to řeší v UI).
   // Asistent, ne kontrola: vrací fakta (kdy POS otvírá/zavírá vs. kdy tam
   // technik dorazí podle SVÉHO pořadí), UI rozhoduje, jak to ukázat.
   function checkOpeningHours(order, calcResult, startTime, dayIdx){
     const startMin = parseHM(startTime);
     if (startMin === null || dayIdx === undefined || dayIdx === null) return [];
     if (!calcResult) return [];
-    const realOrder = order.filter(p => p.gpsSource === 'real');
+    const realOrder = order.filter(hasUsableGps);
     if (calcResult.legs.length !== realOrder.length) return [];
     const issues = [];
     let clockMin = startMin;
