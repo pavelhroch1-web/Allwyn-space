@@ -3446,6 +3446,29 @@ function showAdminPOSDetail(posId) {
   // Frekvence návštěv — odvozeno z reálných dat, ne vymyšlené
   const isOverdueNow = getOverduePOS(foundWeek, FULL_POS_DATA).some(op => op.id === p.id);
   const posModel = PosModel.toPosModel(p, { history, isOverdue: isOverdueNow });
+
+  // Kampaně — stejné aktivní kampaně jako vidí technik na této POS
+  const editorCamps = lsg('editor_campaigns') || [];
+  const isCorn = p.typ === 'CORN' || p.kat === '9' || p.k === '9';
+  html += `<div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Kampaně</div>
+  <div style="background:white;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:14px">
+  ${editorCamps.length ? editorCamps.map(c => `<div style="padding:10px 14px;border-bottom:1px solid var(--bg)">
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:10px;font-weight:700;color:var(--teal);text-transform:uppercase">${c.type||''}</span>
+      <div style="flex:1;font-size:13px;font-weight:700">${c.name||''}</div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:2px">${c.dates||''}${c.deadline?' · deadline: '+c.deadline.split('-').reverse().join('. '):''}</div>
+  </div>`).join('') : `<div style="padding:14px;font-size:12px;color:var(--muted)">Žádné aktivní kampaně.</div>`}
+  ${isCorn ? `<div style="padding:10px 14px;border-top:1px solid var(--bg);font-size:11px;color:var(--orange);font-weight:600">Corn — zvláštní kanál: plánogram dle konkrétní lokace, viz složka aktuálních plánogramů.</div>` : ''}
+  </div>
+
+  <!-- Tržby a prioritní skóre — honest empty state, žádná vymyšlená čísla -->
+  <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Tržby a prioritní skóre</div>
+  <div style="background:var(--bg);border-radius:10px;padding:13px;margin-bottom:14px;font-size:12px;color:var(--muted)">
+    ${posModel.salesValue === null ? 'Data o tržbách nejsou dostupná — chybí zdroj (SAP/reporting).' : posModel.salesValue}
+    <br>${posModel.priorityScore === null ? 'Prioritní skóre nelze vypočítat — chybí vstupní data.' : posModel.priorityScore}
+  </div>`;
+
   if (posModel.daysSinceLastVisit !== null) {
     const freqColors = { 'on-track': 'var(--green)', 'due-soon': 'var(--orange)', overdue: 'var(--red)' };
     const freqBg = { 'on-track': 'var(--gl)', 'due-soon': 'var(--ol)', overdue: 'var(--rl)' };
