@@ -149,7 +149,6 @@ function setViewTechnician(name){
 function loginAsVelin(){
   setSession({ role:'velin', user:VELIN_USER, viewingAs:null });
   enterRole('admin');
-  setTimeout(showVelinBriefing,500);
 }
 function loginAsTechnician(name){
   name = name || PosModel.SOLE_REAL_TECHNICIAN;
@@ -245,30 +244,6 @@ function renderUserMenus(){
 // Velín "Operations Briefing" — analogie technician showBriefing(), ale ze
 // stejných reálných zdrojů jako landing stránka a dashboard (deriveAllTechnicians,
 // RouteEngine.analyzeFleet) — žádné nové vymyšlené číslo.
-function showVelinBriefing(){
-  const techs = deriveAllTechnicians();
-  const totalPos = techs.reduce((s,t)=>s+t.total,0);
-  const activeToday = techs.filter(t=>t.activityCode==='on-pos'||t.activityCode==='done').length;
-  const overdue = techs.filter(t=>t.overdue).length;
-  const routes = buildAllDailyRoutes();
-  const fleet = Object.keys(routes).length ? RouteEngine.analyzeFleet(routes) : null;
-  const now = new Date();
-  document.getElementById('vb-date').textContent = now.toLocaleDateString('cs-CZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  document.getElementById('vb-pos').textContent = totalPos;
-  document.getElementById('vb-active').textContent = activeToday;
-  document.getElementById('vb-overdue').textContent = overdue;
-  document.getElementById('vb-msg').textContent = fleet
-    ? `Route Intelligence: optimalizace trasy by mohla ušetřit ${fleet.wastedHours.toFixed(0)} h jízdy a ${RouteEngine.formatKm(fleet.wastedKm)} tento týden.`
-    : 'Route Intelligence: pro tento týden nemám dostatek dat na odhad úspor.';
-  document.getElementById('velin-briefing').classList.add('open');
-}
-function closeVelinBriefing(){ document.getElementById('velin-briefing').classList.remove('open'); }
-function showVelinRecommendations(){
-  closeVelinBriefing();
-  const btn = document.querySelector(`[onclick="showAdmPage('dashboard',this)"]`);
-  if (btn) showAdmPage('dashboard',btn);
-}
-
 // ══════════════════════════════════════════════════════
 // ROLE
 // ══════════════════════════════════════════════════════
@@ -1312,6 +1287,41 @@ function renderAdminDashboard() {
   if (dssFlags) dssFlags.textContent = flagsToday;
   if (dssPct) dssPct.textContent = completionPct + '%';
 
+  // Jeden souhrnný verdikt — odpověď na "je dnešní provoz pod kontrolou?"
+  // do 10 sekund, beze čtení jednotlivých karet.
+  const issueCount = behind.length + flagsToday + live.servisOpen.length;
+  const verdictEl = document.getElementById('dash-verdict');
+  if (verdictEl) {
+    verdictEl.className = 'dash-verdict ' + (issueCount === 0 ? 'ok' : 'warn');
+    verdictEl.innerHTML = issueCount === 0
+      ? `<svg class="ic"><use href="#ic-check-circle"/></svg> Provoz pod kontrolou`
+      : `<svg class="ic"><use href="#ic-warning"/></svg> Vyžaduje zásah — ${issueCount} ${issueCount === 1 ? 'položka' : 'položky'} k řešení`;
+  }
+
+  // Regiony — kde je tým přetížený a kde je volná kapacita, ze stejných dat
+  // jako leaderboard/attention, jen seskupené podle t.region.
+  const byRegion = {};
+  adminTechnicians.forEach(t => {
+    const r = byRegion[t.region] = byRegion[t.region] || { region: t.region, techs: 0, active: 0, behind: 0, done: 0, total: 0 };
+    r.techs++;
+    if (t.done > 0 && t.done < t.total) r.active++;
+    if (t.overdue) r.behind++;
+    r.done += t.done;
+    r.total += t.total;
+  });
+  const regionRows = Object.values(byRegion)
+    .map(r => ({ ...r, pct: r.total ? Math.round(r.done / r.total * 100) : 0 }))
+    .sort((a, b) => a.pct - b.pct);
+  const regEl = document.getElementById('dash-regions');
+  if (regEl) {
+    regEl.innerHTML = regionRows.map(r => `
+      <div class="reg-row ${r.behind > 0 ? 'reg-warn' : ''}">
+        <div class="reg-name">${r.region}</div>
+        <div class="reg-bar-bg"><div class="reg-bar-fg" style="width:${r.pct}%"></div></div>
+        <div class="reg-stats">${r.done}/${r.total} POS · ${r.techs} ${r.techs === 1 ? 'technik' : 'techniků'}${r.behind ? ` · <span class="reg-behind">${r.behind} pozadu</span>` : ''}</div>
+      </div>`).join('');
+  }
+
   // Attention feed — servisy, GPS flagy, krátké návštěvy, technici pozadu
   const attnItems = [];
   live.servisOpen.forEach(p => attnItems.push({ icon: 'ic-wrench', sev: 'red', text: `Servis čeká: <strong>${p.n}</strong>` }));
@@ -1421,11 +1431,10 @@ function renderPerTechnicianSavings(fleet) {
     const techName = dayPos[0]?.assignedTechnician || 'Neznámý technik';
     const parts = routeKey.split('_');
     const dayLbl = parts[parts.length - 1];
-    const week = parts[parts.length - 2];
-    return `<div class="tr" style="cursor:default">
+    return `<div class="tr" onclick="showTechDetail('${techName}')">
       <div class="tn">${techName}</div>
-      <div style="flex:1;font-size:12px;color:var(--muted)">W${week} · ${dayLbl} · ${cmp.before.posCount} POS</div>
-      <div style="font-size:13px;font-weight:700;color:var(--teal)">Mohl by ušetřit ${RouteEngine.formatKm(cmp.savedKm)} · ${RouteEngine.formatHM(cmp.savedMin)}</div>
+      <div style="flex:1;font-size:12px;color:var(--muted)">${dayLbl} · trasa o ${RouteEngine.formatKm(cmp.savedKm)} horší než optimální pořadí (${cmp.before.posCount} POS)</div>
+      <div style="font-size:12px;font-weight:700;color:var(--teal);white-space:nowrap">Upravit trasu →</div>
     </div>`;
   }).join('');
 }

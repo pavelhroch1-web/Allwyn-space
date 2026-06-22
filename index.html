@@ -488,24 +488,6 @@
 <!-- ══ ADMIN / VELÍN ══ -->
 <div id="admin-screen">
 
-  <!-- OPERATIONS BRIEFING -->
-  <div class="briefing-ov" id="velin-briefing">
-    <div class="briefing-sh">
-      <div class="bf-handle"></div>
-      <div class="bf-hdr">
-        <div class="bf-emoji"><svg class="ic ic-xl"><use href="#ic-dashboard"/></svg></div>
-        <div><div class="bf-title">Dobré ráno, Pavel</div><div class="bf-date" id="vb-date"></div></div>
-      </div>
-      <div class="ai-msg"><span id="vb-msg"></span><span class="ai-badge">AI Insight</span></div>
-      <div class="bf-stats">
-        <div class="bf-stat o"><div class="bf-sv" id="vb-pos">—</div><div class="bf-sl">POS síť</div></div>
-        <div class="bf-stat g"><div class="bf-sv" id="vb-active">—</div><div class="bf-sl">Aktivní dnes</div></div>
-        <div class="bf-stat r"><div class="bf-sv" id="vb-overdue">—</div><div class="bf-sl">Pozadu</div></div>
-      </div>
-      <button class="bf-btn" onclick="showVelinRecommendations()">Zobrazit doporučení →</button>
-    </div>
-  </div>
-
   <!-- VIEW AS TECHNICIAN MODAL -->
   <div class="viewas-modal" id="viewas-modal">
     <div class="viewas-card">
@@ -557,6 +539,8 @@
         <div class="dss-item"><span class="dss-val" id="dss-pct">—</span><span class="dss-lbl">plnění týdne</span></div>
       </div>
 
+      <div class="dash-verdict ok" id="dash-verdict"></div>
+
       <div class="rf-row" id="dash-view-toggle">
         <button class="rfb active" id="dvt-morning" onclick="setDashView('morning')">Ranní pohled</button>
         <button class="rfb" id="dvt-afternoon" onclick="setDashView('afternoon')">Odpolední pohled</button>
@@ -571,9 +555,14 @@
         </div>
 
         <div class="dash-block" id="dash-hero-block" style="display:none">
-          <div class="dash-block-t"><svg class="ic"><use href="#ic-intel"/></svg> Route Intelligence — příležitosti tento týden</div>
+          <div class="dash-block-t"><svg class="ic"><use href="#ic-intel"/></svg> Route Intelligence — co upravit tento týden</div>
           <div class="kpi-grid" id="dash-hero-kpis"></div>
           <div class="kpi-grid" id="dash-route-kpis"></div>
+        </div>
+
+        <div class="dash-block">
+          <div class="dash-block-t"><svg class="ic"><use href="#ic-pin"/></svg> Regiony — vytížení a kapacita</div>
+          <div class="cw" id="dash-regions"></div>
         </div>
 
         <div class="dash-block">
