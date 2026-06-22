@@ -1322,12 +1322,58 @@ function renderAdminDashboard() {
       </div>`).join('');
   }
 
+  // Region capacity recommendation — POS/technika per region vs. fleetový
+  // průměr. Žádný vymyšlený práh, jen reálná odchylka od průměru fleetu.
+  const regCapEl = document.getElementById('dash-region-reco');
+  if (regCapEl) {
+    const withCap = regionRows.filter(r => r.techs > 0).map(r => ({ ...r, perTech: (r.total - r.done) / r.techs }));
+    const fleetAvgPerTech = withCap.length ? withCap.reduce((s, r) => s + r.perTech, 0) / withCap.length : 0;
+    const over = withCap.filter(r => r.perTech > fleetAvgPerTech * 1.2).sort((a, b) => b.perTech - a.perTech)[0];
+    const under = withCap.filter(r => r.perTech < fleetAvgPerTech * 0.8).sort((a, b) => a.perTech - b.perTech)[0];
+    if (over && under && over.region !== under.region) {
+      const overGap = Math.round((over.perTech - fleetAvgPerTech) * over.techs);
+      const underGap = Math.round((fleetAvgPerTech - under.perTech) * under.techs);
+      regCapEl.style.display = '';
+      regCapEl.innerHTML = `<svg class="ic"><use href="#ic-intel"/></svg> <strong>${over.region}</strong> má ${overGap > 0 ? '+' + overGap : overGap} POS nad fleetovým průměrem na technika, <strong>${under.region}</strong> má ${underGap} POS volné kapacity pod průměrem → zvážit přesun techniků nebo POS mezi regiony.`;
+    } else {
+      regCapEl.style.display = 'none';
+      regCapEl.innerHTML = '';
+    }
+  }
+
   // Attention feed — servisy, GPS flagy, krátké návštěvy, technici pozadu
   const attnItems = [];
   live.servisOpen.forEach(p => attnItems.push({ icon: 'ic-wrench', sev: 'red', text: `Servis čeká: <strong>${p.n}</strong>` }));
   gpsFlags.forEach(f => attnItems.push({ icon: 'ic-pin', sev: 'red', text: `GPS anomálie: <strong>${f.posName}</strong> · ${f.dist != null ? f.dist.toFixed(1) + 'km' : ''} od POS` }));
   shortVisits.forEach(v => attnItems.push({ icon: 'ic-clock', sev: 'orange', text: `Krátká návštěva: <strong>${v.posName}</strong> · ${v.dur} min` }));
   behind.forEach(t => attnItems.push({ icon: 'ic-warning', sev: 'orange', text: `<strong>${t.name}</strong> je pozadu — ${t.done}/${t.total} POS` }));
+
+  // Dnešní zátěž — relativní srovnání zbývajících POS dnes mezi techniky
+  // (žádný odhad konce směny, jen reálné rozdělení v rámci dnešního dne).
+  const todayIdx = getTodayDayIdx();
+  if (todayIdx !== null) {
+    const todayLoad = adminTechnicians
+      .map(t => ({ t, remaining: t.pos.filter(p => p.d === todayIdx && !p.v).length }))
+      .filter(x => x.remaining > 0);
+    if (todayLoad.length > 1) {
+      const avg = todayLoad.reduce((s, x) => s + x.remaining, 0) / todayLoad.length;
+      todayLoad
+        .filter(x => x.remaining >= avg * 1.5 && x.remaining - avg >= 3)
+        .sort((a, b) => b.remaining - a.remaining)
+        .slice(0, 2)
+        .forEach(x => attnItems.push({ icon: 'ic-clock', sev: 'orange', text: `<strong>${x.t.name}</strong> má dnes ${x.remaining} POS k řešení — nejvíc v týmu (průměr ${avg.toFixed(1)})` }));
+    }
+
+    // Vadný/k výměně materiál na dnešní trase — reálná data z inventory,
+    // ne odhad. Zdroj: PosModel.getMaterials() nad POS naplánovanými na dnes.
+    adminTechnicians.forEach(t => {
+      const todays = t.pos.filter(p => p.d === todayIdx && !p.v);
+      todays.forEach(p => {
+        const flagged = (PosModel.getMaterials(p) || []).filter(m => m.status === 'damaged' || m.status === 'needs_replacement');
+        flagged.forEach(m => attnItems.push({ icon: 'ic-warning', sev: 'orange', text: `<strong>${t.name}</strong> jede na POS <strong>${p.n}</strong>, kde je nahlášený materiál „${m.name}“ — ${m.statusLabel}` }));
+      });
+    });
+  }
 
   const attnEl = document.getElementById('dash-attention');
   if (attnEl) {
@@ -1406,13 +1452,15 @@ function renderFleetRouteAnalytics() {
 }
 
 // ── Per-technik framing nad stejnou kalkulací (žádná samostatná čísla) ─────
-// "Technik XY by dnes mohl ušetřit: 34 km / 42 minut." Pomáhá, nekontroluje.
+// Rozhodnutí, ne statistika: "Změnou pořadí ušetříš X min/km → zobrazit nové
+// pořadí?" Rozbalením se ukáže přesné nové pořadí POS, žádná černá skříňka.
 function renderPerTechnicianSavings(fleet) {
   let el = document.getElementById('dash-tech-savings');
   if (!el) {
     const block = document.createElement('div');
     block.className = 'dash-block';
-    block.innerHTML = `<div class="dash-block-t"><svg class="ic"><use href="#ic-target"/></svg> Úspora podle technika — pomáháme, nekontrolujeme</div><div class="cw" id="dash-tech-savings"></div>`;
+    block.innerHTML = `<div class="dash-block-t"><svg class="ic"><use href="#ic-target"/></svg> Úspora podle technika — pomáháme, nekontrolujeme</div>
+      <div class="cw" id="dash-tech-savings"></div>`;
     const anchor = document.getElementById('dash-route-kpis')?.closest('.dash-block');
     if (anchor) anchor.after(block);
     el = document.getElementById('dash-tech-savings');
@@ -1426,17 +1474,35 @@ function renderPerTechnicianSavings(fleet) {
     el.innerHTML = '<div class="empty"><div class="empty-t">Všechny trasy jsou už optimální</div></div>';
     return;
   }
-  el.innerHTML = entries.map(([routeKey, cmp]) => {
+  el.innerHTML = entries.map(([routeKey, cmp], idx) => {
     const dayPos = routes[routeKey] || [];
     const techName = dayPos[0]?.assignedTechnician || 'Neznámý technik';
     const parts = routeKey.split('_');
     const dayLbl = parts[parts.length - 1];
-    return `<div class="tr" onclick="showTechDetail('${techName}')">
-      <div class="tn">${techName}</div>
-      <div style="flex:1;font-size:12px;color:var(--muted)">${dayLbl} · trasa o ${RouteEngine.formatKm(cmp.savedKm)} horší než optimální pořadí (${cmp.before.posCount} POS)</div>
-      <div style="font-size:12px;font-weight:700;color:var(--teal);white-space:nowrap">Upravit trasu →</div>
+    const orderedNames = (cmp.optimizedOrderIds || []).map(id => {
+      const p = dayPos.find(x => x.id === id);
+      return p ? p.n : id;
+    });
+    return `<div class="route-reco">
+      <div class="tr" style="cursor:pointer" onclick="toggleRouteReco(${idx})">
+        <div class="tn">${techName}</div>
+        <div style="flex:1;font-size:12px;color:var(--muted)">${dayLbl} · Změnou pořadí POS ušetříš ${RouteEngine.formatHM(cmp.savedMin)} a ${RouteEngine.formatKm(cmp.savedKm)}</div>
+        <div style="font-size:12px;font-weight:700;color:var(--teal);white-space:nowrap">Zobrazit nové pořadí →</div>
+      </div>
+      <div class="route-reco-detail" id="route-reco-${idx}" style="display:none">
+        <div class="rr-order">${orderedNames.map((n, i) => `<span class="rr-step"><span class="rr-num">${i + 1}</span>${n}</span>`).join('<span class="rr-arrow">→</span>')}</div>
+        <div class="rr-actions">
+          <button class="rr-btn rr-apply" onclick="event.stopPropagation();showTechDetail('${techName}')">Upravit trasu u technika →</button>
+          <button class="rr-btn rr-skip" onclick="event.stopPropagation();toggleRouteReco(${idx})">Nechat současné pořadí</button>
+        </div>
+      </div>
     </div>`;
   }).join('');
+}
+
+function toggleRouteReco(idx) {
+  const d = document.getElementById('route-reco-' + idx);
+  if (d) d.style.display = d.style.display === 'none' ? '' : 'none';
 }
 
 // ══════════════════════════════════════════════════════
