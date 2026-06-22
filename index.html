@@ -7,6 +7,14 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Cross-device sync (pilot test, viz js/sync.js) — bez vyplněných klíčů se
+     appka chová přesně jako dřív, čistě lokálně. Klíče sem vlož po založení
+     Supabase projektu (Project Settings → API). -->
+<script>
+  window.ALLWYN_SUPABASE_URL = '';
+  window.ALLWYN_SUPABASE_ANON_KEY = '';
+</script>
 <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -817,5 +825,6 @@
 <script src="js/posModel.js"></script>
 <script src="js/technicianModel.js"></script>
 <script src="js/app.js"></script>
+<script src="js/sync.js"></script>
 </body>
 </html>
