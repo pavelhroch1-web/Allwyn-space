@@ -289,7 +289,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 /* CHECK-IN */
 .ci-bar{margin:12px 12px 0;border-radius:16px;padding:15px 16px;display:flex;align-items:center;gap:12px;background:#fff;border:none;box-shadow:0 2px 12px rgba(26,60,71,.1)}
 .ci-bar.active{background:linear-gradient(135deg,rgba(26,74,58,.06),#fff);box-shadow:0 2px 12px rgba(46,205,192,.18)}
-.ci-bar.done-ci{background:var(--gl);box-shadow:none}
+.ci-bar.done-ci{background:var(--gl);box-shadow:0 2px 12px rgba(26,140,78,.12)}
 .ci-ico{font-size:22px;flex-shrink:0}
 .ci-info{flex:1;min-width:0}
 .ci-t{font-size:13px;font-weight:700;color:var(--navy)}
@@ -419,7 +419,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .btn-complete.active{background:var(--teal);color:var(--navy);box-shadow:0 6px 18px rgba(46,205,192,.35)}
 .btn-complete.disabled{background:var(--border);color:var(--muted);cursor:default}
 .btn-complete.visited{background:var(--gl);color:var(--green);border:2px solid var(--green)}
-.vis-badge{display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;background:var(--gl);border-radius:8px;margin:8px 12px 4px;font-size:13px;font-weight:600;color:var(--green)}
+.vis-badge{display:flex;align-items:center;justify-content:center;gap:6px;padding:12px;background:var(--gl);border-radius:14px;margin:8px 12px 4px;font-size:13px;font-weight:700;color:var(--green);box-shadow:0 2px 10px rgba(26,140,78,.12)}
 
 /* MAP / ADMIN */
 #admin-screen{display:none;min-height:100vh}
