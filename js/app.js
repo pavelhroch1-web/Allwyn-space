@@ -1276,9 +1276,10 @@ function filterRegion(region,btn){
 
 // Centrální stav — co technik udělal, admin vidí live
 function getLiveState() {
+  const liveName = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
   return {
-    technik: 'Lán Tomáš',
-    initials: 'LT',
+    technik: liveName,
+    initials: TechnicianModel.initialsFromName(liveName),
     week: '25',
     dayStart: lsg('daystart_' + today()),
     visitLog: lsg('vlog_' + today(), []),
