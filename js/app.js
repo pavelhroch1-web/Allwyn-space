@@ -501,6 +501,50 @@ function showUnplanned(){
   wrap.appendChild(lbl);
   unpl.forEach(p=>{wrap.appendChild(makePosCard(p,all.indexOf(p),true));});
 }
+
+// ── Návrh dne (prázdný den) ──────────────────────────────────────────────
+// Asistent, ne automatika: RouteEngine.proposeDayPlan navrhne výběr z reálně
+// neplánovaných POS podle priority/SLA a vzdálenosti od reálné pozice
+// technika (pokud ji známe), v rámci 8h rozpočtu. Nic se nepřiřadí, dokud
+// technik výslovně neklikne "Vzít návrh" — vždy je vidět i tlačítko pro
+// vlastní plánování (CLAUDE.md pravidlo 6: technik si plán dělá sám).
+function buildDayProposalCard(unpl){
+  const startLoc=getStartLocation();
+  const proposal=RouteEngine.proposeDayPlan(unpl, startLoc, {budgetMin:480, dayIdx:cDay, todayStr:today()});
+  const el=document.createElement('div');
+  el.style.cssText='margin:12px;padding:14px;background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:12px';
+  if(!proposal.selected.length){
+    el.innerHTML=`<div class="empty-t" style="margin-bottom:6px">Nic naplánováno</div><div class="empty-s" style="margin-bottom:10px">Nepodařilo se najít vhodný návrh z neplánovaných POS.</div><button onclick="showUnplanned()" style="width:100%;padding:10px;background:var(--navy);color:var(--teal);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Naplánuji si sám</button>`;
+    return el;
+  }
+  const srcLabel = startLoc
+    ? `podle ${isStartLocationFresh()?'tvé dnešní':'tvé poslední uložené'} pozice`
+    : 'bez znalosti tvé pozice — jen podle priority, ne vzdálenosti';
+  el.innerHTML=`
+    <div style="font-size:11px;font-weight:700;color:var(--navy);letter-spacing:.03em;margin-bottom:6px">NÁVRH DNE</div>
+    <div style="font-size:12px;color:var(--td);margin-bottom:10px">Den je prázdný — navrhuju ${proposal.selected.length} POS z neplánovaných (${srcLabel}), odhad ${RouteEngine.formatHM(proposal.usedMin)} z 8h.</div>
+    <div style="margin-bottom:10px">
+      ${proposal.selected.map((p,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;${i<proposal.selected.length-1?'border-bottom:1px solid var(--border)':''}">
+        <div style="width:22px;height:22px;border-radius:50%;background:var(--tl);color:var(--navy);font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
+        <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:var(--navy)">${p.n} <span style="font-weight:600;color:var(--muted);font-size:11px">#${p.id}</span></div><div style="font-size:11px;color:var(--muted)">${p.a}</div></div>
+      </div>`).join('')}
+    </div>
+    <div style="display:flex;gap:8px">
+      <button onclick="acceptDayProposal('${proposal.selectedIds.join(',')}')" style="flex:1;padding:10px;background:var(--teal);color:var(--navy);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Vzít návrh</button>
+      <button onclick="showUnplanned()" style="flex:1;padding:10px;background:none;color:var(--td);border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Naplánuji si sám</button>
+    </div>
+  `;
+  return el;
+}
+function acceptDayProposal(idsCsv){
+  const ids=idsCsv.split(',').filter(Boolean);
+  const all=posData[cWeek]||[];
+  ids.forEach(id=>{
+    const p=all.find(x=>x.id===id);
+    if(p){ p.d=cDay; setAssignment(p.id, cDay); }
+  });
+  updateSummary();renderChips();renderDayTabs();renderList();
+}
 function typTag(p){
   if(p.typ==='CORN')return`<span class="tag t-corn">Corn</span>`;
   if(p.typ==='PETROL')return`<span class="tag t-petrol">${p.partner||'PETROL'}</span>`;
@@ -3033,9 +3077,23 @@ function startLocationKey(){
   return 'start_location_' + ((s && s.user && s.user.id) || 'default');
 }
 function getStartLocation(){ return lsg(startLocationKey()); }
+// Historie pozic (na rozdíl od jediné poslední hodnoty výše) — zatím se
+// nikde nečte, jen se sbírá, aby v budoucnu šlo "návrh dne" počítat podle
+// reálně nejčastějšího výchozího bodu, ne jen podle poslední pozice.
+// Žádné vymýšlení vzorce dříve, než existují reálná data k analýze.
+function startLocationHistoryKey(){
+  const s = getSession();
+  return 'start_location_history_' + ((s && s.user && s.user.id) || 'default');
+}
+function appendStartLocationHistory(loc){
+  const hist = lsg(startLocationHistoryKey()) || [];
+  hist.push(loc);
+  lss(startLocationHistoryKey(), hist.slice(-60));
+}
 function setStartLocation(lat, lng, source){
   const loc = { lat, lng, source, date: today(), ts: Date.now() };
   lss(startLocationKey(), loc);
+  appendStartLocationHistory(loc);
   return loc;
 }
 function isStartLocationFresh(){
@@ -3401,11 +3459,14 @@ renderList = function() {
   if (routeCard) wrap.appendChild(routeCard);
 
   if (!todayPos.length) {
-    const e = document.createElement('div');
-    e.className = 'empty';
-
     // Can they add POS from unplanned?
     const canPlan = isCurrentWeek && (isTodaySelected || isFuture(cDay));
+    if (canPlan && unpl.length > 0) {
+      wrap.appendChild(buildDayProposalCard(unpl));
+      return;
+    }
+    const e = document.createElement('div');
+    e.className = 'empty';
     e.innerHTML = `<div class="empty-i"><svg class="ic ic-xl"><use href="#ic-calendar"/></svg></div>
       <div class="empty-t">Nic naplánováno</div>
       <div class="empty-s">${canPlan ? 'Přiřaď POS z neplánovaných výše.' : 'Minulý den — pouze pro přehled.'}</div>`;

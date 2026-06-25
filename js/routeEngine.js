@@ -410,6 +410,59 @@
   }
   function formatKm(km){ return `${km.toFixed(1)} km`; }
 
+  // ── DAY PROPOSAL (technik s prázdným dnem) ─────────────────────────────
+  // Když má technik prázdný den, navrhneme co navštívit — žádný vymyšlený
+  // plán, jen řízený výběr z reálně neplánovaných POS (unplannedPos), greedy
+  // podle SLA priority (nejdřív) a vzdálenosti od reálného výchozího bodu
+  // (pokud je známý), v rámci reálného časového rozpočtu (budgetMin, default
+  // 8h pracovní doba = jízda + práce na POS). Pokud startPoint chybí, výběr
+  // se řídí jen prioritou — žádná vymyšlená vzdálenost. Vrací jen návrh; UI
+  // (app.js) rozhoduje, jestli ho technik přijme nebo si naplánuje sám.
+  function proposeDayPlan(unplannedPos, startPoint, opts){
+    opts = opts || {};
+    const budgetMin = opts.budgetMin != null ? opts.budgetMin : 480;
+    const dayIdx = opts.dayIdx;
+    const todayStr = opts.todayStr;
+    // POS importem potvrzené jako ten den zavřené (getOpeningHours === null)
+    // vyřadit — návrh trasy na zavřené POS by byl k ničemu. 'unknown' (chybí
+    // master data) se nechává, nelze nic předpokládat.
+    const pool = (unplannedPos || []).filter(p => {
+      if (dayIdx == null) return true;
+      return getOpeningHours(p, dayIdx) !== null;
+    });
+    const selected = [];
+    let usedMin = 0;
+    let cursor = startPoint || null;
+    while (pool.length) {
+      let bestIdx = -1, bestWeight = -1, bestDist = Infinity;
+      pool.forEach((p, idx) => {
+        const weight = getSlaWeight(p, todayStr);
+        const distKm = cursor && hasUsableGps(p) ? currentProvider.getLeg(cursor, p).distanceKm : (cursor ? Infinity : 0);
+        if (weight > bestWeight || (weight === bestWeight && distKm < bestDist)) {
+          bestWeight = weight; bestDist = distKm; bestIdx = idx;
+        }
+      });
+      const next = pool[bestIdx];
+      const legMin = cursor && hasUsableGps(next) ? currentProvider.getLeg(cursor, next).travelTimeMin : 0;
+      const visitMin = getVisitDurationMin(next);
+      const addMin = legMin + visitMin;
+      if (selected.length > 0 && usedMin + addMin > budgetMin) break;
+      usedMin += addMin;
+      selected.push(next);
+      if (hasUsableGps(next)) cursor = next;
+      pool.splice(bestIdx, 1);
+    }
+    return {
+      selected,
+      selectedIds: selected.map(p => p.id),
+      usedMin,
+      budgetMin,
+      remainingMin: Math.max(0, budgetMin - usedMin),
+      remainingUnplannedCount: pool.length,
+      hasStartPoint: !!startPoint,
+    };
+  }
+
   const RouteEngine = {
     providers,
     setDistanceProvider,
@@ -427,6 +480,8 @@
     nearestNeighborOrder,
     compareRoutes,
     analyzeFleet,
+    proposeDayPlan,
+    hasUsableGps,
     formatHM,
     formatKm,
     VISIT_DURATION_MIN,
