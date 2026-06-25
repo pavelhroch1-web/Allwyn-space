@@ -204,3 +204,60 @@ admin_texty (
 
 ## Doporučené pořadí pokud je málo času
 Pro rychlé reálné testování (priorita objednatele): **Fáze 0 → 2 → 3** (auth + DB) dřív než dokonalý refaktor. Modularizace (Fáze 1) se dá dělat průběžně. AI (Fáze 4) až když základ persistuje. Cíl objednatele je *"nechat to někoho otestovat v základní míře"* — tomu pomůže nejvíc persistence dat (Fáze 3) a přihlášení (Fáze 2).
+
+---
+
+## FÁZE 3 — stav implementace (relační perzistence návštěvy)
+
+Implementováno (`supabase/schema.sql`, `js/visitStore.js`): tabulky
+`technicians`, `pos_locations`, `visits`, `visit_tasks`, `materials`,
+`sync_events`. Technik zapisuje do nich přes write-through vzor — každá
+akce zapíše stejně jako dřív do localStorage (okamžitý render, appka
+zůstává funkční i offline/bez konfigurace) a navíc fire-and-forget pošle
+totéž do Supabase. Při loginu/refreshi/přepnutí technika ve Velínu se
+stav dokončení návštěvy a checklistu stáhne ze Supabase a sloučí do živých
+dat (`hydrateVisitStoreFor` v `js/visitStore.js`), takže se promítne i na
+jiném zařízení.
+
+**Zapisuje se (write):** check-in/checkout (`sync_events` log), stav
+checklistu (`visit_tasks`), dokončení návštěvy (`visits.status`/
+`completed_at`), podpis při zásobování (`visits.signature_data`),
+poznámky z POS karty (`visits.notes`), metadata fotek — slot, velikost,
+čas (`visits.photos_meta`, NE samotná fotka), množství spotřebního
+materiálu a merch (`materials`, merch mapováno na 1/0, protože tahle
+tabulka nemá boolean stav — zaokrouhlení, ne reálná kvantita).
+
+**Hydratuje se zpátky (read, ovlivní co technik/Velín vidí po refreshi
+na jiném zařízení):** jen dokončení návštěvy (`p.v`) a stav checklistu.
+To je přesně to, co potřebuje akceptační test "technik dokončí POS →
+refresh → Velín vidí změnu".
+
+**Známé mezery (vědomě, ne zapomenuté):**
+- **Merch/zásobování/fotky se po refreshi na jiném zařízení NEhydratují
+  zpátky do UI** — zapisují se do Supabase (auditovatelné přímým dotazem),
+  ale `merchItems`/`supplyItems`/`p.photos` se dnes čtou jen z lokálního
+  localStorage. Technik na jiném zařízení tak fyzicky neuvidí fotky ani
+  stav zásobování, dokud se nedoplní symetrické čtení.
+- **Kampaně ("campaign check") nemají v UI žádné technické tlačítko** —
+  kampaně jsou dnes čistě read-only přehled editovaný adminem
+  (`renderCampaigns`/`campCard`). Bez UI změny (zadání explicitně říká
+  "STOP all UI redesign") není co perzistovat — technik nemá akci k
+  zaznamenání.
+- **Dlouhodobý inventory** (`setInv`, stavy ok/miss/damaged/needs_replacement)
+  se vědomě NEMAPUJE do `materials.quantity` — bylo by to fabrikování
+  číselné kvantity z kategoriálního stavu (porušení "žádná fake data").
+  Zůstává jen v localStorage, dokud nedostane vlastní schéma.
+- **Visits jsou "aktuální stav", ne historie** — jedna řádka
+  `visits`/technik+POS se přepisuje (stejně jako `materials`), ne nová
+  řádka na každou návštěvu. Historie jednotlivých akcí (checkin, checkout,
+  potvrzení zásobování, poznámka, dokončení) je v `sync_events`.
+- **RLS politika zůstává otevřená pro anon klíč** (`pilot test — anon full
+  access`, viz `supabase/schema.sql`) — vědomé pilotní riziko pro 5 lidí na
+  kontrolovaných zařízeních, neřešeno v tomto kroku (samostatné rozhodnutí
+  o auth-based RLS, viz historie `/think` v repu).
+- **Testováno offline/bez síťového přístupu k Supabase** — Playwright ověřil,
+  že appka běží beze změny chování a bez console errorů, když síť na
+  Supabase není dostupná (`VisitStore.enabled() === false`). Skutečný
+  cross-device test (dvě zařízení, reálné Supabase spojení) nebyl v tomto
+  prostředí možný — doporučeno ověřit manuálně na dvou reálných
+  zařízeních/prohlížečích před nasazením na pilot.
