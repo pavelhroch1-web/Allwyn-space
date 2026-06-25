@@ -418,7 +418,6 @@
       <div class="det-tab active" onclick="showDetTab('inv',this)"><svg class="ic ic-sm"><use href="#ic-box"/></svg> Inventory</div>
       <div class="det-tab" onclick="showDetTab('notes',this)"><svg class="ic ic-sm"><use href="#ic-notes"/></svg> Poznámky</div>
       <div class="det-tab" onclick="showDetTab('karta',this)"><svg class="ic ic-sm"><use href="#ic-card"/></svg> Karta POS</div>
-      <div class="det-tab" onclick="showDetTab('test',this)"><svg class="ic ic-sm"><use href="#ic-box"/></svg> TEST</div>
     </div>
 
     <div id="dtc-notes" class="det-tc" style="display:none;padding:8px 12px">
@@ -461,13 +460,21 @@
       <button onclick="addPosCardNote()" style="margin-top:8px;width:100%;padding:12px;background:var(--navy);color:var(--teal);border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">Uložit záznam</button>
     </div>
 
-    <div id="dtc-test" class="det-tc" style="display:none;padding:8px 12px">
-      <div style="margin:0 0 10px;padding:10px 14px;background:var(--bg);border-radius:10px;font-size:11px;color:var(--muted);line-height:1.5;display:flex;gap:6px">
-        <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-info"/></svg>
-        <span>Sandbox podmíněného checklistu — testovací data z reálné kampaně, nesouvisí s touto POS. Slouží jen k ověření, že větvení Ano/Ne → navazující otázka/foto funguje na reálných odpovědích.</span>
+    <!-- CHECKLIST PREVIEW (sandbox, collapsed by default) -->
+    <div class="ck-preview-wrap">
+      <button class="ck-preview-toggle" id="ck-preview-toggle" onclick="toggleChecklistPreview()">
+        <svg class="ic ic-sm"><use href="#ic-box"/></svg>
+        <span>Náhled: chytrý checklist (test)</span>
+        <span class="ck-preview-arrow" id="ck-preview-arrow">⌄</span>
+      </button>
+      <div class="ck-preview-body" id="ck-preview-body" style="display:none">
+        <div style="margin:10px 12px;padding:10px 14px;background:var(--bg);border-radius:10px;font-size:11px;color:var(--muted);line-height:1.5;display:flex;gap:6px">
+          <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-info"/></svg>
+          <span>Náhled budoucí funkce — testovací data z reálné kampaně, nesouvisí s touto POS. Slouží jen k ověření, že větvení Ano/Ne → navazující otázka/foto funguje na reálných odpovědích.</span>
+        </div>
+        <select class="ck-select" id="ck-record-picker" onchange="loadChecklistRecord(this.value)" style="margin:0 12px 10px;width:calc(100% - 24px)"></select>
+        <div id="ck-test-list" style="padding:0 12px"></div>
       </div>
-      <select class="ck-select" id="ck-record-picker" onchange="loadChecklistRecord(this.value)" style="margin-bottom:10px"></select>
-      <div id="ck-test-list"></div>
     </div>
 
     <div id="vis-badge-slot2"></div>

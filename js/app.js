@@ -932,13 +932,20 @@ function showDetTab(tab,btn){
   if(btn)btn.classList.add('active');
   if(tab==='inv')renderInventory();
   if(tab==='karta')renderPosCard();
-  if(tab==='test')renderChecklistSandbox();
 }
 
 // ══════════════════════════════════════════════════════
-// CHECKLIST SANDBOX (test) — podmíněný checklist engine, sandbox data
+// CHECKLIST PREVIEW (sandbox, collapsible) — podmíněný checklist engine
 // ══════════════════════════════════════════════════════
 let ckSandboxAnswers={};
+let ckPreviewOpen=false;
+function toggleChecklistPreview(){
+  ckPreviewOpen=!ckPreviewOpen;
+  document.getElementById('ck-preview-body').style.display=ckPreviewOpen?'block':'none';
+  document.getElementById('ck-preview-arrow').style.transform=ckPreviewOpen?'rotate(180deg)':'';
+  document.getElementById('ck-preview-toggle').classList.toggle('open',ckPreviewOpen);
+  if(ckPreviewOpen)renderChecklistSandbox();
+}
 function renderChecklistSandbox(){
   const picker=document.getElementById('ck-record-picker');
   if(!picker.options.length){
