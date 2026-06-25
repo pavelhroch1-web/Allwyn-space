@@ -200,3 +200,12 @@ prezentaci důležité)
    Bez rozhodnutí nemůžu tohle dokončit.
 3. Cokoliv z §5/§6 dál — `app.js` refactor na samostatné moduly je teprve
    "nice to have" pro tuhle fázi, ne blocker.
+4. **Auth-based RLS (§4, bod 3) — vědomě odloženo, rozhodnutí 2026-06-25.**
+   Pavel: "teď to bude bez hesel... pořád jsme ve fázi testů." Zůstává
+   současný stav — login je klik na jméno bez hesla, `sync_kv` RLS politika
+   v `supabase/schema.sql` zůstává otevřená (anon klíč čte/píše vše). Žádné
+   heslo/PIN se technikovi nepřidává. Pokud se v budoucnu objeví reálná
+   potřeba (např. Supabase si vyžádá přihlašovací údaj), řešit přes
+   autofill/tlačítko, ne přes ruční zadávání hesla technikem. Před širším
+   nasazením nad rámec pilotu (5 lidí, kontrolovaná zařízení) **musí** být
+   nahrazeno auth-based politikou — viz `supabase/schema.sql` komentář.
