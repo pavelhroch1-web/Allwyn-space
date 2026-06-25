@@ -481,12 +481,6 @@ function renderList(){
   }
   const dp=all.filter(p=>p.d===cDay);
   if(!dp.length){
-    const todayIdx=getTodayDayIdx();
-    const isPastDay=cWeek===CURRENT_OPS_WEEK&&todayIdx!==null&&cDay<todayIdx;
-    if(unpl.length&&!isPastDay){
-      wrap.appendChild(buildDayProposalCard(unpl));
-      return;
-    }
     const e=document.createElement('div');e.className='empty';
     e.innerHTML=`<div class="empty-i"><svg class="ic ic-xl"><use href="#ic-calendar"/></svg></div><div class="empty-t">Nic naplánováno</div><div class="empty-s">Přiřaď POS z neplánovaných výše.</div>`;
     wrap.appendChild(e);return;
@@ -3465,11 +3459,14 @@ renderList = function() {
   if (routeCard) wrap.appendChild(routeCard);
 
   if (!todayPos.length) {
-    const e = document.createElement('div');
-    e.className = 'empty';
-
     // Can they add POS from unplanned?
     const canPlan = isCurrentWeek && (isTodaySelected || isFuture(cDay));
+    if (canPlan && unpl.length > 0) {
+      wrap.appendChild(buildDayProposalCard(unpl));
+      return;
+    }
+    const e = document.createElement('div');
+    e.className = 'empty';
     e.innerHTML = `<div class="empty-i"><svg class="ic ic-xl"><use href="#ic-calendar"/></svg></div>
       <div class="empty-t">Nic naplánováno</div>
       <div class="empty-s">${canPlan ? 'Přiřaď POS z neplánovaných výše.' : 'Minulý den — pouze pro přehled.'}</div>`;
