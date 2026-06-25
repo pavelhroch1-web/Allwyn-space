@@ -38,6 +38,15 @@ function augmentRawPos(p, assignedTechnician){
     : (typeof withCoords.lat === 'number'
         ? (withCoords.gpsTownMatched ? 'town' : 'region')
         : 'unknown');
+  const taskState = [...((getTaskTemplates()[typ]||getTaskTemplates()[rawTyp]||getTaskTemplates().IDT)).map(t=>({text:t,src:'template',done:p.v}))];
+  getAdminPosTasks(p.id).forEach(t => taskState.push({...t}));
+  const inventory = JSON.parse(JSON.stringify(INV_DEFAULT[typ]||INV_DEFAULT[rawTyp]||INV_DEFAULT.IDT));
+  const materialOverrides = getAdminMaterialOverrides(p.id);
+  Object.keys(materialOverrides).forEach(section => {
+    (inventory[section]||[]).forEach(item => {
+      if (materialOverrides[section][item.id] !== undefined) item.s = materialOverrides[section][item.id];
+    });
+  });
   return {
     ...withCoords,
     typ,
@@ -45,9 +54,9 @@ function augmentRawPos(p, assignedTechnician){
     area: withCoords.area || PosModel.DEFAULT_REGION,
     region: withCoords.area || PosModel.DEFAULT_REGION,
     photos:[],notes:'',
-    taskState:[...((getTaskTemplates()[typ]||getTaskTemplates()[rawTyp]||getTaskTemplates().IDT)).map(t=>({text:t,src:'template',done:p.v}))],
+    taskState,
     refs:(REFS[typ]||REFS[rawTyp]||REFS.IDT),
-    inventory:JSON.parse(JSON.stringify(INV_DEFAULT[typ]||INV_DEFAULT[rawTyp]||INV_DEFAULT.IDT)),
+    inventory,
   };
 }
 
@@ -69,6 +78,7 @@ const FULL_POS_DATA={};
 const posData={};
 for(const w of POS_WEEK_KEYS){
   FULL_POS_DATA[w] = (importedWeeks[w]||[]).map(p => augmentRawPos(p, p.assignedTechnician));
+  FULL_POS_DATA[w].forEach(p => applyVisitState(p, w));
   posData[w] = FULL_POS_DATA[w].filter(p => p.assignedTechnician === PosModel.SOLE_REAL_TECHNICIAN);
 }
 // Servisní úkoly (src:'servis') vznikají jen z reálného zdroje — Jira import
@@ -821,6 +831,7 @@ function renderTasks(){
 function toggleTask(ti){
   const p=posData[cWeek][cIdx];if(p.v)return;
   p.taskState[ti].done=!p.taskState[ti].done;
+  saveVisitState(p,cWeek);
   renderTasks();renderCompleteBtn();
 }
 
@@ -852,10 +863,14 @@ function handlePhoto(e){
     const p=posData[cWeek][cIdx];
     if(pendingSlot!==null&&pendingSlot<p.photos.length)p.photos[pendingSlot]=ev.target.result;
     else p.photos.push(ev.target.result);
-    pendingSlot=null;renderPhotos();e.target.value='';
+    pendingSlot=null;saveVisitState(p,cWeek);renderPhotos();e.target.value='';
   };r.readAsDataURL(file);
 }
-function rmPhoto(e,i){e.stopPropagation();posData[cWeek][cIdx].photos.splice(i,1);renderPhotos();}
+function rmPhoto(e,i){
+  e.stopPropagation();
+  const p=posData[cWeek][cIdx];
+  p.photos.splice(i,1);saveVisitState(p,cWeek);renderPhotos();
+}
 
 // ══════════════════════════════════════════════════════
 // DETAIL TABS
@@ -1083,7 +1098,7 @@ function renderCompleteBtn(){
 function markVisited(){
   const p=posData[cWeek][cIdx];
   if(p.v||!p.taskState.every(t=>t.done))return;
-  p.v=true;renderCompleteBtn();updateSummary();renderChips();renderDayTabs();
+  p.v=true;saveVisitState(p,cWeek);renderCompleteBtn();updateSummary();renderChips();renderDayTabs();
 }
 function goBack(){
   document.getElementById('t-detail').style.display='none';
@@ -1096,7 +1111,9 @@ function showAddForm(){document.getElementById('add-btn').style.display='none';d
 function hideAddForm(){document.getElementById('add-btn').style.display='block';document.getElementById('add-form').style.display='none';document.getElementById('new-task-input').value='';}
 function addTask(){
   const val=document.getElementById('new-task-input').value.trim();if(!val)return;
-  posData[cWeek][cIdx].taskState.push({text:val,src:'own',done:false});
+  const p=posData[cWeek][cIdx];
+  p.taskState.push({text:val,src:'own',done:false});
+  saveVisitState(p,cWeek);
   hideAddForm();renderTasks();renderCompleteBtn();
 }
 
@@ -1993,6 +2010,53 @@ markVisited = function() {
 };
 
 
+
+// ══════════════════════════════════════════════════════
+// VISIT STATE PERSISTENCE — přežije F5 (Fáze 0 fix)
+// Drží reálný stav technika (navštíveno, úkoly, fotky) per POS+týden,
+// místo aby se po refreshi přepočítal z deterministického Excel odhadu.
+// ══════════════════════════════════════════════════════
+function visitStateKey(posId, weekKey) { return 'visitstate_' + posId + '_' + weekKey; }
+function getVisitState(posId, weekKey) { return lsg(visitStateKey(posId, weekKey)); }
+function saveVisitState(p, weekKey) {
+  lss(visitStateKey(p.id, weekKey), { v: p.v, taskState: p.taskState, photos: p.photos });
+}
+function applyVisitState(p, weekKey) {
+  const saved = getVisitState(p.id, weekKey);
+  if (!saved) return;
+  p.v = saved.v;
+  if (saved.photos) p.photos = saved.photos;
+  if (saved.taskState) {
+    saved.taskState.forEach(st => {
+      const match = p.taskState.find(t => t.text === st.text && t.src === st.src);
+      if (match) match.done = st.done;
+      else p.taskState.push(st);
+    });
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// ADMIN POS-CARD EDIT PERSISTENCE — přežije F5 (Fáze 0 fix)
+// On-top úkol nebo stav materiálu zadaný adminem v POS detailu se dřív
+// zapsal jen do FULL_POS_DATA v paměti a po refreshi zmizel.
+// ══════════════════════════════════════════════════════
+function adminPosTasksKey(posId) { return 'admin_pos_tasks_' + posId; }
+function getAdminPosTasks(posId) { return lsg(adminPosTasksKey(posId), []); }
+function saveAdminPosTaskForPos(posId, text) {
+  const tasks = getAdminPosTasks(posId);
+  tasks.push({ text, src: 'on_top', done: false, note: 'Přidáno adminem' });
+  lss(adminPosTasksKey(posId), tasks);
+}
+
+function adminMaterialKey(posId) { return 'admin_material_' + posId; }
+function getAdminMaterialOverrides(posId) { return lsg(adminMaterialKey(posId), {}); }
+function saveAdminMaterialOverride(posId, section, itemId, status) {
+  const overrides = getAdminMaterialOverrides(posId);
+  if (!overrides[section]) overrides[section] = {};
+  if (status === null) delete overrides[section][itemId];
+  else overrides[section][itemId] = status;
+  lss(adminMaterialKey(posId), overrides);
+}
 
 // ══════════════════════════════════════════════════════
 // ADMIN TASK STORAGE
@@ -3569,6 +3633,7 @@ function addAdminPosTask(posId, weekKey) {
   const p = (FULL_POS_DATA[weekKey]||[]).find(x=>x.id===posId);
   if (!p) return;
   p.taskState.push({text:val, src:'on_top', done:false, note:'Přidáno adminem'});
+  saveAdminPosTaskForPos(posId, val);
   const btn = document.querySelector('#admin-pos-sheet button[onclick^="addAdmin"]');
   if (btn) { btn.textContent='✓ Přidáno!'; setTimeout(()=>btn.textContent='Přidat úkol technikovi ✓',2000); }
   document.getElementById('admin-pos-task-input').value = '';
@@ -3580,6 +3645,7 @@ function setAdminMaterialStatus(posId, weekKey, section, itemId, status) {
   const item = (p.inventory[section]||[]).find(x=>x.id===itemId);
   if (!item) return;
   item.s = item.s === status ? null : status;
+  saveAdminMaterialOverride(posId, section, itemId, item.s);
   showAdminPOSDetail(posId);
 }
 
