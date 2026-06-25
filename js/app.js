@@ -1369,6 +1369,24 @@ function renderAdminDashboard() {
   shortVisits.forEach(v => attnItems.push({ icon: 'ic-clock', sev: 'orange', text: `Krátká návštěva: <strong>${v.posName}</strong> · ${v.dur} min` }));
   behind.forEach(t => attnItems.push({ icon: 'ic-warning', sev: 'orange', text: `<strong>${t.name}</strong> je pozadu — ${t.done}/${t.total} POS` }));
 
+  // SLA / termín — úkoly zadané Velínem (Editorial Modal) s reálným
+  // deadline, který je dnes nebo už po termínu a ještě nejsou splněné.
+  // Žádný vymyšlený risk score — jen reálné datum zadané člověkem porovnané
+  // s dnešním datem (today()).
+  const todayStr = today();
+  pos.forEach(p => {
+    (p.taskState || []).forEach(t => {
+      if (t.done || !t.deadline) return;
+      if (t.deadline > todayStr) return;
+      const overdue = t.deadline < todayStr;
+      attnItems.push({
+        icon: 'ic-warning',
+        sev: 'red',
+        text: `${overdue ? 'Po termínu' : 'Termín dnes'}: <strong>${p.n}</strong> — ${t.text}`,
+      });
+    });
+  });
+
   // Dnešní zátěž — relativní srovnání zbývajících POS dnes mezi techniky
   // (žádný odhad konce směny, jen reálné rozdělení v rámci dnešního dne).
   const todayIdx = getTodayDayIdx();
@@ -2087,6 +2105,7 @@ function injectAdminTasksIntoPosData() {
           adminTaskId: task.id,
           note: task.deadline ? `Deadline: ${task.deadline}` : undefined,
           priority: task.priority,
+          deadline: task.deadline || undefined,
         });
       });
     });
@@ -2978,7 +2997,7 @@ function applyStoredRouteOrder(dayPos, week, day){
 function buildRouteSummaryCard(dayPos, week, day){
   if (dayPos.length < 2) return null;
   const startLoc = getStartLocation();
-  const cmp = RouteEngine.compareRoutes(dayPos, startLoc, getStartTime(), day);
+  const cmp = RouteEngine.compareRoutes(dayPos, startLoc, getStartTime(), day, today());
   const hasStoredOrder = !!getStoredRouteOrder(week, day);
   const fewerViolations = cmp.optimizedViolations != null && cmp.optimizedViolations < cmp.currentViolations;
   const showOptimize = cmp.savedKm > 0.5 || fewerViolations;
@@ -3070,7 +3089,7 @@ function moveRouteStop(week, day, posId, dir){
 function useRecommendedRoute(week, day){
   const all = posData[week] || [];
   const dayPos = applyStoredRouteOrder(all.filter(p => p.d === day), week, day);
-  const cmp = RouteEngine.compareRoutes(dayPos, getStartLocation(), getStartTime(), day);
+  const cmp = RouteEngine.compareRoutes(dayPos, getStartLocation(), getStartTime(), day, today());
   setStoredRouteOrder(week, day, cmp.optimizedOrderIds);
   recordRouteDecision(week, day, 'accepted');
   showRouteView(week, day);
@@ -3200,7 +3219,7 @@ function showRouteView(week, day){
 
   // Porovnání + volba (jen pokud je co porovnávat a je víc než 1 zastávka)
   if (dayPos.length > 1) {
-    const cmp = RouteEngine.compareRoutes(dayPos, startLoc, startTime, day);
+    const cmp = RouteEngine.compareRoutes(dayPos, startLoc, startTime, day, today());
     const fewerViolations = cmp.optimizedViolations != null && cmp.optimizedViolations < cmp.currentViolations;
     const showOpportunity = cmp.savedKm > 0.5 || fewerViolations;
     const checklist = `
@@ -3270,7 +3289,7 @@ function buildMorningBriefCard(todayPos, week, day){
   const s = getSession();
   const firstName = ((s && s.user && s.user.name) || '').trim().split(/\s+/).pop() || '';
   const startLoc = getStartLocation();
-  const cmp = todayPos.length > 1 ? RouteEngine.compareRoutes(todayPos, startLoc, getStartTime(), day) : null;
+  const cmp = todayPos.length > 1 ? RouteEngine.compareRoutes(todayPos, startLoc, getStartTime(), day, today()) : null;
   const workMin = todayPos.reduce((sum, p) => sum + RouteEngine.getVisitDurationMin(p), 0);
   const drivingMin = cmp ? cmp.before.drivingMin : 0;
   const totalMin = workMin + drivingMin;
