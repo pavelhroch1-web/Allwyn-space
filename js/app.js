@@ -692,6 +692,11 @@ function doCheckin(){
   const timeStr=now.toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'});
   lss('ci_'+p.id,{inTs:now.getTime(),inTime:timeStr,out:false});
   if(!lsg('daystart_'+today())) lss('daystart_'+today(),{ts:now.getTime(),time:timeStr,posId:p.id,posName:p.n});
+  if (typeof VisitStore !== 'undefined') {
+    const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
+    VisitStore.setVisitField(tech, p.id, p.n, p.a, null, { status: 'in_progress', started_at: now.toISOString() });
+    VisitStore.logEvent(tech, 'checkin:' + p.id);
+  }
   renderCheckin();
 }
 function doCheckout(){
@@ -704,6 +709,10 @@ function doCheckout(){
   const log=lsg('vlog_'+today(),[]);
   log.push({posId:p.id,posName:p.n,typ:p.typ,inTime:ci.inTime,outTime:timeStr,dur,flag:dur<10?'short':dur>60?'long':'ok'});
   lss('vlog_'+today(),log);
+  if (typeof VisitStore !== 'undefined') {
+    const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
+    VisitStore.logEvent(tech, 'checkout:' + p.id + ':' + dur + 'min');
+  }
   if(ciTimer){clearInterval(ciTimer);ciTimer=null;}
   renderCheckin();
 }
@@ -863,6 +872,12 @@ function confirmSupply(){
   const sapCodes=supplyItems.filter(x=>x.sap&&x.sap.trim()).map(x=>x.n+': '+x.sap).join(', ');
   lss('supply_'+p.id+'_'+today(),{items:supplyItems,receiver:recv,sigData:sigCanvas.toDataURL(),confirmed:true,at:new Date().toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'}),sapCodes});
   supplyLocked=true;
+  if (typeof VisitStore !== 'undefined') {
+    const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
+    VisitStore.setVisitField(tech, p.id, p.n, p.a, null, { signature_data: sigCanvas.toDataURL(), notes: 'Zásobování přijal: ' + recv });
+    supplyItems.filter(x => x.qty > 0).forEach(x => VisitStore.setMaterial(p.id, p.n, p.a, null, x.n, x.qty));
+    VisitStore.logEvent(tech, 'supply_confirmed:' + p.id);
+  }
   renderSupplyItems();
   document.getElementById('sig-done').style.display='block';
   document.querySelector('.sig-conf').style.display='none';
@@ -896,6 +911,10 @@ function toggleTask(ti){
   const p=posData[cWeek][cIdx];if(p.v)return;
   p.taskState[ti].done=!p.taskState[ti].done;
   saveVisitState(p,cWeek);
+  if (typeof VisitStore !== 'undefined') {
+    const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
+    VisitStore.setTaskDone(tech, p.id, p.n, p.a, null, p.taskState[ti].text, p.taskState[ti].done);
+  }
   renderTasks();renderCompleteBtn();
 }
 
@@ -920,6 +939,12 @@ function renderPhotos(){
     grid.appendChild(slot);
   }
 }
+function pushPhotosMeta(p){
+  if (typeof VisitStore === 'undefined') return;
+  const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
+  const meta = p.photos.map((dataUrl, i) => ({ slot: i, sizeBytes: Math.round(dataUrl.length * 0.75), takenAt: new Date().toISOString() }));
+  VisitStore.setVisitField(tech, p.id, p.n, p.a, null, { photos_meta: meta });
+}
 function handlePhoto(e){
   const file=e.target.files[0];if(!file)return;
   const r=new FileReader();
@@ -928,12 +953,14 @@ function handlePhoto(e){
     if(pendingSlot!==null&&pendingSlot<p.photos.length)p.photos[pendingSlot]=ev.target.result;
     else p.photos.push(ev.target.result);
     pendingSlot=null;saveVisitState(p,cWeek);renderPhotos();e.target.value='';
+    pushPhotosMeta(p);
   };r.readAsDataURL(file);
 }
 function rmPhoto(e,i){
   e.stopPropagation();
   const p=posData[cWeek][cIdx];
   p.photos.splice(i,1);saveVisitState(p,cWeek);renderPhotos();
+  pushPhotosMeta(p);
 }
 
 // ══════════════════════════════════════════════════════
@@ -1024,6 +1051,9 @@ function setMerch(i, done) {
   if (!merchItems[i]) return;
   merchItems[i].done = merchItems[i].done === done ? null : done;
   lss('merch_' + p.id + '_' + today(), merchItems);
+  if (typeof VisitStore !== 'undefined' && merchItems[i].done !== null) {
+    VisitStore.setMaterial(p.id, p.n, p.a, null, merchItems[i].n, merchItems[i].done ? 1 : 0);
+  }
   renderMerch(p);
 }
 
@@ -1182,6 +1212,12 @@ function addPosCardNote(){
   const notes=lsg('poscard_'+p.id,[]);
   notes.push({text:val,time:new Date().toLocaleDateString('cs-CZ',{day:'numeric',month:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}),author:'Lán Tomáš'});
   lss('poscard_'+p.id,notes);
+  if (typeof VisitStore !== 'undefined') {
+    const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
+    const allNotes = notes.map(n => n.time + ' ' + n.author + ': ' + n.text).join('\n');
+    VisitStore.setVisitField(tech, p.id, p.n, p.a, null, { notes: allNotes });
+    VisitStore.logEvent(tech, 'note_added:' + p.id);
+  }
   document.getElementById('pos-card-ta').value='';
   renderPosCard();
 }
@@ -1209,6 +1245,11 @@ function markVisited(){
   const p=posData[cWeek][cIdx];
   if(p.v||!p.taskState.every(t=>t.done))return;
   p.v=true;saveVisitState(p,cWeek);renderCompleteBtn();updateSummary();renderChips();renderDayTabs();
+  if (typeof VisitStore !== 'undefined') {
+    const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
+    VisitStore.setVisitField(tech, p.id, p.n, p.a, null, { status: 'completed', completed_at: new Date().toISOString() });
+    VisitStore.logEvent(tech, 'visit_completed:' + p.id);
+  }
 }
 function goBack(){
   document.getElementById('t-detail').style.display='none';
@@ -1224,6 +1265,10 @@ function addTask(){
   const p=posData[cWeek][cIdx];
   p.taskState.push({text:val,src:'own',done:false});
   saveVisitState(p,cWeek);
+  if (typeof VisitStore !== 'undefined') {
+    const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
+    VisitStore.setTaskDone(tech, p.id, p.n, p.a, null, val, false);
+  }
   hideAddForm();renderTasks();renderCompleteBtn();
 }
 
