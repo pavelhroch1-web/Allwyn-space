@@ -652,6 +652,7 @@ function openDetail(ri){
   renderMerch(p);
   renderSupply(p);
   renderTasks();
+  renderCampaignChecklist();
   renderPhotos();
   renderCompleteBtn();
   document.getElementById('t-list').style.display='none';
@@ -919,6 +920,45 @@ function toggleTask(ti){
 }
 
 // ══════════════════════════════════════════════════════
+// CAMPAIGN CHECKLIST (technik) — podmíněný checklist z chytrého enginu,
+// napojený na aktuálně aktivní kampaň (Velín → Editor → Kampaně, pole
+// "Checklist na POS"). Kampaň platí pro POS, pokud kanál sedí (nebo je
+// "Všechny kanály") a deadline ještě nevypršel.
+// ══════════════════════════════════════════════════════
+function getPosChannel(p){
+  const rawTyp=p.typ||'IDT';
+  return (rawTyp==='CORN'||(p.k&&p.k.startsWith('9')))?'CORN':rawTyp;
+}
+function getActiveCampaignChecklist(p){
+  const camps=getEditorCampaigns();
+  const channel=getPosChannel(p);
+  const today=new Date();today.setHours(0,0,0,0);
+  const tpls=getChecklistTemplates();
+  const match=camps.find(c=>{
+    if(!c.checklistTemplateId||!tpls[c.checklistTemplateId])return false;
+    const ch=c.channel||'ALL';
+    if(ch!=='ALL'&&ch!==channel)return false;
+    if(c.deadline){const dl=new Date(c.deadline);if(dl<today)return false;}
+    return true;
+  });
+  return match?{campaign:match,template:tpls[match.checklistTemplateId]}:null;
+}
+function campaignChecklistKey(posId,templateId){return 'checklist_'+posId+'_'+templateId;}
+let ckPosAnswers={};
+function renderCampaignChecklist(){
+  const p=posData[cWeek][cIdx];
+  const wrap=document.getElementById('campaign-checklist-wrap');
+  if(!wrap)return;
+  const active=getActiveCampaignChecklist(p);
+  if(!active){wrap.style.display='none';return;}
+  wrap.style.display='block';
+  ckActiveContext='pos';
+  document.getElementById('campaign-checklist-title').textContent='Kontrolní checklist — '+active.campaign.name;
+  ckPosAnswers=lsg(campaignChecklistKey(p.id,active.template.id))||{};
+  document.getElementById('campaign-checklist-list').innerHTML=ChecklistEngine.renderChecklistHtml(active.template,ckPosAnswers);
+}
+
+// ══════════════════════════════════════════════════════
 // PHOTOS
 // ══════════════════════════════════════════════════════
 function renderPhotos(){
@@ -980,7 +1020,7 @@ function showDetTab(tab,btn){
 // ══════════════════════════════════════════════════════
 let ckSandboxAnswers={};
 let ckPreviewOpen=false;
-let ckActiveContext='sandbox'; // 'sandbox' (technik) | 'editor' (Velín editor náhled)
+let ckActiveContext='sandbox'; // 'sandbox' (demo náhled) | 'editor' (Velín editor náhled) | 'pos' (reálný checklist na kartě POS)
 function toggleChecklistPreview(){
   ckActiveContext='sandbox';
   ckPreviewOpen=!ckPreviewOpen;
@@ -1010,6 +1050,16 @@ function setChecklistAnswer(id,val){
     if(val===undefined)delete edChecklistPreviewAnswers[id];
     else edChecklistPreviewAnswers[id]=val;
     renderEdChecklistPreview();
+    return;
+  }
+  if(ckActiveContext==='pos'){
+    const p=posData[cWeek][cIdx];
+    const active=getActiveCampaignChecklist(p);
+    if(!active)return;
+    if(val===undefined)delete ckPosAnswers[id];
+    else ckPosAnswers[id]=val;
+    lss(campaignChecklistKey(p.id,active.template.id),ckPosAnswers);
+    document.getElementById('campaign-checklist-list').innerHTML=ChecklistEngine.renderChecklistHtml(active.template,ckPosAnswers);
     return;
   }
   if(val===undefined)delete ckSandboxAnswers[id];
@@ -4125,6 +4175,8 @@ function saveEditorCampaigns(camps) { lss('editor_campaigns', camps); }
 
 function renderEditorCampaigns() {
   const camps = getEditorCampaigns();
+  const tpls = getChecklistTemplates();
+  const tplIds = Object.keys(tpls);
   const el = document.getElementById('ed-campaigns-list');
   if (!el) return;
   el.innerHTML = camps.map((c,i) => `
@@ -4139,6 +4191,17 @@ function renderEditorCampaigns() {
           <input type="date" value="${c.deadline||''}" oninput="updateCampaign(${i},'deadline',this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:12px;outline:none"/>
         </div>
         <textarea placeholder="Co osadit (každý řádek = položka)" oninput="updateCampaign(${i},'items',this.value)" style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:12px;font-family:inherit;resize:none;min-height:60px;outline:none;line-height:1.5">${c.items||''}</textarea>
+        <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+          <span style="font-size:11px;color:var(--muted);white-space:nowrap">Kanál</span>
+          <select onchange="updateCampaign(${i},'channel',this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:12px;outline:none">
+            ${['ALL','IDT','KA','PETROL','CORN'].map(ch => `<option value="${ch}" ${(c.channel||'ALL')===ch?'selected':''}>${ch==='ALL'?'Všechny kanály':ch}</option>`).join('')}
+          </select>
+          <span style="font-size:11px;color:var(--muted);white-space:nowrap;margin-left:6px">Checklist na POS</span>
+          <select onchange="updateCampaign(${i},'checklistTemplateId',this.value)" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:12px;outline:none">
+            <option value="" ${!c.checklistTemplateId?'selected':''}>— žádný —</option>
+            ${tplIds.map(id => `<option value="${id}" ${c.checklistTemplateId===id?'selected':''}>${tpls[id].name||id}</option>`).join('')}
+          </select>
+        </div>
         <button onclick="deleteCampaign(${i})" style="margin-top:8px;padding:6px 12px;background:var(--rl);color:var(--red);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Smazat kampaň</button>
       </div>
     </div>`).join('');
@@ -4268,10 +4331,27 @@ function renderEditorChecklistQuestions() {
   const el = document.getElementById('ed-checklist-questions');
   if (!el || !tpl) return;
   const ids = tpl.questions.map(q => q.id);
+  // photo nemá smysluplnou "rovná se" hodnotu (jen pending/nic) — nelze na něj větvit
+  const dependableIds = ids.filter(id => tpl.questions.find(q => q.id === id).type !== 'photo');
   el.innerHTML = tpl.questions.map((q,i) => {
-    const otherIds = ids.filter(id => id !== q.id);
+    const otherDependableIds = dependableIds.filter(id => id !== q.id);
     const depOpts = `<option value="">— vždy zobrazit —</option>` +
-      otherIds.map(id => `<option value="${id}" ${q.condition && q.condition.dependsOn===id ? 'selected' : ''}>${id}</option>`).join('');
+      otherDependableIds.map(id => `<option value="${id}" ${q.condition && q.condition.dependsOn===id ? 'selected' : ''}>${id}</option>`).join('');
+    let equalsField = '';
+    if (q.condition) {
+      const depQ = tpl.questions.find(dq => dq.id === q.condition.dependsOn);
+      if (depQ && depQ.type === 'select') {
+        equalsField = `<select onchange="updateChecklistQuestion(${i},'equals',this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:6px;font-size:12px;outline:none">
+          ${(depQ.options||[]).map(v => `<option value="${v}" ${q.condition.equals===v?'selected':''}>${v}</option>`).join('')}
+        </select>`;
+      } else if (depQ && depQ.type === 'text') {
+        equalsField = `<input value="${(q.condition.equals||'').replace(/"/g,'&quot;')}" placeholder="přesná hodnota" oninput="updateChecklistQuestion(${i},'equals',this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:6px;font-size:12px;outline:none;width:120px"/>`;
+      } else {
+        equalsField = `<select onchange="updateChecklistQuestion(${i},'equals',this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:6px;font-size:12px;outline:none">
+          ${['Ano','Ne'].map(v => `<option value="${v}" ${q.condition.equals===v?'selected':''}>${v}</option>`).join('')}
+        </select>`;
+      }
+    }
     return `
     <div style="padding:12px 14px;border-bottom:1px solid var(--bg)">
       <div style="display:flex;gap:8px;margin-bottom:8px">
@@ -4281,13 +4361,12 @@ function renderEditorChecklistQuestions() {
         </select>
         <button onclick="deleteChecklistQuestion(${i})" style="background:none;border:none;color:var(--red);font-size:16px;cursor:pointer;padding:4px">✕</button>
       </div>
+      ${q.type==='select' ? `<input value="${(q.options||[]).join(', ').replace(/"/g,'&quot;')}" placeholder="Možnosti, oddělené čárkou" oninput="updateChecklistQuestion(${i},'options',this.value)" style="width:100%;margin-bottom:8px;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:12px;outline:none"/>` : ''}
       <div style="display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted)">
         <span>id: <code>${q.id}</code></span>
         <span style="margin-left:auto">Závisí na</span>
         <select onchange="updateChecklistQuestion(${i},'dependsOn',this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:6px;font-size:12px;outline:none">${depOpts}</select>
-        ${q.condition ? `<span>rovná se</span><select onchange="updateChecklistQuestion(${i},'equals',this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:6px;font-size:12px;outline:none">
-          ${['Ano','Ne'].map(v => `<option value="${v}" ${q.condition.equals===v?'selected':''}>${v}</option>`).join('')}
-        </select>` : ''}
+        ${q.condition ? `<span>rovná se</span>${equalsField}` : ''}
       </div>
     </div>`;
   }).join('') || '<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px">Žádné otázky</div>';
@@ -4298,10 +4377,17 @@ function updateChecklistQuestion(i, field, val) {
   const tpl = tpls[edChecklistTplId];
   const q = tpl.questions[i];
   if (field === 'dependsOn') {
-    if (!val) delete q.condition;
-    else q.condition = { dependsOn: val, equals: (q.condition && q.condition.equals) || 'Ano' };
+    if (!val) {
+      delete q.condition;
+    } else {
+      const depQ = tpl.questions.find(dq => dq.id === val);
+      const defaultEquals = depQ && depQ.type === 'select' ? (depQ.options||[])[0] || '' : depQ && depQ.type === 'text' ? '' : 'Ano';
+      q.condition = { dependsOn: val, equals: defaultEquals };
+    }
   } else if (field === 'equals') {
     if (q.condition) q.condition.equals = val;
+  } else if (field === 'options') {
+    q.options = val.split(',').map(s => s.trim()).filter(Boolean);
   } else {
     q[field] = val;
   }
