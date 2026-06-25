@@ -267,12 +267,12 @@ function enterRole(role,opts){
   document.getElementById('switch-btn').style.display='block';
   if(role==='technik'){
     document.getElementById('technik-screen').classList.add('active');
-    document.getElementById('admin-screen').style.display='none';
+    document.getElementById('admin-screen').classList.remove('active');
     updateHdrLabel();renderChips();renderDayTabs();renderList();
     if(!opts.skipBriefing) setTimeout(showBriefing,500);
   } else {
     document.getElementById('technik-screen').classList.remove('active');
-    document.getElementById('admin-screen').style.display='block';
+    document.getElementById('admin-screen').classList.add('active');
     renderAdminDashboard();renderAdminLive();renderAdminAlerts();renderAdminCasy();renderAdminFoto();
     setTimeout(initAdminMap,300);
   }
@@ -282,7 +282,7 @@ function goHome(){
   document.getElementById('role-screen').style.display='flex';
   document.getElementById('switch-btn').style.display='none';
   document.getElementById('technik-screen').classList.remove('active');
-  document.getElementById('admin-screen').style.display='none';
+  document.getElementById('admin-screen').classList.remove('active');
   pushRoute();
 }
 function showAdmPage(p,btn){
@@ -301,7 +301,7 @@ function showAdmPage(p,btn){
 // ══════════════════════════════════════════════════════
 let routeSuspend=false;
 function computeRouteHash(){
-  if(document.getElementById('admin-screen').style.display==='block'){
+  if(document.getElementById('admin-screen').classList.contains('active')){
     const activePage=document.querySelector('.adm-page.active');
     const page=activePage?activePage.id.replace('adm-',''):'dashboard';
     return '#/admin/'+page;
@@ -1318,7 +1318,7 @@ let adminRefreshTimer = null;
 function startAdminRefresh() {
   if (adminRefreshTimer) return;
   adminRefreshTimer = setInterval(() => {
-    if (document.getElementById('admin-screen').style.display !== 'none') {
+    if (document.getElementById('admin-screen').classList.contains('active')) {
       const activePage = document.querySelector('.adm-page.active');
       if (!activePage) return;
       if (activePage.id === 'adm-dashboard') renderAdminDashboard();

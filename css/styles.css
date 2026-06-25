@@ -443,6 +443,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 /* MAP / ADMIN */
 #admin-screen{display:none;min-height:100vh}
+#admin-screen.active{display:block}
 .adm-hdr{background:var(--navy);padding:13px 18px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;box-shadow:0 2px 10px rgba(0,0,0,.25)}
 .adm-logo{display:flex;align-items:center;gap:8px}
 .adm-a{width:26px;height:26px;background:var(--teal);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:var(--navy);font-style:italic}
@@ -457,6 +458,24 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .adm-content{padding:14px}
 .adm-page{display:none}
 .adm-page.active{display:block}
+
+/* VELÍN DESKTOP LAYOUT — nad 1024px se horizontální nav (vhodný pro
+   mobil/úzký viewport) změní na svislý sidebar, obsah dostane víc
+   prostoru a klíčové grids přejdou na víc sloupců. */
+@media (min-width:1024px){
+  #admin-screen.active{display:flex;align-items:flex-start}
+  .adm-hdr{position:sticky;top:0;align-self:flex-start;height:100vh;width:248px;flex-shrink:0;
+    flex-direction:column;align-items:stretch;gap:18px;padding:20px 14px;overflow-y:auto;box-shadow:2px 0 10px rgba(0,0,0,.15)}
+  .adm-logo{padding:0 4px}
+  .adm-nav{flex-direction:column;overflow-x:visible;gap:3px;width:100%}
+  .adm-btn{width:100%;justify-content:flex-start;padding:10px 12px}
+  .adm-hdr>div[style*="position:relative"]{order:10;width:100%}
+  .adm-hdr>div[style*="position:relative"] input{width:100% !important}
+  .adm-hdr .user-chip{order:11;margin-top:auto}
+  .adm-content{flex:1;min-width:0;padding:24px 32px;max-width:1500px}
+  .sgrid{grid-template-columns:repeat(4,1fr)}
+  .lb-grid{grid-template-columns:repeat(3,1fr)}
+}
 
 /* REGION FILTER */
 .rf-wrap{margin-bottom:14px}
