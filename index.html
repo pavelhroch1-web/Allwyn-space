@@ -145,7 +145,8 @@
       </div>
 
       <div class="rs-vsection">
-        <div class="rs-vtitle">Intelligence moduly</div>
+        <div class="rs-vtitle">Intelligence moduly — kam se chceme dostat</div>
+        <div class="rs-module-subtitle">1 modul je živý, 5 je vize. „Live“ = reálně funguje s reálnými daty. „Vize“ = plánovaný směr, zatím neimplementováno.</div>
         <div class="rs-modules">
 
           <div class="rs-module-card">
@@ -155,9 +156,40 @@
             <div class="rs-module-goal">Cíl: méně jízdy, víc času na POS.</div>
           </div>
 
-          <!-- Vize moduly (Territory/Capacity/Material/Campaign/Photo Intelligence) skryty pro
-               pilot — nejsou implementované a na landing screenu matou manažera dělajícího
-               rychlé rozhodnutí (Fáze 0 fix, viz audit). Beze ztráty kódu pro budoucí návrat. -->
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-map"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
+            <div class="rs-module-title">Territory Intelligence</div>
+            <div class="rs-module-desc">„Máme regiony nastavené správně?“ Analyzuje, kde technici začínají a jak je vyvážená jejich síť POS.</div>
+            <div class="rs-module-goal">Najde překryvy regionů a zbytečné kilometry — člověk rozhoduje o změně.</div>
+          </div>
+
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-clock"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
+            <div class="rs-module-title">Capacity Intelligence</div>
+            <div class="rs-module-desc">Pochopí dostupný čas týmu. Např. „Tento týden: volná kapacita 42 hodin.“</div>
+            <div class="rs-module-goal">Navrhne, jaké POS/úkoly se dají přidat.</div>
+          </div>
+
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-box"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
+            <div class="rs-module-title">Material Intelligence</div>
+            <div class="rs-module-desc">Virtuální sklad technika — ví, co je v autě, jaké kampaně se blíží a jaký SAP materiál bude potřeba.</div>
+            <div class="rs-module-goal">„Vyzvedni materiál teď, další návštěva skladu za 12 dní.“</div>
+          </div>
+
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-flag"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
+            <div class="rs-module-title">Campaign Intelligence</div>
+            <div class="rs-module-desc">Kampaň + důležitost POS + sales data + termín → AI navrhne, které POS navštívit, kdy a který technik.</div>
+            <div class="rs-module-goal">Velín schvaluje, AI jen doporučuje.</div>
+          </div>
+
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-camera"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
+            <div class="rs-module-title">Photo Intelligence</div>
+            <div class="rs-module-desc">AI kontroluje fotky z POS — přítomnost konkurence, chybějící materiál, kvalitu provedení.</div>
+            <div class="rs-module-goal">Vytváří strukturované reporty pro velín.</div>
+          </div>
 
         </div>
       </div>
