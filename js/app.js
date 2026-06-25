@@ -4359,18 +4359,16 @@ function renderImportSourceLabel(){
     : `Aktivní zdroj: baked export „${src.fileName}“`;
 }
 
-function parseSheetRows(workbook){
+function parseSheetRows(workbook, isHeaderRow){
   const sheetName = workbook.SheetNames[0];
   const sheet = workbook.Sheets[sheetName];
   const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' });
-  // Odstraň prázdné řádky a hlavičkový řádek (pokud TERMINAL_ID/POS_ID
-  // nejsou čistě číselné, jde o popisek sloupce, ne reálný řádek dat).
+  // Odstraň prázdné řádky a hlavičkový řádek — detekce hlavičky je
+  // specifická pro každý import (sloupce mají jinou sémantiku),
+  // proto si ji volající strana definuje sama přes isHeaderRow.
   const nonEmpty = rows.filter(r => r.some(c => String(c).trim() !== ''));
-  if(nonEmpty.length && nonEmpty[0].length >= 2){
-    const first = nonEmpty[0];
-    if(!/^\d+$/.test(String(first[0]).trim()) || !/^\d+$/.test(String(first[1]).trim())){
-      nonEmpty.shift();
-    }
+  if(nonEmpty.length && isHeaderRow(nonEmpty[0])){
+    nonEmpty.shift();
   }
   return nonEmpty;
 }
@@ -4384,7 +4382,10 @@ function handleImportFile(e){
   reader.onload = (ev) => {
     try {
       const workbook = XLSX.read(ev.target.result, { type: 'array' });
-      const rows = parseSheetRows(workbook);
+      // Tourplan: TERMINAL_ID + POS_ID, oba čistě číselné — hlavička je popisek, ne čísla.
+      const rows = parseSheetRows(workbook, (first) =>
+        first.length >= 2 && (!/^\d+$/.test(String(first[0]).trim()) || !/^\d+$/.test(String(first[1]).trim()))
+      );
       ExcelImport.validateColumns(rows);
       const { summary, warnings } = ExcelImport.buildPosWeeks(rows, POS_WEEK_KEYS, { currentWeek: CURRENT_OPS_WEEK, todayIdx: getTodayDayIdx() });
       pendingImportRows = rows;
@@ -4461,7 +4462,11 @@ function handlePosMasterImportFile(e){
   reader.onload = (ev) => {
     try {
       const workbook = XLSX.read(ev.target.result, { type: 'array' });
-      const rows = parseSheetRows(workbook);
+      // POS Master: jen POS_ID musí být čistě číselné — LAT (sloupec 1) je desetinné
+      // číslo, takže ho nelze použít ke kontrole hlavičky stejně jako u Tourplan importu.
+      const rows = parseSheetRows(workbook, (first) =>
+        first.length >= 1 && !/^\d+$/.test(String(first[0]).trim())
+      );
       PosMasterData.validateColumns(rows);
       const { summary, warnings } = PosMasterData.buildPosMasterMap(rows);
       pendingPosMasterRows = rows;
