@@ -370,13 +370,17 @@
   // ── FLEET / VELÍN ANALYTICS ───────────────────────────────────────────────
   // routesByTechnician: { technicianId: POS[] } — denní/týdenní plán každého technika.
   // Používá identický engine jako technik — žádná samostatná "fake" čísla.
-  function analyzeFleet(routesByTechnician){
+  function analyzeFleet(routesByTechnician, todayStr){
     const perTechnician = {};
     let totalWastedKm = 0, totalWastedMin = 0, totalDrivingKm = 0;
 
     for (const [techId, posList] of Object.entries(routesByTechnician)){
       if (!posList || !posList.length) continue;
-      const cmp = compareRoutes(posList);
+      // startPoint/startTime/dayIdx zůstávají undefined — pro ostatní
+      // techniky nemáme reálnou pozici/čas odjezdu (jen u přihlášeného
+      // technika), žádné vymýšlení. todayStr ale máme reálně vždy, takže
+      // SLA/priorita se do fleet KPI promítne stejně jako do trasy technika.
+      const cmp = compareRoutes(posList, undefined, undefined, undefined, todayStr);
       perTechnician[techId] = cmp;
       totalWastedKm += cmp.savedKm;
       totalWastedMin += cmp.savedMin;

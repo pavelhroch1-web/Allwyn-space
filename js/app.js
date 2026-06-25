@@ -153,7 +153,7 @@ function clearSession(){ localStorage.removeItem('session'); }
 function setViewTechnician(name){
   currentViewTechnician = name;
   for (const w of POS_WEEK_KEYS) posData[w] = FULL_POS_DATA[w].filter(p => p.assignedTechnician === name);
-  cWeek = '25'; cDay = 0; cIdx = null;
+  cWeek = CURRENT_OPS_WEEK; cDay = 0; cIdx = null;
 }
 
 function loginAsVelin(){
@@ -378,28 +378,33 @@ window.addEventListener('DOMContentLoaded',()=>{
 // BRIEFING
 // ══════════════════════════════════════════════════════
 function showBriefing(){
-  const pos=posData['25']||[];
-  const todayPos=pos.filter(p=>p.d===0);
+  const pos=posData[CURRENT_OPS_WEEK]||[];
+  const todayIdx=getTodayDayIdx();
+  const todayPos=pos.filter(p=>p.d===(todayIdx!==null?todayIdx:0));
   const svc=pos.filter(p=>p.taskState.some(t=>t.src==='servis'&&!t.done));
   const now=new Date();
   document.getElementById('bf-date').textContent=now.toLocaleDateString('cs-CZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  const msgs=[
-    'Losy: POUZE nová emise Zlaté rybky — ne původní! Stále se objevují chyby.',
-    'Rebranding: norma 2 POS/den. Kontroluj samolepky Sazka mobil — musí být odstraněny.',
-    'ORLEN: nově v tourplanu — pouze výměna losů + zásobování, NE rebranding.',
-    'Corn: priorita tohoto týdne — vždy 2 plakáty na totem, nikdy bílá plocha.',
-    'Zásobování: vždy vyžádej podpis a vyplň SAP kódy.',
-  ];
-  document.getElementById('bf-msg').textContent=msgs[Math.floor(Math.random()*msgs.length)];
+  // SLA-rizikové úkoly (stejný zdroj jako Velín decision feed) — žádné
+  // natvrdo vepsané "deadline dnes", jen reálné taskState.deadline z dat.
+  const todayStr=today();
+  const slaRisk=[];
+  pos.forEach(p=>(p.taskState||[]).forEach(t=>{
+    if(t.done||!t.deadline||t.deadline>todayStr) return;
+    slaRisk.push({pos:p,task:t,overdue:t.deadline<todayStr});
+  }));
+  document.getElementById('bf-msg').textContent = slaRisk.length
+    ? `${slaRisk.filter(x=>x.overdue).length} úkolů po termínu, ${slaRisk.filter(x=>!x.overdue).length} s termínem dnes — zkontroluj je v trase.`
+    : 'Žádné úkoly s blížícím se termínem.';
   document.getElementById('bf-total').textContent=pos.length;
   document.getElementById('bf-today').textContent=todayPos.length;
   document.getElementById('bf-svc').textContent=svc.length;
-  document.getElementById('bf-items').innerHTML=[
+  const items=[
     {c:'urg',i:ic('ic-wrench'),t:`${svc.length} servisních tiketů — začni jimi, jsou nejvyšší priorita`},
-    {c:'nrm',i:ic('ic-target'),t:'Deadline EuroJackpot plakáty: 20. 6. — dnes! Nezapomeň osadit'},
-    {c:'nrm',i:ic('ic-camera'),t:'Foť terminál PŘED a PO osazení — admin kontroluje'},
-    {c:'inf',i:ic('ic-edit'),t:'U zásobování vždy vyžádej podpis přijímajícího'},
-  ].map(x=>`<div class="bf-item ${x.c}"><div class="bf-ico">${x.i}</div><div class="bf-txt">${x.t}</div></div>`).join('');
+  ];
+  slaRisk.slice(0,3).forEach(x=>items.push({c:'nrm',i:ic('ic-target'),t:`${x.overdue?'Po termínu':'Termín dnes'}: ${x.pos.n} — ${x.task.text}`}));
+  items.push({c:'nrm',i:ic('ic-camera'),t:'Foť terminál PŘED a PO osazení — admin kontroluje'});
+  items.push({c:'inf',i:ic('ic-edit'),t:'U zásobování vždy vyžádej podpis přijímajícího'});
+  document.getElementById('bf-items').innerHTML=items.map(x=>`<div class="bf-item ${x.c}"><div class="bf-ico">${x.i}</div><div class="bf-txt">${x.t}</div></div>`).join('');
   document.getElementById('briefing').classList.add('open');
 }
 function closeBriefing(){document.getElementById('briefing').classList.remove('open');}
@@ -442,7 +447,7 @@ function renderDayTabs(){
   const pos=posData[cWeek]||[];
   const m=WEEKS_META[cWeek];
   const todayIdx=getTodayDayIdx();
-  const isCurrentWeek=cWeek===getCurrentWeekNum();
+  const isCurrentWeek=cWeek===CURRENT_OPS_WEEK;
   document.getElementById('day-tabs').innerHTML=DAYS.map((d,i)=>{
     const dp=pos.filter(p=>p.d===i);
     const ad=dp.length>0&&dp.every(p=>p.v);
@@ -1465,7 +1470,7 @@ function renderFleetRouteAnalytics() {
     if (heroBlock) heroBlock.style.display = 'none';
     return;
   }
-  const fleet = RouteEngine.analyzeFleet(routes);
+  const fleet = RouteEngine.analyzeFleet(routes, today());
   el.innerHTML = `
     <div class="kpi-card"><div class="kpi-icon"><svg class="ic ic-lg"><use href="#ic-route"/></svg></div><div class="kpi-val">${routeCount}</div><div class="kpi-lbl">Analyzovaných tras</div></div>
     <div class="kpi-card warn"><div class="kpi-icon"><svg class="ic ic-lg"><use href="#ic-flag"/></svg></div><div class="kpi-val">${RouteEngine.formatKm(fleet.wastedKm)}</div><div class="kpi-lbl">Zbytečné km (suboptimální pořadí)</div></div>
@@ -2090,8 +2095,9 @@ function saveAdminTask(task) {
 function injectAdminTasksIntoPosData() {
   const tasks = getAdminTasks().filter(t => t.status === 'active');
   tasks.forEach(task => {
-    // Find matching POS
-    Object.values(posData).forEach(weekList => {
+    // Find matching POS — napříč všemi techniky (Velín zadává úkoly pro celou
+    // firmu, ne jen pro přihlášeného technika), proto FULL_POS_DATA, ne posData.
+    Object.values(FULL_POS_DATA).forEach(weekList => {
       weekList.forEach(p => {
         const match = taskMatchesPos(task, p);
         if (!match) return;
@@ -2120,7 +2126,7 @@ function taskMatchesPos(task, p) {
     if (p.partner && task.groups.includes(p.partner)) return true;
     return false;
   }
-  if (task.target === 'technik') return task.technikName === 'Lán Tomáš'; // demo: LT only
+  if (task.target === 'technik') return task.technikName === p.assignedTechnician;
   if (task.target === 'pos') return p.id === task.posId;
   return false;
 }
@@ -2915,14 +2921,6 @@ function getOpeningStatusInfo(p){
   return { text: 'Zavřeno', cls: 'dh-closed' };
 }
 
-function getCurrentWeekNum() {
-  const d = new Date();
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const dayNum = date.getUTCDay() || 7;
-  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  return String(Math.ceil((((date - yearStart) / 86400000) + 1) / 7));
-}
 
 function isToday(dayIdx) {
   return getTodayDayIdx() === dayIdx;
@@ -3222,11 +3220,13 @@ function showRouteView(week, day){
     const cmp = RouteEngine.compareRoutes(dayPos, startLoc, startTime, day, today());
     const fewerViolations = cmp.optimizedViolations != null && cmp.optimizedViolations < cmp.currentViolations;
     const showOpportunity = cmp.savedKm > 0.5 || fewerViolations;
+    const slaCount = dayPos.filter(p => RouteEngine.getSlaWeight(p, today()) > 0).length;
     const checklist = `
       <div style="font-size:11px;font-weight:700;color:var(--navy);letter-spacing:.03em;margin-bottom:8px">ROUTE INTELLIGENCE</div>
       <div style="font-size:12px;color:var(--td);margin-bottom:2px">✓ Zkontrolováno ${dayPos.length} POS${cmp.exact ? ' (porovnána všechna pořadí)' : ' (optimalizace 2-opt)'}</div>
       <div style="font-size:12px;color:var(--td);margin-bottom:2px">✓ Zkontrolována vzdálenost trasy</div>
-      <div style="font-size:12px;color:var(--td);margin-bottom:10px">${cmp.currentViolations != null ? '✓ Zkontrolována otevírací doba' : '○ Otevírací dobu nelze ověřit — chybí pozice/čas odjezdu'}</div>
+      <div style="font-size:12px;color:var(--td);margin-bottom:2px">${cmp.currentViolations != null ? '✓ Zkontrolována otevírací doba' : '○ Otevírací dobu nelze ověřit — chybí pozice/čas odjezdu'}</div>
+      <div style="font-size:12px;color:var(--td);margin-bottom:10px">${slaCount > 0 ? `✓ Zkontrolována priorita/SLA — ${slaCount} ${slaCount === 1 ? 'POS' : 'POS'} s vyšší prioritou zohledněno v pořadí` : '✓ Zkontrolována priorita/SLA — žádné POS s blížícím se termínem'}</div>
     `;
     const cmpCard = document.createElement('div');
     cmpCard.style.cssText = 'margin:0 12px 10px;padding:14px;background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:12px';
@@ -3263,7 +3263,19 @@ function showRouteView(week, day){
   lbl.textContent = `Pořadí zastávek (${dayPos.length})`;
   wrap.appendChild(lbl);
 
+  const todayStr = today();
   dayPos.forEach((p, i) => {
+    const tasks = p.taskState || [];
+    const hasServis = tasks.some(t => !t.done && t.priority === 'servis');
+    const hasDeadline = tasks.some(t => !t.done && t.deadline && t.deadline <= todayStr);
+    const hasHigh = tasks.some(t => !t.done && t.priority === 'high');
+    const slaBadge = hasServis
+      ? '<span style="background:#fde2e2;color:#c0392b;font-size:10px;font-weight:700;padding:1px 6px;border-radius:6px;margin-left:6px">SERVIS</span>'
+      : hasDeadline
+      ? '<span style="background:#fff3cd;color:#b8860b;font-size:10px;font-weight:700;padding:1px 6px;border-radius:6px;margin-left:6px">TERMÍN</span>'
+      : hasHigh
+      ? '<span style="background:#e6f7f5;color:#1a8a7c;font-size:10px;font-weight:700;padding:1px 6px;border-radius:6px;margin-left:6px">PRIORITA</span>'
+      : '';
     const row = document.createElement('div');
     row.className = 'pos-card';
     row.style.cursor = 'default';
@@ -3271,7 +3283,7 @@ function showRouteView(week, day){
       <div class="pci">
         <div style="width:26px;height:26px;border-radius:50%;background:var(--tl);color:var(--navy);font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i + 1}</div>
         <div class="pinfo">
-          <div class="pname">${p.n} <span style="font-weight:600;color:var(--muted);font-size:11px">#${p.id}</span></div>
+          <div class="pname">${p.n} <span style="font-weight:600;color:var(--muted);font-size:11px">#${p.id}</span>${slaBadge}</div>
           <div class="paddr">${p.a}</div>
         </div>
         <div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0">
@@ -3328,7 +3340,7 @@ renderList = function() {
   }
 
   const todayIdx = getTodayDayIdx();
-  const isCurrentWeek = cWeek === getCurrentWeekNum();
+  const isCurrentWeek = cWeek === CURRENT_OPS_WEEK;
 
   // Overdue POS (past days, not done) — show at top of today
   const overdue = isCurrentWeek ? getOverduePOS(cWeek) : [];
@@ -3463,11 +3475,11 @@ markVisited = function() {
 
 // ── Auto-set today's week and day on init ────────────────────────────────
 function autoSetCurrentDay() {
-  const weekNum = getCurrentWeekNum();
-  // Use W25 as demo if current week not in data
-  if (posData[weekNum] && posData[weekNum].length > 0) {
-    cWeek = weekNum;
-  }
+  // CURRENT_OPS_WEEK je jediný zdroj pravdy pro "aktuální týden" (stejný,
+  // jaký používá Velín dashboard/traceability/alerty) — ne ISO týden ze
+  // systémového data, který se s daty rozejde, jakmile reálné datum
+  // přeteče naimportovaný rozsah (POS_WEEK_KEYS).
+  cWeek = CURRENT_OPS_WEEK;
   const todayIdx = getTodayDayIdx();
   cDay = todayIdx !== null ? todayIdx : 0;
 }
@@ -3785,7 +3797,7 @@ function showPlanningView() {
   wrap.innerHTML = '';
   const all = posData[cWeek] || [];
   const todayIdx = getTodayDayIdx();
-  const isCurrentWeek = cWeek === getCurrentWeekNum();
+  const isCurrentWeek = cWeek === CURRENT_OPS_WEEK;
 
   // Back button
   const back = document.createElement('div');
