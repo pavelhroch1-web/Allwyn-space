@@ -36,6 +36,22 @@ Aktuální audit kódu (co je reálně implementováno) je v `CODE_AUDIT.md` —
 
 ---
 
+## DEPLOYMENT WORKFLOW (závazné, po každém dokončeném úkolu/feature)
+
+1. **Ověř** — žádné console errors, funguje flow Technika, funguje flow Velína.
+2. **Commit** se srozumitelnou zprávou.
+3. **Push** na GitHub.
+4. **Deploy automaticky.** Pokud se pracuje na branchi: vytvoř PR a **automaticky ho mergni**, pokud checky projdou a oprávnění to dovolí.
+5. **Ověř GitHub Pages deployment** (live URL).
+6. **Reportuj uživateli až po té**, co je live verze aktuální.
+
+Když řekneš "hotovo", znamená to vždy:
+✅ implementováno · ✅ otestováno · ✅ commitnuto · ✅ pushnuto · ✅ live URL aktualizováno.
+
+Nenech hotovou práci jen lokálně nebo jen v branchi — pokud tomu nebrání blokující problém (např. neprocházející CI, chybějící oprávnění k mergi).
+
+---
+
 ## ARCHITEKTURA (cílová)
 
 ```
@@ -100,7 +116,7 @@ Doporučený stack (návrh, ne dogma): frontend buď ponechat vanilla/lehký fra
 
 ## Doménové konstanty (reference)
 
-**Regiony:** RSE, RSZ, RSJ, RSM, Praha
+**Regiony (reálné kódy POS AREA z Tourplan exportu):** RSA (Praha+Kladno), RSB (Brno/jižní Morava+jižní Čechy), RSC (Plzeň/západní Čechy+Karlovy Vary), RSD (Ústí nad Labem/severní Čechy), RSE (Pardubice/Hradec Králové+Zlín), RSG (Ostrava/Olomouc/Moravskoslezský kraj)
 **Dny:** Po, Út, St, Čt, Pá (víkend = bez práce)
 **Priority úkolů:** servis (1, červená) > template (2) > on_top (3) > own (4)
 **KA partneři:** Albert, Tesco, Hruška, Fast, GECO, JIP, JP Servis, KM-Prona, Prim, PEAL, Bonveno, Lagardere, Tobacco DC, EUROBIT (pozastaveno), CSPOINT

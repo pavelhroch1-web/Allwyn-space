@@ -5,10 +5,68 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Allwyn Space</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Space+Grotesk:wght@700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Cross-device sync (pilot test, viz js/sync.js) — bez vyplněných klíčů se
+     appka chová přesně jako dřív, čistě lokálně. Klíče sem vlož po založení
+     Supabase projektu (Project Settings → API). -->
+<script>
+  window.ALLWYN_SUPABASE_URL = 'https://lpnorveltzcmgfouufx.supabase.co';
+  window.ALLWYN_SUPABASE_ANON_KEY = 'sb_publishable_Yk_JFXeWpSfqAtyMJqzlyw_xbo4i3D3';
+</script>
 <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
+<!-- ICON SPRITE (unified line-icon set, replaces emoji glyphs across the app) -->
+<svg style="display:none" aria-hidden="true">
+<defs>
+<symbol id="ic-dashboard" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/></symbol>
+<symbol id="ic-live" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+<symbol id="ic-warning" viewBox="0 0 24 24"><path d="M12 4 21 19H3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><line x1="12" y1="10" x2="12" y2="14.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="17" r="0.9"/></symbol>
+<symbol id="ic-team" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="17" cy="9" r="2.3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M15.5 14.7c2.4.3 4.3 2.2 4.5 5.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+<symbol id="ic-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 7.5V12l3.2 2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+<symbol id="ic-camera" viewBox="0 0 24 24"><path d="M4 8.5a1.5 1.5 0 0 1 1.5-1.5h1.6l.9-1.6h7l.9 1.6h1.6A1.5 1.5 0 0 1 20 8.5v10A1.5 1.5 0 0 1 18.5 20h-13A1.5 1.5 0 0 1 4 18.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.2" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+<symbol id="ic-edit" viewBox="0 0 24 24"><path d="M16.7 3.3a2 2 0 0 1 2.8 2.8L8 17.6 4 19l1.4-4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+<symbol id="ic-intel" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.4" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="4" cy="6" r="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="20" cy="6" r="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="4" cy="18" r="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="20" cy="18" r="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><line x1="9.6" y1="10.2" x2="5.2" y2="7" stroke="currentColor" stroke-width="1.2"/><line x1="14.4" y1="10.2" x2="18.8" y2="7" stroke="currentColor" stroke-width="1.2"/><line x1="9.6" y1="13.8" x2="5.2" y2="17" stroke="currentColor" stroke-width="1.2"/><line x1="14.4" y1="13.8" x2="18.8" y2="17" stroke="currentColor" stroke-width="1.2"/></symbol>
+<symbol id="ic-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8.3 12.3l2.4 2.4 5-5.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="ic-notes" viewBox="0 0 24 24"><rect x="4.5" y="3.5" width="15" height="17" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.6"/><line x1="8" y1="8.5" x2="16" y2="8.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><line x1="8" y1="12.3" x2="16" y2="12.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><line x1="8" y1="16.1" x2="13" y2="16.1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+<symbol id="ic-box" viewBox="0 0 24 24"><path d="M3.5 7.8 12 3.5l8.5 4.3-8.5 4.3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M3.5 7.8v8.4L12 20.5l8.5-4.3V7.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><line x1="12" y1="12.1" x2="12" y2="20.5" stroke="currentColor" stroke-width="1.6"/></symbol>
+<symbol id="ic-card" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="8" cy="11" r="1.7" fill="none" stroke="currentColor" stroke-width="1.4"/><line x1="13" y1="10" x2="18" y2="10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><line x1="13" y1="13" x2="18" y2="13" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><line x1="5" y1="16" x2="11" y2="16" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></symbol>
+<symbol id="ic-store" viewBox="0 0 24 24"><path d="M4 9.5 5.2 4h13.6l1.2 5.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M4 9.5a2.2 2.2 0 0 0 4.4.3 2.2 2.2 0 0 0 4.4 0 2.2 2.2 0 0 0 4.4 0 2.2 2.2 0 0 0 4.4-.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M5 9.8V20h14V9.8" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="9.5" y="14" width="5" height="6" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+<symbol id="ic-building" viewBox="0 0 24 24"><rect x="5" y="3.5" width="14" height="17" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/><line x1="8.5" y1="7.5" x2="8.5" y2="7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="7.5" x2="12" y2="7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="15.5" y1="7.5" x2="15.5" y2="7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="8.5" y1="11.5" x2="8.5" y2="11.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="11.5" x2="12" y2="11.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="15.5" y1="11.5" x2="15.5" y2="11.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="9.5" y="15" width="5" height="5.5" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+<symbol id="ic-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-6.1-6.5-11.2A6.5 6.5 0 0 1 12 3.3a6.5 6.5 0 0 1 6.5 6.5C18.5 14.9 12 21 12 21z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="9.8" r="2.2" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+<symbol id="ic-map" viewBox="0 0 24 24"><path d="M9 4 4 6v14l5-2 6 2 5-2V4l-5 2-6-2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><line x1="9" y1="4" x2="9" y2="18" stroke="currentColor" stroke-width="1.4"/><line x1="15" y1="6" x2="15" y2="20" stroke="currentColor" stroke-width="1.4"/></symbol>
+<symbol id="ic-flag" viewBox="0 0 24 24"><path d="M6 3v18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M6 4h11l-2.5 3.5L17 11H6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+<symbol id="ic-wrench" viewBox="0 0 24 24"><path d="M14.7 9.3 18 6a3.5 3.5 0 0 0-5-1.4L9.5 8 4 13.5 6.5 16 12 10.5l3.4 3.4a3.5 3.5 0 0 0-1.4-5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+<symbol id="ic-route" viewBox="0 0 24 24"><circle cx="5.5" cy="6" r="2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="18.5" cy="18" r="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5.5 8v4a4 4 0 0 0 4 4h4a4 4 0 0 0 4-4v-2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+<symbol id="ic-trophy" viewBox="0 0 24 24"><path d="M7 4h10v4a5 5 0 0 1-10 0z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M7 5H4.5a1 1 0 0 0-1 1.2c.3 1.8 1.5 3.2 3.5 3.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M17 5h2.5a1 1 0 0 1 1 1.2c-.3 1.8-1.5 3.2-3.5 3.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><line x1="12" y1="12.7" x2="12" y2="16" stroke="currentColor" stroke-width="1.6"/><path d="M8.5 20h7l-1-3.3h-5z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+<symbol id="ic-arrow-down" viewBox="0 0 24 24"><line x1="12" y1="4" x2="12" y2="18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M6.5 13 12 18.5 17.5 13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="ic-upload" viewBox="0 0 24 24"><line x1="12" y1="20" x2="12" y2="6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M6.5 11 12 5.5 17.5 11" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 19.5h16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+<symbol id="ic-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.6"/><line x1="3.5" y1="9.5" x2="20.5" y2="9.5" stroke="currentColor" stroke-width="1.6"/><line x1="8" y1="3" x2="8" y2="6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><line x1="16" y1="3" x2="16" y2="6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+<symbol id="ic-shield" viewBox="0 0 24 24"><path d="M12 3.5 19 6.3v5.4c0 5-3 8-7 9.3-4-1.3-7-4.3-7-9.3V6.3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 12l2.2 2.2L15.5 9.7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="ic-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="12" cy="12" r="1.2"/></symbol>
+<symbol id="ic-image" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="8.3" cy="9.3" r="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M4.5 17 9 12.5l3 2.7L16.5 11l3.5 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="ic-fuel" viewBox="0 0 24 24"><rect x="4" y="4" width="9" height="16" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.6"/><line x1="6.5" y1="8" x2="10.5" y2="8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M13 8.5h2.3L18 11v6a1.4 1.4 0 0 1-2.8 0v-3h-2.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+<symbol id="ic-close" viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+<symbol id="ic-bell" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2H4.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M10 19.5a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+<symbol id="ic-monitor" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="12" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.6"/><line x1="8.5" y1="20" x2="15.5" y2="20" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><line x1="12" y1="16.5" x2="12" y2="20" stroke="currentColor" stroke-width="1.6"/></symbol>
+<symbol id="ic-bulb" viewBox="0 0 24 24"><path d="M9 18.5h6M10 21h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M12 3.5a5.8 5.8 0 0 0-3 10.8c.6.4 1 1 1 1.7v.5h4v-.5c0-.7.4-1.3 1-1.7A5.8 5.8 0 0 0 12 3.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+<symbol id="ic-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.6"/><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="12" y1="2.5" x2="12" y2="4.8"/><line x1="12" y1="19.2" x2="12" y2="21.5"/><line x1="2.5" y1="12" x2="4.8" y2="12"/><line x1="19.2" y1="12" x2="21.5" y2="12"/><line x1="5.1" y1="5.1" x2="6.7" y2="6.7"/><line x1="17.3" y1="17.3" x2="18.9" y2="18.9"/><line x1="5.1" y1="18.9" x2="6.7" y2="17.3"/><line x1="17.3" y1="6.7" x2="18.9" y2="5.1"/></g></symbol>
+<symbol id="ic-lock" viewBox="0 0 24 24"><rect x="5.5" y="11" width="13" height="9" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+<symbol id="ic-image" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="9" cy="10" r="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M4 16.5l5-4.5 3.5 3 3-2.5 4.5 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+<symbol id="ic-signal" viewBox="0 0 24 24"><circle cx="12" cy="17" r="1.5" fill="currentColor"/><path d="M8.5 14a5 5 0 0 1 7 0M5.5 11a9 9 0 0 1 13 0M2.8 8a13 13 0 0 1 18.4 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+<symbol id="ic-check-badge" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 12.3l2.6 2.6 5.4-5.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="ic-palette" viewBox="0 0 24 24"><path d="M12 3.5a8.5 8 0 1 0 0 16c1.2 0 1.8-.7 1.8-1.6 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.7-1.6 1.6-1.6h1.9a4 3.8 0 0 0 4.2-3.8C20.5 6.3 16.7 3.5 12 3.5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="7.2" cy="11" r="1.1" fill="currentColor"/><circle cx="9.5" cy="7.3" r="1.1" fill="currentColor"/><circle cx="14.5" cy="7.3" r="1.1" fill="currentColor"/><circle cx="16.8" cy="11" r="1.1" fill="currentColor"/></symbol>
+<symbol id="ic-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><line x1="12" y1="11" x2="12" y2="16.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="7.8" r="1" fill="currentColor"/></symbol>
+<symbol id="ic-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5.5 19.5c0-3.5 3-6 6.5-6s6.5 2.5 6.5 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+<symbol id="ic-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3.5 19c0-3 2.5-5.3 5.5-5.3S14.5 16 14.5 19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M15.5 6a3 3 0 0 1 0 5.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M16 13.7c2.3.4 4 2.4 4 5.3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+</defs>
+</svg>
+
 <!-- ROLE SELECT -->
 <div id="role-screen">
   <div class="rs-bg">
@@ -21,99 +79,189 @@
   </div>
 
   <div class="rs-content">
-    <div class="rs-top">
-      <div class="rs-logo"><div class="rs-a">a</div><div class="rs-name">allwyn <span>space</span></div></div>
+
+    <div class="rs-hero">
+      <div class="rs-hero-top">
+        <div class="rs-logo"><div class="rs-a">a</div><div class="rs-name">allwyn <span>space</span></div></div>
+        <div class="rs-live-pill"><span class="rs-live-dot"></span>LIVE</div>
+      </div>
       <div class="rs-sub">Field Operations Intelligence Platform</div>
-      <div class="rs-tagline">Connecting field execution with real-time operational control.</div>
-      <div class="rs-status">
-        <span class="rs-live-dot"></span>
-        <span class="rs-status-text">LIVE NETWORK</span>
-        <span class="rs-status-sep">·</span>
-        <span class="rs-status-text" id="rs-stat-techs">27 technicians online</span>
-        <span class="rs-status-sep">·</span>
-        <span class="rs-status-text" id="rs-stat-pos">945 POS monitored</span>
+
+      <div class="rs-stats">
+        <div class="rs-stat"><div class="rs-stat-v" id="rs-stat-pos-v">945</div><div class="rs-stat-l">POS monitored</div></div>
+        <div class="rs-stat"><div class="rs-stat-v" id="rs-stat-tech-v">27</div><div class="rs-stat-l">technicians</div></div>
+        <div class="rs-stat"><div class="rs-stat-v" id="rs-stat-cov-v">—</div><div class="rs-stat-l">coverage this week</div></div>
+        <div class="rs-stat"><div class="rs-stat-v" id="rs-stat-saved-v">—</div><div class="rs-stat-l">route time saved</div></div>
       </div>
     </div>
 
-    <div class="rs-cards">
-      <div class="rs-card rs-card-field" onclick="enterRole('technik')">
-        <div class="rs-card-top">
-          <div class="rs-card-eyebrow">Field Technician</div>
-          <svg class="rs-card-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5" stroke="currentColor" stroke-width="1.6"/><line x1="10" y1="18.3" x2="14" y2="18.3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    <div class="rs-panel">
+      <div class="rs-panel-map">
+        <svg viewBox="0 0 220 110" class="rs-cc-svg" aria-hidden="true">
+          <g class="rs-cc-lines" id="rs-cc-lines"></g>
+          <g class="rs-cc-dots" id="rs-cc-dots"></g>
+        </svg>
+      </div>
+      <div class="rs-panel-intel">
+        <div class="rs-intel-row"><span class="rs-intel-dot rs-id-t"></span><span id="rs-intel-saved">—</span></div>
+        <div class="rs-intel-row"><span class="rs-intel-dot rs-id-o"></span><span id="rs-intel-attention">—</span></div>
+        <div class="rs-intel-row"><span class="rs-intel-dot rs-id-g" id="rs-intel-cov-dot"></span><span id="rs-intel-cov">—</span></div>
+      </div>
+    </div>
+
+    <div class="rs-vision">
+
+      <div class="rs-quote">„Pomáháme každému technikovi věnovat víc času hodnotě v terénu — míň jízdě, hledání a koordinaci.“</div>
+
+      <div class="rs-vsection">
+        <div class="rs-vtitle">Realita dnes</div>
+        <div class="rs-problem-grid">
+          <div class="rs-problem-item">Práce přichází z mnoha různých zdrojů</div>
+          <div class="rs-problem-item">Plánování trasy je ruční</div>
+          <div class="rs-problem-item">Regiony možná nejsou nastavené optimálně</div>
+          <div class="rs-problem-item">Návštěvy skladu nejsou optimalizované</div>
+          <div class="rs-problem-item">Volná kapacita techniků je těžko vidět</div>
         </div>
-        <div class="rs-preview rs-preview-phone">
-          <div class="rs-pv-row"><span class="rs-pv-dot rs-pv-dot-g"></span>Dnešní trasa optimalizována</div>
-          <div class="rs-pv-row"><span class="rs-pv-dot rs-pv-dot-t"></span>POS checklist · 5/7 hotovo</div>
-          <div class="rs-pv-row"><span class="rs-pv-dot rs-pv-dot-o"></span>Materiál · doplnit 2 položky</div>
-        </div>
-        <div class="rs-card-desc">Plan visits. Optimize routes. Execute POS operations.</div>
-        <div class="rs-chips">
-          <span class="rs-chip">Smart routes</span>
-          <span class="rs-chip">GPS check-in</span>
-          <span class="rs-chip">Inventory</span>
-          <span class="rs-chip">Tasks</span>
-        </div>
-        <div class="rs-card-enter">Vstoupit jako Technik <span class="rs-arrow">→</span></div>
+        <div class="rs-vlead">Allwyn Space nad tím staví jednu inteligentní vrstvu.</div>
       </div>
 
-      <div class="rs-card rs-card-ops" onclick="enterRole('admin')">
-        <div class="rs-card-top">
-          <div class="rs-card-eyebrow">Operations Command Center</div>
-          <svg class="rs-card-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="3.4" stroke="currentColor" stroke-width="1.6"/><circle cx="4" cy="6" r="1.6" stroke="currentColor" stroke-width="1.6"/><circle cx="20" cy="6" r="1.6" stroke="currentColor" stroke-width="1.6"/><circle cx="4" cy="18" r="1.6" stroke="currentColor" stroke-width="1.6"/><circle cx="20" cy="18" r="1.6" stroke="currentColor" stroke-width="1.6"/><line x1="9.6" y1="10.2" x2="5.2" y2="7" stroke="currentColor" stroke-width="1.2"/><line x1="14.4" y1="10.2" x2="18.8" y2="7" stroke="currentColor" stroke-width="1.2"/><line x1="9.6" y1="13.8" x2="5.2" y2="17" stroke="currentColor" stroke-width="1.2"/><line x1="14.4" y1="13.8" x2="18.8" y2="17" stroke="currentColor" stroke-width="1.2"/></svg>
-        </div>
-        <div class="rs-preview rs-preview-dash">
-          <div class="rs-pv-map">
-            <span class="rs-pv-node" style="left:18%;top:30%"></span>
-            <span class="rs-pv-node" style="left:42%;top:62%"></span>
-            <span class="rs-pv-node" style="left:66%;top:24%"></span>
-            <span class="rs-pv-node rs-pv-node-alert" style="left:80%;top:58%"></span>
-            <span class="rs-pv-node" style="left:30%;top:78%"></span>
+      <div class="rs-vsection">
+        <div class="rs-flow">
+          <div class="rs-flow-col">
+            <div class="rs-flow-label">Vstupy</div>
+            <div class="rs-flow-items">SAP požadavky · Jira servisní tikety · Kampaně · Priority POS · Sales data</div>
           </div>
-          <div class="rs-pv-row rs-pv-ai"><span class="rs-pv-dot rs-pv-dot-t"></span>AI insight · 2 regiony vyžadují pozornost</div>
+          <div class="rs-flow-arrow">→</div>
+          <div class="rs-flow-col rs-flow-col-mid">
+            <div class="rs-flow-label">Intelligence Engine</div>
+            <div class="rs-flow-items">Kapacita technika · GPS POS · Otevírací doba · Vzdálenost trasy · Potřebný materiál · Inventář vozu · Nastavení regionů</div>
+          </div>
+          <div class="rs-flow-arrow">→</div>
+          <div class="rs-flow-col">
+            <div class="rs-flow-label">Smart Execution</div>
+            <div class="rs-flow-items">Kdo to udělá? Kdy? S jakým materiálem? V jakém pořadí?</div>
+          </div>
         </div>
-        <div class="rs-card-desc">Real-time visibility and intelligent control of field operations.</div>
-        <div class="rs-chips">
-          <span class="rs-chip">Live overview</span>
-          <span class="rs-chip">AI insights</span>
-          <span class="rs-chip">Performance</span>
-          <span class="rs-chip">Risk detection</span>
+      </div>
+
+      <div class="rs-vsection">
+        <div class="rs-vtitle">Intelligence moduly — kam se chceme dostat</div>
+        <div class="rs-module-subtitle">1 modul je živý, 5 je vize. „Live“ = reálně funguje s reálnými daty. „Vize“ = plánovaný směr, zatím neimplementováno.</div>
+        <div class="rs-modules">
+
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-route"/></svg><span class="rs-module-badge rs-badge-live">Live</span></div>
+            <div class="rs-module-title">Route Intelligence</div>
+            <div class="rs-module-desc">Optimalizuje denní práci. Rozumí výchozímu bodu technika, GPS POS, otevírací době a délce úkolu.</div>
+            <div class="rs-module-goal">Cíl: méně jízdy, víc času na POS.</div>
+          </div>
+
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-map"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
+            <div class="rs-module-title">Territory Intelligence</div>
+            <div class="rs-module-desc">„Máme regiony nastavené správně?“ Analyzuje, kde technici začínají a jak je vyvážená jejich síť POS.</div>
+            <div class="rs-module-goal">Najde překryvy regionů a zbytečné kilometry — člověk rozhoduje o změně.</div>
+          </div>
+
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-clock"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
+            <div class="rs-module-title">Capacity Intelligence</div>
+            <div class="rs-module-desc">Pochopí dostupný čas týmu. Např. „Tento týden: volná kapacita 42 hodin.“</div>
+            <div class="rs-module-goal">Navrhne, jaké POS/úkoly se dají přidat.</div>
+          </div>
+
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-box"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
+            <div class="rs-module-title">Material Intelligence</div>
+            <div class="rs-module-desc">Virtuální sklad technika — ví, co je v autě, jaké kampaně se blíží a jaký SAP materiál bude potřeba.</div>
+            <div class="rs-module-goal">„Vyzvedni materiál teď, další návštěva skladu za 12 dní.“</div>
+          </div>
+
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-flag"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
+            <div class="rs-module-title">Campaign Intelligence</div>
+            <div class="rs-module-desc">Kampaň + důležitost POS + sales data + termín → AI navrhne, které POS navštívit, kdy a který technik.</div>
+            <div class="rs-module-goal">Velín schvaluje, AI jen doporučuje.</div>
+          </div>
+
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-camera"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
+            <div class="rs-module-title">Photo Intelligence</div>
+            <div class="rs-module-desc">AI kontroluje fotky z POS — přítomnost konkurence, chybějící materiál, kvalitu provedení.</div>
+            <div class="rs-module-goal">Vytváří strukturované reporty pro velín.</div>
+          </div>
+
         </div>
-        <div class="rs-card-enter">Vstoupit do Velínu <span class="rs-arrow">→</span></div>
+      </div>
+
+      <div class="rs-vsection">
+        <div class="rs-evo">
+          <div class="rs-evo-step"><div class="rs-evo-dot rs-evo-dot-live"></div><div class="rs-evo-label">Dnes</div><div class="rs-evo-text">Route Intelligence</div></div>
+          <div class="rs-evo-line"></div>
+          <div class="rs-evo-step"><div class="rs-evo-dot"></div><div class="rs-evo-label">Další</div><div class="rs-evo-text">Connected Operations</div></div>
+          <div class="rs-evo-line"></div>
+          <div class="rs-evo-step"><div class="rs-evo-dot"></div><div class="rs-evo-label">Budoucnost</div><div class="rs-evo-text">AI-assisted Field Planning</div></div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="rs-cta-lead">Vyzkoušet appku</div>
+    <div class="rs-roles">
+      <div class="rs-role-card" onclick="loginAsTechnician()">
+        <svg class="rs-role-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5" stroke="currentColor" stroke-width="1.6"/><line x1="10" y1="18.3" x2="14" y2="18.3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <div class="rs-role-text">
+          <div class="rs-role-title">Technician Workspace</div>
+          <div class="rs-role-desc">Přihlásit jako Lán Tomáš · routes · inventory</div>
+        </div>
+        <span class="rs-role-arrow">→</span>
+      </div>
+      <div class="rs-role-card" onclick="loginAsVelin()">
+        <svg class="rs-role-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="3.4" stroke="currentColor" stroke-width="1.6"/><circle cx="4" cy="6" r="1.6" stroke="currentColor" stroke-width="1.6"/><circle cx="20" cy="6" r="1.6" stroke="currentColor" stroke-width="1.6"/><circle cx="4" cy="18" r="1.6" stroke="currentColor" stroke-width="1.6"/><circle cx="20" cy="18" r="1.6" stroke="currentColor" stroke-width="1.6"/><line x1="9.6" y1="10.2" x2="5.2" y2="7" stroke="currentColor" stroke-width="1.2"/><line x1="14.4" y1="10.2" x2="18.8" y2="7" stroke="currentColor" stroke-width="1.2"/><line x1="9.6" y1="13.8" x2="5.2" y2="17" stroke="currentColor" stroke-width="1.2"/><line x1="14.4" y1="13.8" x2="18.8" y2="17" stroke="currentColor" stroke-width="1.2"/></svg>
+        <div class="rs-role-text">
+          <div class="rs-role-title">Operations Control Center</div>
+          <div class="rs-role-desc">Přihlásit jako Pavel Hroch · Velín / Řízení terénu</div>
+        </div>
+        <span class="rs-role-arrow">→</span>
       </div>
     </div>
 
-    <div class="rs-ai-strip">
-      <span class="rs-ai-pulse"></span>
-      <span class="rs-ai-strip-title">AI Operations Intelligence active</span>
-      <span class="rs-ai-strip-sep">—</span>
-      <span class="rs-ai-strip-text">Tomorrow's field operation analyzed. 3 optimization opportunities detected.</span>
-    </div>
-
-    <div class="rs-badge">Tourplan W23–W28 · 27 techniků · 945 POS</div>
+    <div class="rs-badge" id="rs-badge">Tourplan W23–W28 · 27 techniků</div>
   </div>
 </div>
 
-<button class="switch-btn" id="switch-btn" style="display:none" onclick="goHome()">⇄ Přepnout</button>
+<button class="switch-btn" id="switch-btn" style="display:none" onclick="logout()">⇄ Odhlásit</button>
 
 <!-- ══ TECHNIK ══ -->
 <div class="screen" id="technik-screen">
 
+  <!-- VIEW AS BANNER (Velín náhled technika) -->
+  <div class="viewas-banner" id="viewas-banner" style="display:none">
+    <svg class="ic ic-sm"><use href="#ic-user"/></svg>
+    <span>Zobrazuješ pohled technika: <b id="viewas-name"></b></span>
+    <button onclick="backToVelin()">Zpět do Velínu</button>
+  </div>
+
   <!-- BRIEFING -->
   <div class="briefing-ov" id="briefing">
     <div class="briefing-sh">
-      <div class="bf-handle"></div>
-      <div class="bf-hdr">
-        <div class="bf-emoji">☀️</div>
-        <div><div class="bf-title">Dobré ráno, Tomáš!</div><div class="bf-date" id="bf-date"></div></div>
+      <div class="bf-hero">
+        <div class="bf-handle"></div>
+        <div class="bf-hdr">
+          <div class="bf-emoji"><svg class="ic ic-xl"><use href="#ic-calendar"/></svg></div>
+          <div><div class="bf-title">Dobré ráno, Tomáš!</div><div class="bf-date" id="bf-date"></div></div>
+        </div>
+        <div class="bf-stats">
+          <div class="bf-stat o"><div class="bf-sv" id="bf-total">35</div><div class="bf-sl">POS týden</div></div>
+          <div class="bf-stat g"><div class="bf-sv" id="bf-today">7</div><div class="bf-sl">Dnes</div></div>
+          <div class="bf-stat r"><div class="bf-sv" id="bf-svc">2</div><div class="bf-sl">Servis</div></div>
+        </div>
       </div>
-      <div class="ai-msg" id="bf-msg"><span class="ai-typing" id="bf-typing"></span><span class="ai-badge">✨ AI</span></div>
-      <div class="bf-stats">
-        <div class="bf-stat o"><div class="bf-sv" id="bf-total">35</div><div class="bf-sl">POS týden</div></div>
-        <div class="bf-stat g"><div class="bf-sv" id="bf-today">7</div><div class="bf-sl">Dnes</div></div>
-        <div class="bf-stat r"><div class="bf-sv" id="bf-svc">2</div><div class="bf-sl">Servis</div></div>
+      <div class="bf-body">
+        <div class="ai-msg" id="bf-msg"><span id="bf-typing"></span><span class="ai-badge">AI Insight</span></div>
+        <div class="bf-items" id="bf-items"></div>
+        <button class="bf-btn" onclick="closeBriefing()">Rozumím, jdeme na to →</button>
       </div>
-      <div class="bf-items" id="bf-items"></div>
-      <button class="bf-btn" onclick="closeBriefing()">Rozumím, jdeme na to →</button>
     </div>
   </div>
 
@@ -122,7 +270,18 @@
     <div class="hdr">
       <div class="hdr-row">
         <div class="hdr-logo"><div class="hdr-a">a</div><div class="hdr-title">allwyn <span>space</span></div></div>
-        <div class="av">LT</div>
+        <div class="user-chip">
+          <div class="av" id="tech-av" onclick="toggleUserMenu('tech')">LT</div>
+          <div class="user-dd" id="user-dd-tech">
+            <div class="user-dd-name" id="user-dd-tech-name">—</div>
+            <div class="user-dd-role">Technik</div>
+            <div class="user-dd-sep"></div>
+            <button class="user-dd-item" onclick="toggleProfileDetail('tech')">Profil</button>
+            <div class="user-dd-detail" id="user-dd-tech-detail" style="display:none"></div>
+            <button class="user-dd-item disabled" disabled>Nastavení <span class="user-dd-soon">brzy</span></button>
+            <button class="user-dd-item" onclick="logout()">Odhlásit</button>
+          </div>
+        </div>
       </div>
       <div class="hdr-sub" id="hdr-week-label">Načítám…</div>
     </div>
@@ -155,11 +314,12 @@
       <div class="det-name" id="d-fullname"></div>
       <div class="det-addr" id="d-addr"></div>
       <div class="det-chips" id="d-chips"></div>
+      <div class="det-hours" id="d-hours"></div>
     </div>
 
     <!-- CHECK-IN -->
     <div class="ci-bar" id="ci-bar">
-      <div class="ci-ico">📍</div>
+      <div class="ci-ico"><svg class="ic ic-lg"><use href="#ic-pin"/></svg></div>
       <div class="ci-info">
         <div class="ci-t" id="ci-t">Check-in na POS</div>
         <div class="ci-s" id="ci-s">Potvrď příjezd na provozovnu</div>
@@ -175,15 +335,15 @@
     <div class="sec-lbl">Info o provozovně</div>
     <div style="background:#fff;border-radius:10px;margin:0 12px 8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05)">
       <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--bg)">
-        <div style="font-size:15px;width:20px;text-align:center">📍</div>
+        <div style="width:20px;text-align:center;color:var(--teal)"><svg class="ic"><use href="#ic-pin"/></svg></div>
         <div><div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Oblast / Region</div><div style="font-size:13px;font-weight:600;margin-top:1px" id="info-area">—</div></div>
       </div>
       <div style="display:flex;align-items:center;gap:12px;padding:11px 14px">
-        <div style="font-size:15px;width:20px;text-align:center">🏪</div>
+        <div style="width:20px;text-align:center;color:var(--teal)"><svg class="ic"><use href="#ic-store"/></svg></div>
         <div><div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Typ partnerství</div><div style="font-size:13px;font-weight:600;margin-top:1px" id="info-typ">—</div></div>
       </div>
     </div>
-    <div style="margin:0 12px 8px;border-radius:10px;background:#fff;border:2px dashed var(--border);padding:11px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted)" onclick="openMap()">🗺️ Navigovat na místo</div>
+    <div style="margin:0 12px 8px;border-radius:10px;background:#fff;border:2px dashed var(--border);padding:11px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted)" onclick="openMap()"><svg class="ic"><use href="#ic-map"/></svg> Navigovat na místo</div>
 
     <!-- CAMPAIGNS -->
     <div class="sec-lbl">Aktuální kampaně</div>
@@ -198,7 +358,7 @@
       <div class="sec-lbl">Merch — osazení materiálů</div>
       <div class="supply-card" style="margin:0 12px 8px">
         <div class="supply-hdr" style="background:var(--tm)">
-          <div class="supply-hdr-t">🎨 Merchandising</div>
+          <div class="supply-hdr-t"><svg class="ic ic-sm"><use href="#ic-palette"/></svg> Merchandising</div>
           <div class="supply-badge" style="background:rgba(255,255,255,.2);color:#fff">Bez podpisu</div>
         </div>
         <div id="merch-items"></div>
@@ -213,7 +373,7 @@
       <div class="sec-lbl">Spotřební materiál — předání</div>
       <div class="supply-card" style="margin:0 12px 8px">
         <div class="supply-hdr">
-          <div class="supply-hdr-t">📦 Spotřební materiál</div>
+          <div class="supply-hdr-t"><svg class="ic ic-sm"><use href="#ic-box"/></svg> Spotřební materiál</div>
           <div class="supply-badge" id="supply-badge-lbl">Vyžaduje podpis</div>
         </div>
         <div id="supply-items"></div>
@@ -255,24 +415,24 @@
 
     <!-- DETAIL TABS -->
     <div class="det-tabs">
-      <div class="det-tab active" onclick="showDetTab('notes',this)">📝 Poznámky</div>
-      <div class="det-tab" onclick="showDetTab('inv',this)">📦 Inventory</div>
-      <div class="det-tab" onclick="showDetTab('karta',this)">🗂️ Karta POS</div>
+      <div class="det-tab active" onclick="showDetTab('inv',this)"><svg class="ic ic-sm"><use href="#ic-box"/></svg> Inventory</div>
+      <div class="det-tab" onclick="showDetTab('notes',this)"><svg class="ic ic-sm"><use href="#ic-notes"/></svg> Poznámky</div>
+      <div class="det-tab" onclick="showDetTab('karta',this)"><svg class="ic ic-sm"><use href="#ic-card"/></svg> Karta POS</div>
     </div>
 
-    <div id="dtc-notes" class="det-tc" style="padding:8px 12px">
+    <div id="dtc-notes" class="det-tc" style="display:none;padding:8px 12px">
       <textarea class="notes-ta" id="notes-ta" placeholder="Poznámky z návštěvy — stav, problémy, požadavky…" oninput="saveNote()" style="margin-top:6px"></textarea>
     </div>
-    <div id="dtc-inv" class="det-tc" style="display:none;padding-top:4px">
+    <div id="dtc-inv" class="det-tc" style="padding-top:4px">
       <!-- Inventory sub-tabs -->
       <div style="display:flex;margin:4px 12px 10px;background:var(--bg);border-radius:10px;padding:3px;gap:3px">
         <button onclick="showInvTab('vnitrni',this)" id="inv-tab-vnitrni"
           style="flex:1;padding:7px;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:var(--navy);color:var(--teal)">
-          🏪 Vnitřní
+          <svg class="ic ic-sm"><use href="#ic-store"/></svg> Vnitřní
         </button>
         <button onclick="showInvTab('venkovni',this)" id="inv-tab-venkovni"
           style="flex:1;padding:7px;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:transparent;color:var(--muted)">
-          🏢 Venkovní
+          <svg class="ic ic-sm"><use href="#ic-building"/></svg> Venkovní
         </button>
       </div>
 
@@ -288,8 +448,9 @@
         <button class="inv-add" onclick="addInvItem('venkovni')">+ Přidat venkovní položku</button>
       </div>
 
-      <div style="margin:8px 12px;padding:10px 14px;background:var(--bg);border-radius:10px;font-size:11px;color:var(--muted);line-height:1.5">
-        📋 Inventory = dlouhodobý majetek. Aktualizuj pouze při instalaci, výměně nebo zjištěné změně. Označení "Chybí" automaticky vytvoří prioritní úkol.
+      <div style="margin:8px 12px;padding:10px 14px;background:var(--bg);border-radius:10px;font-size:11px;color:var(--muted);line-height:1.5;display:flex;gap:6px">
+        <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-info"/></svg>
+        <span>Inventory = dlouhodobý majetek. Aktualizuj pouze při instalaci, výměně nebo zjištěné změně. Označení "Chybí" automaticky vytvoří prioritní úkol.</span>
       </div>
     </div>
     <div id="dtc-karta" class="det-tc" style="display:none;padding:8px 12px">
@@ -297,6 +458,23 @@
       <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Přidat záznam</div>
       <textarea class="notes-ta" id="pos-card-ta" placeholder="Např: Chystají zavřít, bude rekonstrukce, špatné osazení, nový vedoucí…" style="min-height:70px"></textarea>
       <button onclick="addPosCardNote()" style="margin-top:8px;width:100%;padding:12px;background:var(--navy);color:var(--teal);border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">Uložit záznam</button>
+    </div>
+
+    <!-- CHECKLIST PREVIEW (sandbox, collapsed by default) -->
+    <div class="ck-preview-wrap">
+      <button class="ck-preview-toggle" id="ck-preview-toggle" onclick="toggleChecklistPreview()">
+        <svg class="ic ic-sm"><use href="#ic-box"/></svg>
+        <span>Náhled: chytrý checklist (test)</span>
+        <span class="ck-preview-arrow" id="ck-preview-arrow">⌄</span>
+      </button>
+      <div class="ck-preview-body" id="ck-preview-body" style="display:none">
+        <div style="margin:10px 12px;padding:10px 14px;background:var(--bg);border-radius:10px;font-size:11px;color:var(--muted);line-height:1.5;display:flex;gap:6px">
+          <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-info"/></svg>
+          <span>Náhled budoucí funkce — testovací data z reálné kampaně, nesouvisí s touto POS. Slouží jen k ověření, že větvení Ano/Ne → navazující otázka/foto funguje na reálných odpovědích.</span>
+        </div>
+        <select class="ck-select" id="ck-record-picker" onchange="loadChecklistRecord(this.value)" style="margin:0 12px 10px;width:calc(100% - 24px)"></select>
+        <div id="ck-test-list" style="padding:0 12px"></div>
+      </div>
     </div>
 
     <div id="vis-badge-slot2"></div>
@@ -334,19 +512,50 @@
 
 <!-- ══ ADMIN / VELÍN ══ -->
 <div id="admin-screen">
+
+  <!-- VIEW AS TECHNICIAN MODAL -->
+  <div class="viewas-modal" id="viewas-modal">
+    <div class="viewas-card">
+      <div class="viewas-hdr">
+        <div>Zobrazit jako technik</div>
+        <button class="viewas-close" onclick="closeViewAsModal()">✕</button>
+      </div>
+      <div class="viewas-list" id="viewas-list"></div>
+    </div>
+  </div>
+
   <div class="adm-hdr">
     <div class="adm-logo"><div class="adm-a">a</div><div class="adm-title">allwyn <span>space</span> · velín</div></div>
     <div class="adm-nav">
-      <button class="adm-btn active" onclick="showAdmPage('dashboard',this)">📊 Dashboard</button>
-      <button class="adm-btn" onclick="showAdmPage('live',this)">🔴 Live</button>
-      <button class="adm-btn" onclick="showAdmPage('alerts',this)">⚠️ Flagy</button>
-      <button class="adm-btn" onclick="showAdmPage('technici',this)">👥 Technici</button>
-      <button class="adm-btn" onclick="showAdmPage('casy',this)">⏱ Časy</button>
-      <button class="adm-btn" onclick="showAdmPage('foto',this)">📸 Fotky</button>
-      <button class="adm-btn" onclick="showAdmPage('redakce',this)">✏️ Úkoly</button>
-      <button class="adm-btn" onclick="showAdmPage('ai',this)">🤖 AI</button>
-      <button class="adm-btn" onclick="showAdmPage('editor',this)">✍️ Editor</button>
-      <button class="adm-btn" onclick="showAdmPage('schvaleni',this)">✅ Schválení</button>
+      <button class="adm-btn active" onclick="showAdmPage('dashboard',this)"><svg class="ic ic-sm"><use href="#ic-dashboard"/></svg> Velín Home</button>
+      <button class="adm-btn" onclick="showAdmPage('posnet',this)"><svg class="ic ic-sm"><use href="#ic-pin"/></svg> POS Síť</button>
+      <button class="adm-btn" onclick="showAdmPage('import',this)"><svg class="ic ic-sm"><use href="#ic-upload"/></svg> Import dat</button>
+      <button class="adm-btn" onclick="showAdmPage('alerts',this)"><svg class="ic ic-sm"><use href="#ic-warning"/></svg> Flagy</button>
+      <button class="adm-btn" onclick="showAdmPage('foto',this)"><svg class="ic ic-sm"><use href="#ic-camera"/></svg> Fotky</button>
+      <button class="adm-btn" onclick="showAdmPage('redakce',this)"><svg class="ic ic-sm"><use href="#ic-edit"/></svg> Úkoly</button>
+      <button class="adm-btn" onclick="showAdmPage('ai',this)"><svg class="ic ic-sm"><use href="#ic-intel"/></svg> Intelligence</button>
+      <button class="adm-btn" onclick="showAdmPage('editor',this)"><svg class="ic ic-sm"><use href="#ic-edit"/></svg> Editor</button>
+      <button class="adm-btn" onclick="showAdmPage('schvaleni',this)"><svg class="ic ic-sm"><use href="#ic-check-circle"/></svg> Schválení</button>
+    </div>
+    <div style="position:relative;flex-shrink:0">
+      <input type="text" id="global-pos-search" placeholder="POS ID, název, adresa…"
+        oninput="onGlobalPosSearch(this.value)"
+        onkeydown="if(event.key==='Enter') submitGlobalPosSearch()"
+        style="width:180px;padding:8px 12px;border-radius:8px;border:1.5px solid rgba(255,255,255,.15);background:rgba(255,255,255,.08);color:#fff;font-size:13px;font-family:inherit;outline:none"/>
+      <div id="global-pos-search-results" style="display:none;position:absolute;top:calc(100% + 6px);right:0;width:280px;background:#fff;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.25);overflow:hidden;z-index:300"></div>
+    </div>
+    <div class="user-chip">
+      <div class="av" id="velin-av" onclick="toggleUserMenu('velin')">PH</div>
+      <div class="user-dd" id="user-dd-velin">
+        <div class="user-dd-name" id="user-dd-velin-name">Pavel Hroch</div>
+        <div class="user-dd-role">Velín · Řízení terénu</div>
+        <div class="user-dd-sep"></div>
+        <button class="user-dd-item" onclick="toggleProfileDetail('velin')">Profil</button>
+        <div class="user-dd-detail" id="user-dd-velin-detail" style="display:none"></div>
+        <button class="user-dd-item" onclick="openViewAsModal()">Přepnout pohled</button>
+        <button class="user-dd-item disabled" disabled>Nastavení <span class="user-dd-soon">brzy</span></button>
+        <button class="user-dd-item" onclick="logout()">Odhlásit</button>
+      </div>
     </div>
   </div>
   <div class="adm-content">
@@ -354,57 +563,162 @@
     <!-- EXECUTIVE DASHBOARD -->
     <div class="adm-page active" id="adm-dashboard">
       <div class="adm-sh"><div class="adm-st">Přehled výkonu — W25</div><div class="adm-sc" id="dash-updated">Dnes</div></div>
-      <div class="kpi-grid" id="dash-kpis"></div>
 
-      <div class="dash-block">
-        <div class="dash-block-t">📡 Plnění podle kanálu</div>
-        <div id="dash-channels"></div>
+      <div class="dash-status-strip" id="dash-status-strip">
+        <div class="dss-item"><span class="dss-val" id="dss-active">—</span><span class="dss-lbl">vyjelo</span></div>
+        <div class="dss-item dss-warn"><span class="dss-val" id="dss-behind">—</span><span class="dss-lbl">pozadu</span></div>
+        <div class="dss-item dss-danger"><span class="dss-val" id="dss-flags">—</span><span class="dss-lbl">flagů dnes</span></div>
+        <div class="dss-item"><span class="dss-val" id="dss-pct">—</span><span class="dss-lbl">plnění týdne</span></div>
       </div>
 
-      <div class="dash-block">
-        <div class="dash-block-t">🏆 Výkon techniků</div>
-        <div class="lb-grid" id="dash-leaderboard"></div>
+      <div class="dash-verdict ok" id="dash-verdict"></div>
+
+      <div class="rf-row" id="dash-view-toggle">
+        <button class="rfb active" id="dvt-morning" onclick="setDashView('morning')">Ranní pohled</button>
+        <button class="rfb" id="dvt-afternoon" onclick="setDashView('afternoon')">Odpolední pohled</button>
       </div>
 
-      <div class="dash-block">
-        <div class="dash-block-t">🧠 AI insighty</div>
-        <div class="insight-grid" id="dash-insights"></div>
+      <!-- RANNÍ POHLED — kde dnes zasáhnout -->
+      <div class="dash-view" data-view="morning" id="dash-view-morning">
+
+        <div class="dash-block">
+          <div class="dash-block-t"><svg class="ic"><use href="#ic-warning"/></svg> Vyžaduje pozornost</div>
+          <div class="cw" id="dash-attention"></div>
+        </div>
+
+        <div class="dash-block" id="dash-hero-block" style="display:none">
+          <div class="dash-block-t"><svg class="ic"><use href="#ic-intel"/></svg> Route Intelligence — co upravit tento týden</div>
+          <div class="kpi-grid" id="dash-hero-kpis"></div>
+          <div class="kpi-grid" id="dash-route-kpis"></div>
+        </div>
+
+        <div class="dash-block">
+          <div class="dash-block-t"><svg class="ic"><use href="#ic-pin"/></svg> Regiony — vytížení a kapacita</div>
+          <div class="cw" id="dash-regions"></div>
+          <div class="reg-reco" id="dash-region-reco" style="display:none"></div>
+        </div>
+
+        <div class="dash-block">
+          <div class="dash-block-t"><svg class="ic"><use href="#ic-live"/></svg> Technici v terénu</div>
+          <div class="rf-wrap">
+            <div class="rf-lbl">Filtr regionu</div>
+            <div class="rf-row" id="rf-row">
+              <button class="rfb active" onclick="filterRegion('all',this)">Celá ČR</button>
+              <button class="rfb" onclick="filterRegion('RSA',this)">RSA</button>
+              <button class="rfb" onclick="filterRegion('RSB',this)">RSB</button>
+              <button class="rfb" onclick="filterRegion('RSC',this)">RSC</button>
+              <button class="rfb" onclick="filterRegion('RSD',this)">RSD</button>
+              <button class="rfb" onclick="filterRegion('RSE',this)">RSE</button>
+              <button class="rfb" onclick="filterRegion('RSG',this)">RSG</button>
+            </div>
+          </div>
+          <div class="sgrid">
+            <div class="scard t"><div class="sv" id="adm-active">—</div><div class="sl">Aktivní</div></div>
+            <div class="scard g"><div class="sv" id="adm-done-n">—</div><div class="sl">Splněno dnes</div></div>
+            <div class="scard r"><div class="sv" id="adm-behind">—</div><div class="sl">Pozadu</div></div>
+            <div class="scard o"><div class="sv" id="adm-svc-open">—</div><div class="sl">Servis čeká</div></div>
+          </div>
+          <div class="map-box">
+            <div class="map-hdr">
+              <div class="map-hdr-t">Technici v terénu — W25</div>
+              <div class="live-badge"><div class="live-dot"></div>LIVE</div>
+            </div>
+            <div id="admin-map" style="height:260px"></div>
+          </div>
+          <div class="adm-sh"><div class="adm-st">Aktuální stav</div><div class="adm-sc" id="live-wlbl">Týden 25</div></div>
+          <div class="cw" id="adm-live-list"></div>
+        </div>
+
       </div>
 
-      <div class="dash-block">
-        <div class="dash-block-t">🚨 Vyžaduje pozornost</div>
-        <div class="cw" id="dash-attention"></div>
+      <!-- ODPOLEDNÍ POHLED — jak dopadl den, podklad pro plánování zítřka -->
+      <div class="dash-view" data-view="afternoon" id="dash-view-afternoon" style="display:none">
+
+        <div class="kpi-grid" id="dash-kpis"></div>
+
+        <div class="dash-block">
+          <div class="dash-block-t"><svg class="ic"><use href="#ic-route"/></svg> Plnění podle kanálu</div>
+          <div id="dash-channels"></div>
+        </div>
+
+        <div class="dash-block">
+          <div class="dash-block-t"><svg class="ic"><use href="#ic-trophy"/></svg> Výkon techniků</div>
+          <div class="lb-grid" id="dash-leaderboard"></div>
+        </div>
+
+        <div class="dash-block">
+          <div class="dash-block-t"><svg class="ic"><use href="#ic-clock"/></svg> Časy — dnešní přehled</div>
+          <div class="sgrid">
+            <div class="scard t"><div class="sv" id="adm-avg-idt">—</div><div class="sl">Průměr IDT — dnes</div></div>
+            <div class="scard"><div class="sv" id="adm-avg-ka">—</div><div class="sl">Průměr KA — dnes</div></div>
+            <div class="scard g"><div class="sv" id="adm-avg-visit">—</div><div class="sl">Avg. návštěva — dnes</div></div>
+            <div class="scard r"><div class="sv" id="adm-shorts">0</div><div class="sl">Krátké &lt;10m</div></div>
+          </div>
+          <div class="adm-sh"><div class="adm-st">Lán Tomáš — dnešní přehled</div></div>
+          <div class="cw" id="adm-casy-list"></div>
+        </div>
+
       </div>
     </div>
 
-    <!-- LIVE -->
-    <div class="adm-page" id="adm-live">
+    <!-- POS SÍŤ — Admin POS Management -->
+    <div class="adm-page" id="adm-posnet">
+      <div class="adm-sh"><div class="adm-st">POS síť</div><div class="adm-sc" id="posnet-count">—</div></div>
       <div class="rf-wrap">
-        <div class="rf-lbl">Filtr regionu</div>
-        <div class="rf-row" id="rf-row">
-          <button class="rfb active" onclick="filterRegion('all',this)">🇨🇿 Celá ČR</button>
-          <button class="rfb" onclick="filterRegion('RSE',this)">RSE</button>
-          <button class="rfb" onclick="filterRegion('RSZ',this)">RSZ</button>
-          <button class="rfb" onclick="filterRegion('RSJ',this)">RSJ</button>
-          <button class="rfb" onclick="filterRegion('RSM',this)">RSM</button>
-          <button class="rfb" onclick="filterRegion('Praha',this)">Praha</button>
-        </div>
+        <input type="text" id="posnet-search" placeholder="Hledat POS ID, terminál, název nebo adresu…" oninput="setPosNetSearch(this.value)" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--bd);border-radius:10px;font-size:13px;font-family:inherit">
       </div>
-      <div class="sgrid">
-        <div class="scard t"><div class="sv" id="adm-active">27</div><div class="sl">Aktivní</div></div>
-        <div class="scard g"><div class="sv" id="adm-done-n">—</div><div class="sl">Splněno dnes</div></div>
-        <div class="scard r"><div class="sv" id="adm-behind">4</div><div class="sl">Pozadu</div></div>
-        <div class="scard o"><div class="sv">2</div><div class="sl">Servis čeká</div></div>
+      <div class="rf-wrap">
+        <div class="rf-lbl">Technik</div>
+        <div class="rf-row" id="posnet-tech-row"></div>
       </div>
-      <div class="map-box">
-        <div class="map-hdr">
-          <div class="map-hdr-t">Technici v terénu — W25</div>
-          <div class="live-badge"><div class="live-dot"></div>LIVE</div>
-        </div>
-        <div id="admin-map" style="height:260px"></div>
+      <div class="rf-wrap">
+        <div class="rf-lbl">Region</div>
+        <div class="rf-row" id="posnet-region-row"></div>
       </div>
-      <div class="adm-sh"><div class="adm-st">Aktuální stav</div><div class="adm-sc" id="live-wlbl">Týden 25</div></div>
-      <div class="cw" id="adm-live-list"></div>
+      <div class="rf-wrap">
+        <div class="rf-lbl">Kanál</div>
+        <div class="rf-row" id="posnet-channel-row"></div>
+      </div>
+      <div class="rf-wrap">
+        <div class="rf-lbl">Stav</div>
+        <div class="rf-row" id="posnet-status-row"></div>
+      </div>
+      <div class="cw" id="adm-posnet-list"></div>
+    </div>
+
+    <!-- DATA IMPORT — nahrání reálného Tourplan exportu (PART 2) -->
+    <div class="adm-page" id="adm-import">
+      <div class="adm-sh"><div class="adm-st">Import dat z Tourplan Excel</div><div class="adm-sc" id="import-source-label">—</div></div>
+      <div class="dash-block">
+        <div class="dash-block-t"><svg class="ic"><use href="#ic-upload"/></svg> Nahrát export</div>
+        <p style="font-size:13px;color:var(--muted);margin:0 0 12px">Nahraj Tourplan Excel export (.xlsx/.csv) se sloupci: Terminal ID, POS ID, Typ terminálu, Market, Kategorie, Kategorizace, Název, Ulice, Číslo, Město, Oblast, Technik, Týden.</p>
+        <input type="file" id="import-file-input" accept=".xlsx,.xls,.csv" onchange="handleImportFile(event)" style="font-size:13px">
+        <div id="import-status" style="margin-top:12px;font-size:13px"></div>
+      </div>
+      <div class="dash-block" id="import-preview-block" style="display:none">
+        <div class="dash-block-t"><svg class="ic"><use href="#ic-check-circle"/></svg> Náhled importu</div>
+        <div class="kpi-grid" id="import-preview-kpis"></div>
+        <div id="import-checklist" style="margin:14px 0"></div>
+        <div id="import-warnings" style="margin-bottom:14px"></div>
+        <button class="adm-btn active" id="import-confirm-btn" onclick="confirmImport()">Potvrdit a použít data</button>
+        <button class="adm-btn" onclick="cancelImportPreview()">Zrušit</button>
+      </div>
+
+      <!-- POS MASTER DATA — samostatný import GPS + otevírací doby, nezávislý na Tourplan výše -->
+      <div class="dash-block">
+        <div class="dash-block-t"><svg class="ic"><use href="#ic-pin"/></svg> Master data POS — GPS &amp; otevírací doba</div>
+        <p style="font-size:13px;color:var(--muted);margin:0 0 12px">Samostatný soubor (.xlsx/.csv), nezávislý na Tourplan exportu výše. Povinné sloupce: POS ID, GPS Lat, GPS Lng, Po, Út, St, Čt, Pá, So, Ne (každý den jako "08:00-18:00" nebo "zavřeno"). Nepovinné navíc: Název, Adresa, Město, Region (doplní se jen tam, kde chybí v Tourplanu). Klíčuje se podle POS ID — duplicitní ID v souboru import zablokuje.</p>
+        <input type="file" id="pos-master-file-input" accept=".xlsx,.xls,.csv" onchange="handlePosMasterImportFile(event)" style="font-size:13px">
+        <div id="pos-master-status" style="margin-top:12px;font-size:13px"></div>
+        <div id="pos-master-source-label" style="margin-top:6px;font-size:12px;color:var(--muted)"></div>
+      </div>
+      <div class="dash-block" id="pos-master-preview-block" style="display:none">
+        <div class="dash-block-t"><svg class="ic"><use href="#ic-check-circle"/></svg> Náhled master dat</div>
+        <div class="kpi-grid" id="pos-master-preview-kpis"></div>
+        <div id="pos-master-warnings" style="margin-bottom:14px"></div>
+        <button class="adm-btn active" id="pos-master-confirm-btn" onclick="confirmPosMasterImport()">Potvrdit a použít data</button>
+        <button class="adm-btn" onclick="cancelPosMasterImportPreview()">Zrušit</button>
+      </div>
     </div>
 
     <!-- ALERTS -->
@@ -412,25 +726,6 @@
       <div class="adm-sh"><div class="adm-st">Flagy & nesplněné</div></div>
       <div class="cw" id="adm-alerts-list"></div>
     </div>
-
-    <!-- TECHNICI -->
-    <div class="adm-page" id="adm-technici">
-      <div class="adm-sh"><div class="adm-st">Všichni technici</div><div class="adm-sc">27 aktivních</div></div>
-      <div class="cw" id="adm-all-list"></div>
-    </div>
-
-    <!-- ČASY -->
-    <div class="adm-page" id="adm-casy">
-      <div class="sgrid">
-        <div class="scard t"><div class="sv">27m</div><div class="sl">Průměr IDT</div></div>
-        <div class="scard"><div class="sv">38m</div><div class="sl">Průměr KA</div></div>
-        <div class="scard g"><div class="sv">6h 12m</div><div class="sl">Avg. den</div></div>
-        <div class="scard r"><div class="sv" id="adm-shorts">3</div><div class="sl">Krátké &lt;10m</div></div>
-      </div>
-      <div class="adm-sh"><div class="adm-st">Lán Tomáš — dnešní přehled</div></div>
-      <div class="cw" id="adm-casy-list"></div>
-    </div>
-
 
     <!-- REDAKČNÍ OKNO -->
     <div class="adm-page" id="adm-redakce">
@@ -442,13 +737,13 @@
       <!-- Quick action buttons -->
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
         <button onclick="openEditModal('group')" style="flex:1;min-width:120px;padding:12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;text-align:center;cursor:pointer;font-size:12px;font-weight:700;color:var(--navy)">
-          <div style="font-size:20px;margin-bottom:4px">👥</div>Skupině POS
+          <div style="margin-bottom:4px;color:var(--teal)"><svg class="ic ic-lg"><use href="#ic-users"/></svg></div>Skupině POS
         </button>
         <button onclick="openEditModal('technik')" style="flex:1;min-width:120px;padding:12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;text-align:center;cursor:pointer;font-size:12px;font-weight:700;color:var(--navy)">
-          <div style="font-size:20px;margin-bottom:4px">👤</div>Technikovi
+          <div style="margin-bottom:4px;color:var(--teal)"><svg class="ic ic-lg"><use href="#ic-user"/></svg></div>Technikovi
         </button>
         <button onclick="openEditModal('pos')" style="flex:1;min-width:120px;padding:12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;text-align:center;cursor:pointer;font-size:12px;font-weight:700;color:var(--navy)">
-          <div style="font-size:20px;margin-bottom:4px">📍</div>Konkrétní POS
+          <div style="margin-bottom:4px;color:var(--teal)"><svg class="ic ic-lg"><use href="#ic-pin"/></svg></div>Konkrétní POS
         </button>
       </div>
 
@@ -468,15 +763,13 @@
 
     <!-- AI ANALÝZA -->
     <div class="adm-page" id="adm-ai">
-      <div id="ops-intelligence"></div>
-
       <button class="ai-generate-btn" id="mgr-briefing-btn" onclick="generateManagerBriefing()" style="background:var(--teal);color:var(--navy)">
-        <span>🌅</span> Denní briefing pro manažera
+        <svg class="ic"><use href="#ic-calendar"/></svg> Daily Executive Briefing
       </button>
       <div id="mgr-briefing-wrap"></div>
 
       <button class="ai-generate-btn" id="ai-gen-btn" onclick="generateAIReport()">
-        <span>🤖</span> Analyzovat výkon týmu — AI
+        <svg class="ic"><use href="#ic-intel"/></svg> Team Performance Analysis
       </button>
       <div id="ai-report-wrap"></div>
     </div>
@@ -485,9 +778,11 @@
     <div class="adm-page" id="adm-editor">
       <!-- Editor sub-nav -->
       <div style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto">
-        <button class="ed-subnav active" onclick="showEditorSection('texty',this)">📝 Texty</button>
-        <button class="ed-subnav" onclick="showEditorSection('kampane',this)">🎯 Kampaně</button>
-        <button class="ed-subnav" onclick="showEditorSection('inventory',this)">📦 Inventory katalog</button>
+        <button class="ed-subnav active" onclick="showEditorSection('texty',this)"><svg class="ic ic-sm"><use href="#ic-edit"/></svg> Texty</button>
+        <button class="ed-subnav" onclick="showEditorSection('kampane',this)"><svg class="ic ic-sm"><use href="#ic-target"/></svg> Kampaně</button>
+        <button class="ed-subnav" onclick="showEditorSection('inventory',this)"><svg class="ic ic-sm"><use href="#ic-box"/></svg> Inventory katalog</button>
+        <button class="ed-subnav" onclick="showEditorSection('ukoly',this)"><svg class="ic ic-sm"><use href="#ic-check-circle"/></svg> Úkoly na místě</button>
+        <button class="ed-subnav" onclick="showEditorSection('checklist',this)"><svg class="ic ic-sm"><use href="#ic-box"/></svg> Checklist šablony</button>
       </div>
 
       <!-- TEXTY -->
@@ -523,8 +818,9 @@
           <button onclick="addCampaign()" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Kampaň</button>
         </div>
         <div id="ed-campaigns-list"></div>
-        <div style="padding:12px;background:var(--tl);border-radius:10px;font-size:12px;color:var(--tm);line-height:1.5;margin-top:8px">
-          💡 Kampaně se zobrazí technikům v detailu POS. Edituj přímo zde.
+        <div style="padding:12px;background:var(--tl);border-radius:10px;font-size:12px;color:var(--tm);line-height:1.5;margin-top:8px;display:flex;gap:6px">
+          <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-bulb"/></svg>
+          <span>Kampaně se zobrazí technikům v detailu POS. Edituj přímo zde.</span>
         </div>
       </div>
 
@@ -538,8 +834,57 @@
           <button onclick="addCatalogItem('venkovni')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Položka</button>
         </div>
         <div class="editor-card" id="ed-cat-venkovni"></div>
-        <div style="padding:12px;background:var(--tl);border-radius:10px;font-size:12px;color:var(--tm);line-height:1.5;margin-top:8px">
-          💡 Technici vybírají inventory POUZE z tohoto katalogu.
+        <div style="padding:12px;background:var(--tl);border-radius:10px;font-size:12px;color:var(--tm);line-height:1.5;margin-top:8px;display:flex;gap:6px">
+          <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-bulb"/></svg>
+          <span>Technici vybírají inventory POUZE z tohoto katalogu.</span>
+        </div>
+      </div>
+
+      <!-- ÚKOLY NA MÍSTĚ — šablona checklistu per kanál -->
+      <div id="ed-sec-ukoly" style="display:none">
+        <div class="adm-sh" style="margin-bottom:10px"><div class="adm-st">IDT</div>
+          <button onclick="addTaskTemplateItem('IDT')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Úkol</button>
+        </div>
+        <div class="editor-card" id="ed-task-IDT"></div>
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">PETROL</div>
+          <button onclick="addTaskTemplateItem('PETROL')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Úkol</button>
+        </div>
+        <div class="editor-card" id="ed-task-PETROL"></div>
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">KA</div>
+          <button onclick="addTaskTemplateItem('KA')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Úkol</button>
+        </div>
+        <div class="editor-card" id="ed-task-KA"></div>
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">CORN</div>
+          <button onclick="addTaskTemplateItem('CORN')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Úkol</button>
+        </div>
+        <div class="editor-card" id="ed-task-CORN"></div>
+        <div style="padding:12px;background:var(--tl);border-radius:10px;font-size:12px;color:var(--tm);line-height:1.5;margin-top:8px;display:flex;gap:6px">
+          <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-bulb"/></svg>
+          <span>Úprava platí pro nově sestavená/naimportovaná POS. Už rozjeté POS s úkoly z dřívější šablony se nepřepisují zpětně.</span>
+        </div>
+      </div>
+
+      <!-- CHECKLIST ŠABLONY -->
+      <div id="ed-sec-checklist" style="display:none">
+        <div class="adm-sh" style="margin-bottom:10px">
+          <div class="adm-st">Šablona</div>
+        </div>
+        <select class="ck-select" id="ck-tpl-picker" onchange="renderEditorChecklistTemplates()" style="margin-bottom:14px;width:100%"></select>
+
+        <div class="adm-sh" style="margin-bottom:10px">
+          <div class="adm-st">Otázky</div>
+          <button onclick="addChecklistQuestion()" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Otázka</button>
+        </div>
+        <div class="editor-card" id="ed-checklist-questions"></div>
+
+        <div class="adm-sh" style="margin:18px 0 10px"><div class="adm-st">Náhled</div></div>
+        <div style="border:1.5px solid var(--border);border-radius:12px;padding:4px 0;background:#fff">
+          <div id="ed-checklist-preview"></div>
+        </div>
+
+        <div style="padding:12px;background:var(--tl);border-radius:10px;font-size:12px;color:var(--tm);line-height:1.5;margin-top:8px;display:flex;gap:6px">
+          <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-bulb"/></svg>
+          <span>"Závisí na" + "rovná se" určuje, kdy se otázka zobrazí (např. otázka se ukáže jen když předchozí Ano/Ne otázka byla "Ne"). Změny se ihned promítnou do náhledu v detailu POS u technika.</span>
         </div>
       </div>
     </div>
@@ -548,7 +893,7 @@
       <div class="adm-sh"><div class="adm-st">Fotodokumentace — W25</div></div>
       <div class="foto-grid" id="foto-grid"></div>
       <div style="background:#fff;border-radius:12px;padding:20px;text-align:center;color:var(--muted);font-size:13px;box-shadow:0 1px 3px rgba(0,0,0,.06)">
-        <div style="font-size:30px;margin-bottom:8px">📸</div>
+        <div style="margin-bottom:8px;color:var(--muted);display:flex;justify-content:center"><svg class="ic ic-xl"><use href="#ic-camera"/></svg></div>
         <div style="font-weight:700;color:var(--text);margin-bottom:4px">Fotky z dnešních návštěv</div>
         <div>Technici fotí terminál před a po osazení. Zobrazí se zde v reálném čase.</div>
       </div>
@@ -558,6 +903,18 @@
 </div>
 
 <script src="js/data.js"></script>
+<script src="js/geo.js"></script>
+<script src="js/tourplanRaw.js"></script>
+<script src="js/excelImport.js"></script>
+<script src="js/posMasterData.js"></script>
+<script src="js/visitChecklistRaw.js"></script>
+<script src="js/checklistTemplates.js"></script>
+<script src="js/checklistEngine.js"></script>
+<script src="js/dataProvider.js"></script>
+<script src="js/routeEngine.js"></script>
+<script src="js/posModel.js"></script>
+<script src="js/technicianModel.js"></script>
 <script src="js/app.js"></script>
+<script src="js/sync.js"></script>
 </body>
 </html>
