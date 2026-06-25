@@ -207,6 +207,15 @@ function openViewAsModal(){
 }
 function closeViewAsModal(){ document.getElementById('viewas-modal').classList.remove('open'); }
 
+// Landing page — výběr z pilotních techniků (PosModel.PILOT_TECHNICIANS),
+// stejný vzor jako "Zobrazit jako technik" výš.
+function openPilotLoginModal(){
+  const list = document.getElementById('pilot-login-list');
+  if (list) list.innerHTML = PosModel.PILOT_TECHNICIANS.map(n=>`<button class="viewas-item" onclick="closePilotLoginModal();loginAsTechnician('${n.replace(/'/g,"\\'")}')">${n}</button>`).join('');
+  document.getElementById('pilot-login-modal').classList.add('open');
+}
+function closePilotLoginModal(){ document.getElementById('pilot-login-modal').classList.remove('open'); }
+
 function toggleUserMenu(which){
   const dd = document.getElementById('user-dd-'+which);
   if (!dd) return;
@@ -1319,6 +1328,17 @@ function getActiveTechPos() {
   return all.find(p => { const ci = lsg('ci_' + p.id); return ci && !ci.out; });
 }
 
+// "LIVE" = tenhle technik je teď reálně načtený v posData NA TOMHLE zařízení
+// A má dnes reálnou aktivitu (start dne / check-in / visit log) — ne natvrdo
+// jedno jméno. Omezení: localStorage klíče (ci_, vlog_, daystart_) nejsou
+// namespace-ované per technik, takže "live" může být jen ten, kdo je právě
+// načtený (currentViewTechnician) — víc techniků najednou na jednom zařízení
+// nelze rozlišit bez Supabase sync (viz docs/PILOT_READINESS.md §4).
+function isTechnicianLiveNow(name){
+  if (name !== currentViewTechnician) return false;
+  return !!(lsg('daystart_' + today()) || (lsg('vlog_' + today(), []) || []).length || getActiveTechPos());
+}
+
 // Auto-refresh admin every 5s when visible
 let adminRefreshTimer = null;
 function startAdminRefresh() {
@@ -1810,17 +1830,17 @@ function renderAdminLive() {
   const filtered = activeRegion === 'all' ? adminTechnicians : adminTechnicians.filter(t => t.region === activeRegion);
 
   document.getElementById('adm-live-list').innerHTML = filtered.map(t => {
-    const isLT = t.name === PosModel.SOLE_REAL_TECHNICIAN;
-    const currentPosLabel = isLT && activePos ? ` · <span style="color:var(--teal);font-weight:700">● ${activePos.n.substring(0, 20)}…</span>`
+    const isLive = isTechnicianLiveNow(t.name);
+    const currentPosLabel = isLive && activePos ? ` · <span style="color:var(--teal);font-weight:700">● ${activePos.n.substring(0, 20)}…</span>`
       : t.currentPos ? ` · <span style="color:var(--teal);font-weight:700">● ${t.currentPos.n.substring(0, 20)}…</span>` : '';
     const badge = t.done === t.total ? '<span class="badge b-done">✓ Hotovo</span>'
       : t.overdue ? '<span class="badge b-beh">⚠ Pozadu</span>'
       : t.done > 0 ? '<span class="badge b-act">● Aktivní</span>'
       : '<span class="badge b-wait">○ Nezačal</span>';
     return `<div class="tr" onclick="showTechDetail('${t.name}')">
-      <div class="tav ${t.overdue ? 'ov' : ''}" style="${isLT ? 'background:var(--teal);color:var(--navy)' : ''}">${t.initials}</div>
+      <div class="tav ${t.overdue ? 'ov' : ''}" style="${isLive ? 'background:var(--teal);color:var(--navy)' : ''}">${t.initials}</div>
       <div class="tinf">
-        <div class="tn">${t.name}${isLT ? ' <span style="font-size:9px;background:var(--teal);color:var(--navy);padding:1px 5px;border-radius:10px;font-weight:800">LIVE</span>' : ''}</div>
+        <div class="tn">${t.name}${isLive ? ' <span style="font-size:9px;background:var(--teal);color:var(--navy);padding:1px 5px;border-radius:10px;font-weight:800">LIVE</span>' : ''}</div>
         <div class="ts">${t.activityLabel}${currentPosLabel}</div>
       </div>
       <div class="tr-right">
@@ -1838,14 +1858,14 @@ function showTechDetail(name) {
   adminTechnicians = deriveAllTechnicians();
   const t = adminTechnicians.find(x => x.name === name);
   if (!t) return;
-  const isLT = name === PosModel.SOLE_REAL_TECHNICIAN;
-  const live = isLT ? getLiveState() : null;
+  const isLive = isTechnicianLiveNow(name);
+  const live = isLive ? getLiveState() : null;
   const pct = t.pct;
 
   // Build drawer content
   let html = `<div style="padding:20px 18px 32px">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
-      <div class="tav" style="width:44px;height:44px;font-size:14px;background:${isLT?'var(--teal)':'var(--navy)'};color:${isLT?'var(--navy)':'var(--teal)'}">${t.initials}</div>
+      <div class="tav" style="width:44px;height:44px;font-size:14px;background:${isLive?'var(--teal)':'var(--navy)'};color:${isLive?'var(--navy)':'var(--teal)'}">${t.initials}</div>
       <div>
         <div style="font-size:18px;font-weight:800">${t.name}</div>
         <div style="font-size:12px;color:var(--muted);margin-top:2px">${t.activityLabel} · ${t.total} POS tento týden · ${pct}% splněno</div>
@@ -1871,7 +1891,7 @@ function showTechDetail(name) {
     </div>
   </div>`;
 
-  if (isLT && live) {
+  if (isLive && live) {
     // Day timeline
     if (live.dayStart || live.visitLog.length) {
       html += `<div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Dnešní průběh</div>

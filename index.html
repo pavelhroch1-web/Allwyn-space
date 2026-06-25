@@ -208,11 +208,11 @@
 
     <div class="rs-cta-lead">Vyzkoušet appku</div>
     <div class="rs-roles">
-      <div class="rs-role-card" onclick="loginAsTechnician()">
+      <div class="rs-role-card" onclick="openPilotLoginModal()">
         <svg class="rs-role-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5" stroke="currentColor" stroke-width="1.6"/><line x1="10" y1="18.3" x2="14" y2="18.3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
         <div class="rs-role-text">
           <div class="rs-role-title">Technician Workspace</div>
-          <div class="rs-role-desc">Přihlásit jako Lán Tomáš · routes · inventory</div>
+          <div class="rs-role-desc">Vybrat technika (pilot · 5) · routes · inventory</div>
         </div>
         <span class="rs-role-arrow">→</span>
       </div>
@@ -227,6 +227,17 @@
     </div>
 
     <div class="rs-badge" id="rs-badge">Tourplan W23–W28 · 27 techniků</div>
+  </div>
+
+  <!-- PILOT LOGIN MODAL — výběr z 5 pilotních techniků (stejný vzor jako "Zobrazit jako technik") -->
+  <div class="viewas-modal" id="pilot-login-modal">
+    <div class="viewas-card">
+      <div class="viewas-hdr">
+        <div>Přihlásit se jako technik</div>
+        <button class="viewas-close" onclick="closePilotLoginModal()">✕</button>
+      </div>
+      <div class="viewas-list" id="pilot-login-list"></div>
+    </div>
   </div>
 </div>
 

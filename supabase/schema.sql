@@ -1,4 +1,4 @@
--- Allwyn Space — cross-device sync shim (Fáze: pilot test, scope: Lán Tomáš)
+-- Allwyn Space — cross-device sync shim (Fáze: pilot, scope: 5 pilotních techniků, viz PosModel.PILOT_TECHNICIANS)
 --
 -- Tohle NENÍ nový datový model. Je to 1:1 zrcadlení existujících localStorage
 -- klíčů (viz docs/CLAUDE.md "Klíče v localStorage") do Supabase, aby Velín a
@@ -21,10 +21,10 @@ create table if not exists public.sync_kv (
 
 alter table public.sync_kv enable row level security;
 
--- Pilotní/testovací fáze: anon klíč může číst i psát. Bezpečné, protože
--- data jsou jen testovací (Lán Tomáš, mock) — NEPOUŽÍVAT takto pro reálný
--- pilot s živými daty technika. Před reálným nasazením nahradit auth-based
--- politikou (technik smí psát jen svůj řádek, Velín čte vše).
+-- Pilotní fáze: anon klíč může číst i psát. Přijatelné riziko pro 5 lidí na
+-- kontrolovaných zařízeních v rámci pilotu — NEPOUŽÍVAT takto nad rámec
+-- tohoto pilotu. Před širším nasazením nahradit auth-based politikou
+-- (technik smí psát jen svůj řádek, Velín čte vše).
 create policy "pilot test — anon full access"
   on public.sync_kv
   for all

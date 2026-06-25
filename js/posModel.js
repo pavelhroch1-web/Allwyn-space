@@ -18,6 +18,11 @@
   const SOLE_REAL_TECHNICIAN = 'Lán Tomáš';
   const DEFAULT_REGION = 'RSE'; // konzistentní s defaultem použitým jinde v appce
 
+  // Pilot mode — 5 reálných techniků se srovnatelnou týdenní zátěží
+  // (Tourplan W25: 40/39/38/37/37 POS), žádní outlieři. Zdroj čísel:
+  // FULL_POS_DATA filtrované po assignedTechnician, viz docs/PILOT_READINESS.md §4.
+  const PILOT_TECHNICIANS = ['Lán Tomáš', 'Hrubý Jiří', 'Herman Petr', 'Štolba Jan', 'Dvořák Petr'];
+
   // Budoucí Excel import — sloupec v Excelu -> kanonické pole modelu.
   // Vyplní se až bude k dispozici reálný export ze SAP/Excelu.
   const IMPORT_COLUMN_MAP = {
@@ -155,6 +160,7 @@
 
   const PosModel = {
     SOLE_REAL_TECHNICIAN,
+    PILOT_TECHNICIANS,
     DEFAULT_REGION,
     EXPECTED_CYCLE_DAYS,
     IMPORT_COLUMN_MAP,

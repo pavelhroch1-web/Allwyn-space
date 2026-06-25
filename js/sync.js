@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════
-// SUPABASE SYNC SHIM (pilot test, scope: Lán Tomáš)
+// SUPABASE SYNC SHIM (pilot mode, scope: 5 pilotních techniků)
 // ══════════════════════════════════════════════════════
 // Appka je dnes 100% localStorage — Velín a technik na různých zařízeních
 // nevidí navzájem žádná data. Tohle je nejmenší krok, který to řeší: zrcadlí
@@ -10,11 +10,13 @@
 // přesně jako dřív — čistě lokální, offline. Sync je čistě přídavná vrstva,
 // nikdy nepřepisuje chování bez nastavených klíčů.
 //
-// TEST DATA OMEZENÍ: synchronizujeme jen technika Lán Tomáš (jediný reálně
-// přihlašovatelný technik v prototypu) — viz docs/CLAUDE.md zadání. Než půjde
-// do reálného pilota s živými daty víc techniků, RLS politika v
-// supabase/schema.sql (otevřená pro anon klíč) musí být nahrazená auth-based
-// politikou — viz komentář tamtéž.
+// PILOT OMEZENÍ: synchronizujeme PosModel.PILOT_TECHNICIANS (5 reálně
+// přihlašovatelných techniků, viz docs/PILOT_READINESS.md §4) — žádný z
+// ostatních 22 reálných techniků z Tourplan importu zatím nemá login. RLS
+// politika v supabase/schema.sql (otevřená pro anon klíč) je vědomě
+// pilotní — bezpečná pro 5 lidí na kontrolovaných zařízeních, ale MUSÍ být
+// nahrazená auth-based politikou před nasazením nad rámec tohoto pilotu —
+// viz komentář tamtéž.
 
 const SYNC_CONFIG = {
   url: window.ALLWYN_SUPABASE_URL || '',
@@ -61,41 +63,54 @@ function schedulePush(technician, key, value){
   }, 800);
 }
 
-// Pull: stáhne všechny řádky pro daného technika + globální klíče a
-// přepíše localStorage — voláno při loginu/přepnutí technika.
-async function pullSyncData(technician){
+// Pull: stáhne všechny řádky pro dané techniky (1 při loginu/přepnutí na
+// technika, PILOT_TECHNICIANS všechny při Velín loginu) + globální klíče a
+// přepíše localStorage. Bezpečné mísit víc techniků v jednom localStorage,
+// protože ci_/vlog_/supply_ klíče jsou per-POS a POS je vždy přiřazené
+// přesně jednomu technikovi (žádná kolize klíčů mezi pilotními techniky).
+async function pullSyncData(technicians){
   const client = getSyncClient();
   if (!client) return;
   const { data, error } = await client.from('sync_kv')
     .select('key,value')
-    .in('technician', [technician, '_global']);
+    .in('technician', [...technicians, '_global']);
   if (error) { console.warn('[sync] pull failed', error.message); return; }
   (data || []).forEach(row => {
     try { localStorage.setItem(row.key, JSON.stringify(row.value)); } catch(e) {}
   });
 }
 
-// Realtime: Velín dívající se na technika dostane update bez manuálního
-// refreshu — applyRoute() je existující router re-render appky (js/app.js),
-// bezpečné znovu-zavolat, protože je to přesně to, co běží i po F5.
-function subscribeSyncUpdates(technician){
+// Realtime: Velín/technik dostane update bez manuálního refreshu —
+// applyRoute() je existující router re-render appky (js/app.js), bezpečné
+// znovu-zavolat, protože je to přesně to, co běží i po F5.
+function subscribeSyncUpdates(technicians){
   const client = getSyncClient();
   if (!client) return;
   if (_syncChannel) client.removeChannel(_syncChannel);
-  _syncChannel = client.channel('sync_kv_' + technician)
+  _syncChannel = client.channel('sync_kv_' + technicians.join('_'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'sync_kv' }, (payload) => {
       const row = payload.new || payload.old;
-      if (!row || (row.technician !== technician && row.technician !== '_global')) return;
+      if (!row || (!technicians.includes(row.technician) && row.technician !== '_global')) return;
       try { localStorage.setItem(row.key, JSON.stringify(row.value)); } catch(e) {}
       if (typeof applyRoute === 'function') applyRoute();
     })
     .subscribe();
 }
 
+// Technik se přihlásí / Velín "Zobrazit jako" — scope na jednoho.
 function syncSwitchTechnician(name){
   if (!syncEnabled()) return;
-  pullSyncData(name).then(() => { if (typeof applyRoute === 'function') applyRoute(); });
-  subscribeSyncUpdates(name);
+  pullSyncData([name]).then(() => { if (typeof applyRoute === 'function') applyRoute(); });
+  subscribeSyncUpdates([name]);
+}
+
+// Velín na vlastním dashboardu (ne "Zobrazit jako") — potřebuje vidět
+// live stav všech pilotních techniků najednou, ne jen jednoho natvrdo.
+function syncSwitchVelinAll(){
+  if (!syncEnabled()) return;
+  const names = PosModel.PILOT_TECHNICIANS;
+  pullSyncData(names).then(() => { if (typeof applyRoute === 'function') applyRoute(); });
+  subscribeSyncUpdates(names);
 }
 
 // ── Hooky do existujícího kódu (js/app.js) — sync.js se načítá jako poslední
@@ -125,9 +140,9 @@ function syncSwitchTechnician(name){
   window.loginAsVelin = function(){
     original();
     // Velín dashboard čte localStorage napřímo přes lsg() — bez "zobrazit
-    // jako technik" potřebuje data testovacího technika stáhnout sám, jinak
-    // by viděl jen to, co se stalo na tomhle zařízení.
-    syncSwitchTechnician(PosModel.SOLE_REAL_TECHNICIAN);
+    // jako technik" potřebuje data všech pilotních techniků stáhnout sám,
+    // jinak by viděl jen to, co se stalo na tomhle zařízení.
+    syncSwitchVelinAll();
   };
 })();
 
@@ -138,6 +153,6 @@ window.addEventListener('DOMContentLoaded', () => {
   if (typeof getSession !== 'function') return;
   const s = getSession();
   if (s && s.role === 'velin' && !s.viewingAs) {
-    syncSwitchTechnician(PosModel.SOLE_REAL_TECHNICIAN);
+    syncSwitchVelinAll();
   }
 });
