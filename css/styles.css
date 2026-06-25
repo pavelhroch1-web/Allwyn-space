@@ -413,6 +413,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .pos-rec-txt{font-size:13px;line-height:1.4;color:var(--text)}
 .pos-rec-empty{padding:20px;text-align:center;color:var(--muted);font-size:13px}
 
+/* CHECKLIST ENGINE (conditional bool/text/photo questions) */
+.ck-select{width:100%;border:1.5px solid var(--border);border-radius:10px;padding:10px 12px;font-size:13px;font-family:inherit;background:#fff;color:var(--text);outline:none}
+.ck-q{background:#fff;border-radius:10px;margin-bottom:7px;padding:12px 14px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.ck-q-sub{margin-left:14px;border-left:3px solid var(--teal);border-radius:0 10px 10px 0}
+.ck-q-lbl{font-size:13px;font-weight:600;color:var(--text);margin-bottom:9px;line-height:1.4}
+.ck-yn{display:flex;gap:8px}
+.ck-yn-btn{flex:1;padding:9px;border-radius:9px;border:1.5px solid var(--border);background:#fff;font-size:13px;font-weight:700;cursor:pointer;color:var(--muted);transition:all .15s}
+.ck-yn-btn.yes.on{background:var(--gl);border-color:var(--green);color:var(--green)}
+.ck-yn-btn.no.on{background:var(--rl);border-color:var(--red);color:var(--red)}
+.ck-text-input{width:100%;border:1.5px solid var(--border);border-radius:9px;padding:10px 12px;font-size:13px;font-family:inherit;outline:none;background:#fff}
+.ck-text-input:focus{border-color:var(--teal)}
+.ck-photo-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;border-radius:9px;border:1.5px dashed var(--border);background:#fff;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer}
+.ck-photo-btn.on{border-style:solid;border-color:var(--teal);color:var(--td);background:var(--tl)}
+
 /* COMPLETE */
 .complete-wrap{padding:16px 12px 32px}
 .btn-complete{width:100%;padding:16px;border:none;border-radius:14px;font-size:16px;font-weight:800;cursor:pointer;transition:all .2s;letter-spacing:-.2px}

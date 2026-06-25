@@ -418,6 +418,7 @@
       <div class="det-tab active" onclick="showDetTab('inv',this)"><svg class="ic ic-sm"><use href="#ic-box"/></svg> Inventory</div>
       <div class="det-tab" onclick="showDetTab('notes',this)"><svg class="ic ic-sm"><use href="#ic-notes"/></svg> Poznámky</div>
       <div class="det-tab" onclick="showDetTab('karta',this)"><svg class="ic ic-sm"><use href="#ic-card"/></svg> Karta POS</div>
+      <div class="det-tab" onclick="showDetTab('test',this)"><svg class="ic ic-sm"><use href="#ic-box"/></svg> TEST</div>
     </div>
 
     <div id="dtc-notes" class="det-tc" style="display:none;padding:8px 12px">
@@ -458,6 +459,15 @@
       <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Přidat záznam</div>
       <textarea class="notes-ta" id="pos-card-ta" placeholder="Např: Chystají zavřít, bude rekonstrukce, špatné osazení, nový vedoucí…" style="min-height:70px"></textarea>
       <button onclick="addPosCardNote()" style="margin-top:8px;width:100%;padding:12px;background:var(--navy);color:var(--teal);border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">Uložit záznam</button>
+    </div>
+
+    <div id="dtc-test" class="det-tc" style="display:none;padding:8px 12px">
+      <div style="margin:0 0 10px;padding:10px 14px;background:var(--bg);border-radius:10px;font-size:11px;color:var(--muted);line-height:1.5;display:flex;gap:6px">
+        <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-info"/></svg>
+        <span>Sandbox podmíněného checklistu — testovací data z reálné kampaně, nesouvisí s touto POS. Slouží jen k ověření, že větvení Ano/Ne → navazující otázka/foto funguje na reálných odpovědích.</span>
+      </div>
+      <select class="ck-select" id="ck-record-picker" onchange="loadChecklistRecord(this.value)" style="margin-bottom:10px"></select>
+      <div id="ck-test-list"></div>
     </div>
 
     <div id="vis-badge-slot2"></div>
@@ -865,6 +875,9 @@
 <script src="js/tourplanRaw.js"></script>
 <script src="js/excelImport.js"></script>
 <script src="js/posMasterData.js"></script>
+<script src="js/visitChecklistRaw.js"></script>
+<script src="js/checklistTemplates.js"></script>
+<script src="js/checklistEngine.js"></script>
 <script src="js/dataProvider.js"></script>
 <script src="js/routeEngine.js"></script>
 <script src="js/posModel.js"></script>

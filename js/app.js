@@ -932,6 +932,37 @@ function showDetTab(tab,btn){
   if(btn)btn.classList.add('active');
   if(tab==='inv')renderInventory();
   if(tab==='karta')renderPosCard();
+  if(tab==='test')renderChecklistSandbox();
+}
+
+// ══════════════════════════════════════════════════════
+// CHECKLIST SANDBOX (test) — podmíněný checklist engine, sandbox data
+// ══════════════════════════════════════════════════════
+let ckSandboxAnswers={};
+function renderChecklistSandbox(){
+  const picker=document.getElementById('ck-record-picker');
+  if(!picker.options.length){
+    VISIT_CHECKLIST_RAW.forEach((rec,i)=>{
+      const o=document.createElement('option');
+      o.value=i;o.textContent=`${rec.posId} — ${rec.storeName.split(',')[0]}`;
+      picker.appendChild(o);
+    });
+  }
+  loadChecklistRecord(picker.value||0);
+}
+function loadChecklistRecord(idx){
+  const rec=VISIT_CHECKLIST_RAW[idx];if(!rec)return;
+  ckSandboxAnswers=Object.assign({},rec.answers);
+  renderChecklistSandboxList();
+}
+function setChecklistAnswer(id,val){
+  if(val===undefined)delete ckSandboxAnswers[id];
+  else ckSandboxAnswers[id]=val;
+  renderChecklistSandboxList();
+}
+function renderChecklistSandboxList(){
+  const tpl=CHECKLIST_TEMPLATES['rebranding-idt-kam'];
+  document.getElementById('ck-test-list').innerHTML=ChecklistEngine.renderChecklistHtml(tpl,ckSandboxAnswers);
 }
 
 // ══════════════════════════════════════════════════════
