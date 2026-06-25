@@ -7,7 +7,7 @@ let adminMap=null, adminMarkers=[], adminTechnicians=[];
 let activeRegion='all';
 let ciTimer=null;
 let sigCanvas=null, sigCtx=null, sigDrawing=false, sigMark=false;
-let supplyItems=[];
+let supplyItems=[], supplyLocked=false;
 
 // Build POS data with tasks, refs, inventory. Všech 27 technici jsou nyní
 // reální (DataProvider → ExcelImport → TOURPLAN_RAW, reálný export
@@ -300,6 +300,7 @@ function showAdmPage(p,btn){
 // Refresh zůstává na stejné obrazovce, Back/Forward přepíná mezi obrazovkami.
 // ══════════════════════════════════════════════════════
 let routeSuspend=false;
+let selfNavigating=false; // potlačí hashchange echo, když hash nastavil pushRoute() sám (stav je už správně vyrenderovaný)
 function computeRouteHash(){
   if(document.getElementById('admin-screen').classList.contains('active')){
     const activePage=document.querySelector('.adm-page.active');
@@ -317,9 +318,10 @@ function computeRouteHash(){
 function pushRoute(){
   if(routeSuspend) return;
   const h=computeRouteHash();
-  if(location.hash!==h) location.hash=h;
+  if(location.hash!==h){ selfNavigating=true; location.hash=h; }
 }
 function applyRoute(){
+  if(selfNavigating){ selfNavigating=false; return; } // hash si nastavili sami, stav je už vyrenderovaný — neopakovat
   const hash=location.hash||'#/';
   const parts=hash.replace(/^#\/?/,'').split('/').filter(Boolean);
   routeSuspend=true;
@@ -804,6 +806,7 @@ function renderSupply(p){
   const defaults=isCorn?SUPPLY_CORN:SUPPLY_DEFAULT;
   const saved=lsg('supply_'+p.id+'_'+today());
   supplyItems=saved?saved.items:defaults.map(x=>({...x}));
+  supplyLocked=!!(saved&&saved.confirmed);
   const hdrBadge=document.getElementById('supply-badge-lbl');
   if(hdrBadge) hdrBadge.textContent=isCorn?'Corn — vyžaduje podpis':'Vyžaduje podpis';
   renderSupplyItems();
@@ -818,9 +821,9 @@ function renderSupplyItems(){
       <div style="display:flex;align-items:center;gap:12px;padding:10px 14px">
         <div class="supply-item-n" style="flex:1">${x.n}${x.unit?' <span style="font-size:10px;color:var(--muted)">('+x.unit+')</span>':''}</div>
         <div class="supply-qty">
-          <button class="sq-btn" onclick="adjQty(${i},-1)">−</button>
+          <button class="sq-btn" onclick="adjQty(${i},-1)" ${supplyLocked?'disabled':''}>−</button>
           <div class="sq-val">${x.qty}</div>
-          <button class="sq-btn" onclick="adjQty(${i},1)">+</button>
+          <button class="sq-btn" onclick="adjQty(${i},1)" ${supplyLocked?'disabled':''}>+</button>
         </div>
       </div>
       ${x.qty>0?`<div style="display:flex;align-items:center;gap:8px;padding:0 14px 10px;border-top:1px solid var(--bg)">
@@ -830,7 +833,7 @@ function renderSupplyItems(){
       </div>`:''}
     </div>`).join('');
 }
-function adjQty(i,d){supplyItems[i].qty=Math.max(0,supplyItems[i].qty+d);renderSupplyItems();}
+function adjQty(i,d){if(supplyLocked)return;supplyItems[i].qty=Math.max(0,supplyItems[i].qty+d);renderSupplyItems();}
 function initSig(){
   const c=document.getElementById('sig-canvas');if(!c)return;
   sigCanvas=c;sigCtx=c.getContext('2d');
@@ -850,6 +853,8 @@ function confirmSupply(){
   if(!sigMark){alert('Přijímající musí podepsat.');return;}
   const sapCodes=supplyItems.filter(x=>x.sap&&x.sap.trim()).map(x=>x.n+': '+x.sap).join(', ');
   lss('supply_'+p.id+'_'+today(),{items:supplyItems,receiver:recv,sigData:sigCanvas.toDataURL(),confirmed:true,at:new Date().toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'}),sapCodes});
+  supplyLocked=true;
+  renderSupplyItems();
   document.getElementById('sig-done').style.display='block';
   document.querySelector('.sig-conf').style.display='none';
 }
@@ -1342,6 +1347,8 @@ function renderAdminDashboard() {
   const live = getLiveState();
   const pos = FULL_POS_DATA['25'] || [];
   const gpsFlags = lsg('gps_flags_' + today(), []);
+  const gpsCritical = gpsFlags.filter(f => f.severity === 'critical' || f.severity === undefined);
+  const gpsWarnings = gpsFlags.filter(f => f.severity === 'warning');
   const shortVisits = lsg('vlog_' + today(), []).filter(v => v.flag === 'short');
 
   adminTechnicians = deriveAllTechnicians();
@@ -1350,7 +1357,7 @@ function renderAdminDashboard() {
   const completionPct = totalPOS ? Math.round(donePOS / totalPOS * 100) : 0;
   const behind = adminTechnicians.filter(t => t.overdue);
   const activeCount = adminTechnicians.filter(t => t.done > 0 && t.done < t.total).length;
-  const flagsToday = gpsFlags.length + shortVisits.length;
+  const flagsToday = gpsCritical.length + shortVisits.length;
 
   const kpiEl = document.getElementById('dash-kpis');
   if (kpiEl) kpiEl.innerHTML = `
@@ -1461,7 +1468,8 @@ function renderAdminDashboard() {
   // Attention feed — servisy, GPS flagy, krátké návštěvy, technici pozadu
   const attnItems = [];
   live.servisOpen.forEach(p => attnItems.push({ icon: 'ic-wrench', sev: 'red', text: `Servis čeká: <strong>${p.n}</strong>` }));
-  gpsFlags.forEach(f => attnItems.push({ icon: 'ic-pin', sev: 'red', text: `GPS anomálie: <strong>${f.posName}</strong> · ${f.dist != null ? f.dist.toFixed(1) + 'km' : ''} od POS` }));
+  gpsCritical.forEach(f => attnItems.push({ icon: 'ic-pin', sev: 'red', text: `GPS anomálie: <strong>${f.posName}</strong> · ${f.dist != null ? f.dist.toFixed(1) + 'km' : ''} od POS` }));
+  gpsWarnings.forEach(f => attnItems.push({ icon: 'ic-pin', sev: 'orange', text: `GPS odchylka (varování): <strong>${f.posName}</strong> · ${f.dist != null ? Math.round(f.dist * 1000) + 'm' : ''} od POS` }));
   shortVisits.forEach(v => attnItems.push({ icon: 'ic-clock', sev: 'orange', text: `Krátká návštěva: <strong>${v.posName}</strong> · ${v.dur} min` }));
   behind.forEach(t => attnItems.push({ icon: 'ic-warning', sev: 'orange', text: `<strong>${t.name}</strong> je pozadu — ${t.done}/${t.total} POS` }));
 
@@ -2596,10 +2604,12 @@ doCheckin = function() {
     if (!lsg('daystart_' + today())) {
       lss('daystart_' + today(), {ts: now.getTime(), time: timeStr, posId: p.id, posName: p.n});
     }
-    // Log GPS flag for admin
-    if (gpsFlag) {
+    // Log GPS flag for admin — >1km je kritická anomálie, 300m-1km jen
+    // varování (vidí ho i technik v UI), ale i to musí být vidět ve velínu,
+    // ať admin nemá falešný pocit krytí v celém pásmu pod 1km.
+    if (dist !== null && dist >= 0.3) {
       const flags = lsg('gps_flags_' + today(), []);
-      flags.push({posId: p.id, posName: p.n, time: timeStr, dist: dist, lat, lng});
+      flags.push({posId: p.id, posName: p.n, time: timeStr, dist: dist, lat, lng, severity: dist > 1 ? 'critical' : 'warning'});
       lss('gps_flags_' + today(), flags);
     }
     renderCheckin();
@@ -2706,6 +2716,7 @@ async function generateManagerBriefing() {
   const pct = totalPOS ? Math.round(donePOS / totalPOS * 100) : 0;
   const behind = techs.filter(t => t.overdue);
   const gpsFlags = lsg('gps_flags_' + today(), []);
+  const gpsCritical = gpsFlags.filter(f => f.severity === 'critical' || f.severity === undefined);
 
   const prompt = `Jsi AI executive asistent pro manažera field operations v Allwyn (loterie, ČR), který řídí 27 merch techniků.
 Napiš krátký denní briefing pro manažera (executive summary) v češtině, max 4 věty, profesionální tón pro vedení.
@@ -2714,7 +2725,7 @@ Data:
 - Plnění týmu dnes: ${donePOS}/${totalPOS} POS (${pct}%)
 - Technici pozadu: ${behind.length} (${behind.map(t => t.name).join(', ') || 'žádní'})
 - Otevřené servisy: ${live.servisOpen?.length || 0}
-- GPS anomálie dnes: ${gpsFlags.length}
+- GPS anomálie dnes (>1km od POS): ${gpsCritical.length}
 
 Shrň nejdůležitější fakt, jedno riziko a jedno konkrétní doporučení.`;
 
@@ -2729,11 +2740,11 @@ Shrň nejdůležitější fakt, jedno riziko a jedno konkrétní doporučení.`;
     if (text) {
       wrap.innerHTML = renderBriefingCard(text, false);
     } else {
-      wrap.innerHTML = renderBriefingCard(buildManagerFallbackBriefing(pct, donePOS, totalPOS, behind, gpsFlags, live), true);
+      wrap.innerHTML = renderBriefingCard(buildManagerFallbackBriefing(pct, donePOS, totalPOS, behind, gpsCritical, live), true);
     }
   } catch (e) {
     // AI API nedostupné — šablona z reálných dat, ale NE jako "AI Insight"
-    wrap.innerHTML = renderBriefingCard(buildManagerFallbackBriefing(pct, donePOS, totalPOS, behind, gpsFlags, live), true);
+    wrap.innerHTML = renderBriefingCard(buildManagerFallbackBriefing(pct, donePOS, totalPOS, behind, gpsCritical, live), true);
   }
 
   btn.disabled = false;
@@ -2829,7 +2840,7 @@ function generateMockReport(gpsFlags, shortVisits) {
   return `Rizika a podezřelé aktivity
 
 ${behind.map(t => `• **${t.name}**: pouze ${t.done}/${t.total} POS (${Math.round(t.done/t.total*100)}%) — výrazně pod normou, doporučena kontrola`).join('\n')}
-${gpsFlags.length ? gpsFlags.map(f => `• GPS anomálie: check-in **${f.posName}** — ${f.dist?.toFixed(1)}km od adresy POS v ${f.time}`).join('\n') : ''}
+${gpsFlags.length ? gpsFlags.map(f => `• GPS ${f.severity === 'warning' ? 'odchylka' : 'anomálie'}: check-in **${f.posName}** — ${f.dist?.toFixed(1)}km od adresy POS v ${f.time}`).join('\n') : ''}
 ${shortVisits.length ? shortVisits.map(v => `• Krátká návštěva: **${v.posName}** — pouze ${v.dur} minut`).join('\n') : '• Žádné GPS anomálie ani podezřelé krátké návštěvy dnes'}
 
 Pozitivní výkon
@@ -2872,11 +2883,11 @@ function renderAIReport(text, gpsFlags, shortVisits, isFallback) {
     ${gpsFlags.length ? `<div class="ai-report-card">
       <div class="ai-report-hdr" style="background:var(--red)">
         <div class="ai-report-hdr-icon"><svg class="ic ic-lg" style="color:#fff"><use href="#ic-warning"/></svg></div>
-        <div class="ai-report-hdr-t">GPS Anomálie dnes</div>
+        <div class="ai-report-hdr-t">GPS flagy dnes</div>
         <div class="ai-report-hdr-badge" style="background:rgba(255,255,255,.2);color:#fff">${gpsFlags.length} flagů</div>
       </div>
       <div class="ai-report-body">
-        ${gpsFlags.map(f => `<div class="ai-flag-item ai-flag-red"><span><svg class="ic ic-sm"><use href="#ic-pin"/></svg></span><span><strong>${f.posName}</strong> · ${f.time} · ${f.dist?.toFixed(2)}km od adresy POS</span></div>`).join('')}
+        ${gpsFlags.map(f => `<div class="ai-flag-item ${f.severity === 'warning' ? 'ai-flag-orange' : 'ai-flag-red'}"><span><svg class="ic ic-sm"><use href="#ic-pin"/></svg></span><span><strong>${f.posName}</strong> · ${f.time} · ${f.dist?.toFixed(2)}km od adresy POS${f.severity === 'warning' ? ' · varování' : ' · podezřelé'}</span></div>`).join('')}
       </div>
     </div>` : ''}
   `;
@@ -2919,7 +2930,9 @@ function renderAdminAlertBanner(p) {
 const __origShowAdmPage3 = showAdmPage;
 showAdmPage = function(p, btn) {
   __origShowAdmPage3(p, btn);
-  if (p === 'editor') initEditor();
+  // initEditor() pro editor stránku se volá v pozdějším patchu showAdmPage
+  // (řádek ~4304), který navíc nastavuje výchozí sekci — duplicitní volání
+  // odstraněno, ať se editor neinicializuje 2x při každém vstupu.
   if (p === 'ai') {
     if (!document.getElementById('mgr-briefing-wrap').innerHTML.trim()) {
       document.getElementById('mgr-briefing-wrap').innerHTML = '<div class="empty"><div class="empty-i"><svg class="ic ic-xl"><use href="#ic-calendar"/></svg></div><div class="empty-t">Daily Executive Briefing</div><div class="empty-s">Klikni výše a AI sestaví executive summary z dnešních dat.</div></div>';
