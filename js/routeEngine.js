@@ -83,6 +83,25 @@
     return VISIT_DURATION_MIN[classifyVisit(pos)];
   }
 
+  // getSlaWeight(pos, todayStr) — váha urgentnosti POS odvozená výhradně
+  // z reálných úkolů zadaných Velínem (taskState.priority/deadline, viz
+  // Editorial Modal v app.js). Žádný vymyšlený risk score — jen tři reálné
+  // signály: priorita 'servis' (nejvyšší), priorita 'high', a reálný
+  // deadline, který je dnes nebo už po termínu. todayStr je nepovinný
+  // (YYYY-MM-DD, stejný formát jako task.deadline) — bez něj se kontrola
+  // overdue deadline neprovádí (žádný předpoklad o "dnešku").
+  function getSlaWeight(pos, todayStr){
+    const tasks = pos.taskState || [];
+    let weight = 0;
+    tasks.forEach(t => {
+      if (t.done) return;
+      if (t.priority === 'servis') weight = Math.max(weight, 3);
+      else if (t.priority === 'high') weight = Math.max(weight, 2);
+      if (todayStr && t.deadline && t.deadline <= todayStr) weight = Math.max(weight, 1);
+    });
+    return weight;
+  }
+
   // getOpeningHours(pos, dayIdx) — dayIdx: 0=Po..4=Pá (shoda s app.js DAYS),
   // 5=So, 6=Ne. Bez dayIdx vrací celý týdenní objekt (pro zobrazení v detailu
   // POS), nebo null pokud master data chybí úplně.
@@ -238,15 +257,30 @@
   // čas odjezdu a den). Penalizace je velká (1000 km/porušení), takže
   // optimalizace vždy preferuje pořadí bez zavřených POS před pořadím kratším
   // o pár km, ale s POS mimo otevírací dobu.
+  //
+  // SLA/priorita (getSlaWeight) přidává druhou, mnohem menší penalizaci za
+  // POZICI urgentní POS v pořadí — čím dřív urgentní POS technik navštíví,
+  // tím nižší cena. Nikdy nemůže přebít otevírací dobu (penalty/pozice je
+  // v jednotkách km, ne tisíců km), jen mezi POS se stejně reálnou trasou
+  // posune urgentní/po termínu napřed. todayStr je nepovinný — bez něj se
+  // SLA penalizace nepočítá (zpětná kompatibilita s fleet analytikou).
   const HOURS_VIOLATION_PENALTY_KM = 1000;
-  function routeCost(order, startPoint, startTime, dayIdx){
+  const SLA_POSITION_PENALTY_KM = 3;
+  function routeCost(order, startPoint, startTime, dayIdx, todayStr){
     const calc = calculateRoute(order, startPoint);
     let violations = 0;
     if (startTime != null && dayIdx != null) {
       violations = checkOpeningHours(order, calc, startTime, dayIdx)
         .filter(i => i.status === 'too-early' || i.status === 'too-late' || i.status === 'closed-today').length;
     }
-    return calc.drivingKm + violations * HOURS_VIOLATION_PENALTY_KM;
+    let slaPenalty = 0;
+    if (todayStr) {
+      order.forEach((pos, idx) => {
+        const weight = getSlaWeight(pos, todayStr);
+        if (weight > 0) slaPenalty += weight * idx * SLA_POSITION_PENALTY_KM;
+      });
+    }
+    return calc.drivingKm + violations * HOURS_VIOLATION_PENALTY_KM + slaPenalty;
   }
 
   // ── OPTIMIZATION: exact (brute force) pro malé počty zastávek ───────────
@@ -263,10 +297,10 @@
     }
     return result;
   }
-  function exactBestOrder(posList, startPoint, startTime, dayIdx){
+  function exactBestOrder(posList, startPoint, startTime, dayIdx, todayStr){
     let best = posList, bestCost = Infinity;
     for (const perm of permute(posList)){
-      const cost = routeCost(perm, startPoint, startTime, dayIdx);
+      const cost = routeCost(perm, startPoint, startTime, dayIdx, todayStr);
       if (cost < bestCost){ bestCost = cost; best = perm; }
     }
     return best;
@@ -276,9 +310,9 @@
   // Začne od nearest-neighbor pořadí a opakovaně zkouší obrátit úseky trasy,
   // dokud nalezne zlepšení (kratší/bez porušení otevírací doby). Standardní
   // heuristika pro TSP — odstraňuje typické "zacuknutí" nearest-neighbor.
-  function twoOptImprove(initialOrder, startPoint, startTime, dayIdx){
+  function twoOptImprove(initialOrder, startPoint, startTime, dayIdx, todayStr){
     let order = initialOrder.slice();
-    let bestCost = routeCost(order, startPoint, startTime, dayIdx);
+    let bestCost = routeCost(order, startPoint, startTime, dayIdx, todayStr);
     let improved = true;
     while (improved){
       improved = false;
@@ -287,7 +321,7 @@
           const candidate = order.slice();
           const seg = candidate.slice(i, j + 1).reverse();
           candidate.splice(i, seg.length, ...seg);
-          const cost = routeCost(candidate, startPoint, startTime, dayIdx);
+          const cost = routeCost(candidate, startPoint, startTime, dayIdx, todayStr);
           if (cost < bestCost - 1e-9){
             bestCost = cost; order = candidate; improved = true;
           }
@@ -299,22 +333,22 @@
 
   // bestOrder(): hlavní vstupní bod optimalizace. Vrací pořadí POS (bez
   // startPoint v poli — startPoint je jen výchozí bod pro výpočet vzdáleností).
-  function bestOrder(posList, startPoint, startTime, dayIdx){
+  function bestOrder(posList, startPoint, startTime, dayIdx, todayStr){
     if (posList.length <= 1) return posList.slice();
     if (posList.length <= EXACT_SEARCH_LIMIT) {
-      return exactBestOrder(posList, startPoint, startTime, dayIdx);
+      return exactBestOrder(posList, startPoint, startTime, dayIdx, todayStr);
     }
     const seeded = nearestNeighborOrder(posList, startPoint).filter(p => posList.indexOf(p) !== -1);
-    return twoOptImprove(seeded, startPoint, startTime, dayIdx);
+    return twoOptImprove(seeded, startPoint, startTime, dayIdx, todayStr);
   }
 
   // ── COMPARISON: current order vs optimized ───────────────────────────────
   // startPoint: volitelný reálný start technika. startTime/dayIdx: pokud jsou
   // známé, optimalizace zohlední i otevírací dobu (ne jen vzdálenost) —
   // bez nich (např. fleet analytika) se optimalizuje čistě podle vzdálenosti.
-  function compareRoutes(posList, startPoint, startTime, dayIdx){
+  function compareRoutes(posList, startPoint, startTime, dayIdx, todayStr){
     const current = calculateRoute(posList, startPoint);
-    const optimizedOrder = bestOrder(posList, startPoint, startTime, dayIdx);
+    const optimizedOrder = bestOrder(posList, startPoint, startTime, dayIdx, todayStr);
     const optimized = calculateRoute(optimizedOrder, startPoint);
     const hasTimeContext = startTime != null && dayIdx != null;
     const currentViolations = hasTimeContext
@@ -379,6 +413,7 @@
     haversineKm,
     getVisitDurationMin,
     classifyVisit,
+    getSlaWeight,
     getOpeningHours,
     checkOpeningHours,
     formatClock,
@@ -393,6 +428,7 @@
     VISIT_DURATION_MIN,
     ROAD_COEFFICIENT,
     AVERAGE_SPEED_KMH,
+    SLA_POSITION_PENALTY_KM,
   };
 
   if (typeof module !== 'undefined' && module.exports) {
