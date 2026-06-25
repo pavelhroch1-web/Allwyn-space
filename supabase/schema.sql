@@ -33,3 +33,93 @@ create policy "pilot test — anon full access"
 
 -- Realtime: ať Velín vidí změny technika bez nutnosti manuálního refreshu.
 alter publication supabase_realtime add table public.sync_kv;
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- FÁZE 3 (MIGRATION_PLAN.md) — reálný relační model návštěv.
+-- Tohle NAHRAZUJE sync_kv pro vše spojené s návštěvou POS (stav, checklist,
+-- materiál, poznámky, podpis, metadata fotek). sync_kv výše zůstává jen pro
+-- to, co tu ještě nemá pokrytí (admin globální config — editor_*, inv_catalog,
+-- admin_tasks) a pro GPS/approval, dokud nebudou taky migrované.
+--
+-- ID technika = jeho reálné jméno z Tourplan (stejná konvence jako sync_kv
+-- technician sloupec) — žádné vymyšlené UUID, technici dnes nemají žádný
+-- jiný stabilní identifikátor. ID POS = reálné Tourplan/POS Master POS ID.
+-- ══════════════════════════════════════════════════════════════════════════
+
+create extension if not exists pgcrypto;
+
+create table if not exists public.technicians (
+  id text primary key,
+  name text not null,
+  region text
+);
+
+create table if not exists public.pos_locations (
+  id text primary key,
+  name text,
+  address text,
+  region text
+);
+
+create table if not exists public.visits (
+  id uuid primary key default gen_random_uuid(),
+  technician_id text not null references public.technicians(id),
+  pos_id text not null references public.pos_locations(id),
+  status text not null default 'in_progress',  -- in_progress | completed
+  started_at timestamptz,
+  completed_at timestamptz,
+  notes text,
+  -- Nad rámec Pavlova zadání, ale nutné pro flow "checklist/kampaň/podpis/foto
+  -- metadata" — žádná z navržených tabulek pro ně nemá místo:
+  signature_data text,    -- canvas podpis (base64), stejný formát jako dnešní supply_* sigData
+  photos_meta jsonb,       -- [{slot, sizeBytes, takenAt}, ...] — jen metadata, ne obsah fotky
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.visit_tasks (
+  id uuid primary key default gen_random_uuid(),
+  visit_id uuid not null references public.visits(id) on delete cascade,
+  task_name text not null,
+  status text not null default 'pending',  -- pending | done
+  updated_at timestamptz not null default now(),
+  unique (visit_id, task_name)
+);
+
+create table if not exists public.materials (
+  id uuid primary key default gen_random_uuid(),
+  pos_id text not null references public.pos_locations(id),
+  item text not null,
+  quantity numeric not null default 0,
+  updated_at timestamptz not null default now(),
+  unique (pos_id, item)
+);
+
+create table if not exists public.sync_events (
+  id uuid primary key default gen_random_uuid(),
+  "user" text not null,
+  action text not null,
+  timestamp timestamptz not null default now()
+);
+
+alter table public.technicians enable row level security;
+alter table public.pos_locations enable row level security;
+alter table public.visits enable row level security;
+alter table public.visit_tasks enable row level security;
+alter table public.materials enable row level security;
+alter table public.sync_events enable row level security;
+
+-- Pilotní fáze: stejná politika jako sync_kv výše — anon plný přístup,
+-- vědomé riziko pro 5 lidí na kontrolovaných zařízeních. Nahradit auth-based
+-- politikou (technik píše jen svůj řádek, Velín čte/píše vše) před širším
+-- nasazením — viz docs/PILOT_READINESS.md.
+create policy "pilot test — anon full access" on public.technicians for all using (true) with check (true);
+create policy "pilot test — anon full access" on public.pos_locations for all using (true) with check (true);
+create policy "pilot test — anon full access" on public.visits for all using (true) with check (true);
+create policy "pilot test — anon full access" on public.visit_tasks for all using (true) with check (true);
+create policy "pilot test — anon full access" on public.materials for all using (true) with check (true);
+create policy "pilot test — anon full access" on public.sync_events for all using (true) with check (true);
+
+-- Realtime: Velín vidí dokončení návštěvy/checklistu bez manuálního refreshu.
+alter publication supabase_realtime add table public.visits;
+alter publication supabase_realtime add table public.visit_tasks;
+alter publication supabase_realtime add table public.materials;
