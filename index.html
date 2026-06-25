@@ -782,6 +782,7 @@
         <button class="ed-subnav" onclick="showEditorSection('kampane',this)"><svg class="ic ic-sm"><use href="#ic-target"/></svg> Kampaně</button>
         <button class="ed-subnav" onclick="showEditorSection('inventory',this)"><svg class="ic ic-sm"><use href="#ic-box"/></svg> Inventory katalog</button>
         <button class="ed-subnav" onclick="showEditorSection('ukoly',this)"><svg class="ic ic-sm"><use href="#ic-check-circle"/></svg> Úkoly na místě</button>
+        <button class="ed-subnav" onclick="showEditorSection('checklist',this)"><svg class="ic ic-sm"><use href="#ic-box"/></svg> Checklist šablony</button>
       </div>
 
       <!-- TEXTY -->
@@ -860,6 +861,30 @@
         <div style="padding:12px;background:var(--tl);border-radius:10px;font-size:12px;color:var(--tm);line-height:1.5;margin-top:8px;display:flex;gap:6px">
           <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-bulb"/></svg>
           <span>Úprava platí pro nově sestavená/naimportovaná POS. Už rozjeté POS s úkoly z dřívější šablony se nepřepisují zpětně.</span>
+        </div>
+      </div>
+
+      <!-- CHECKLIST ŠABLONY -->
+      <div id="ed-sec-checklist" style="display:none">
+        <div class="adm-sh" style="margin-bottom:10px">
+          <div class="adm-st">Šablona</div>
+        </div>
+        <select class="ck-select" id="ck-tpl-picker" onchange="renderEditorChecklistTemplates()" style="margin-bottom:14px;width:100%"></select>
+
+        <div class="adm-sh" style="margin-bottom:10px">
+          <div class="adm-st">Otázky</div>
+          <button onclick="addChecklistQuestion()" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Otázka</button>
+        </div>
+        <div class="editor-card" id="ed-checklist-questions"></div>
+
+        <div class="adm-sh" style="margin:18px 0 10px"><div class="adm-st">Náhled</div></div>
+        <div style="border:1.5px solid var(--border);border-radius:12px;padding:4px 0;background:#fff">
+          <div id="ed-checklist-preview"></div>
+        </div>
+
+        <div style="padding:12px;background:var(--tl);border-radius:10px;font-size:12px;color:var(--tm);line-height:1.5;margin-top:8px;display:flex;gap:6px">
+          <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-bulb"/></svg>
+          <span>"Závisí na" + "rovná se" určuje, kdy se otázka zobrazí (např. otázka se ukáže jen když předchozí Ano/Ne otázka byla "Ne"). Změny se ihned promítnou do náhledu v detailu POS u technika.</span>
         </div>
       </div>
     </div>

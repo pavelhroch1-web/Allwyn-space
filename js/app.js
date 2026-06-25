@@ -939,7 +939,9 @@ function showDetTab(tab,btn){
 // ══════════════════════════════════════════════════════
 let ckSandboxAnswers={};
 let ckPreviewOpen=false;
+let ckActiveContext='sandbox'; // 'sandbox' (technik) | 'editor' (Velín editor náhled)
 function toggleChecklistPreview(){
+  ckActiveContext='sandbox';
   ckPreviewOpen=!ckPreviewOpen;
   document.getElementById('ck-preview-body').style.display=ckPreviewOpen?'block':'none';
   document.getElementById('ck-preview-arrow').style.transform=ckPreviewOpen?'rotate(180deg)':'';
@@ -963,12 +965,18 @@ function loadChecklistRecord(idx){
   renderChecklistSandboxList();
 }
 function setChecklistAnswer(id,val){
+  if(ckActiveContext==='editor'){
+    if(val===undefined)delete edChecklistPreviewAnswers[id];
+    else edChecklistPreviewAnswers[id]=val;
+    renderEdChecklistPreview();
+    return;
+  }
   if(val===undefined)delete ckSandboxAnswers[id];
   else ckSandboxAnswers[id]=val;
   renderChecklistSandboxList();
 }
 function renderChecklistSandboxList(){
-  const tpl=CHECKLIST_TEMPLATES['rebranding-idt-kam'];
+  const tpl=getChecklistTemplates()['rebranding-idt-kam'];
   document.getElementById('ck-test-list').innerHTML=ChecklistEngine.renderChecklistHtml(tpl,ckSandboxAnswers);
 }
 
@@ -4011,7 +4019,7 @@ function makePlanCard(p, ri, selectable) {
 // EDITOR SECTIONS (texty / kampaně / inventory katalog)
 // ══════════════════════════════════════════════════════════════════════════
 function showEditorSection(sec, btn) {
-  ['texty','kampane','inventory','ukoly'].forEach(s => {
+  ['texty','kampane','inventory','ukoly','checklist'].forEach(s => {
     const el = document.getElementById('ed-sec-' + s);
     if (el) el.style.display = s === sec ? 'block' : 'none';
   });
@@ -4020,6 +4028,7 @@ function showEditorSection(sec, btn) {
   if (sec === 'kampane') renderEditorCampaigns();
   if (sec === 'inventory') renderEditorCatalog();
   if (sec === 'ukoly') renderEditorTaskTemplates();
+  if (sec === 'checklist') renderEditorChecklistTemplates();
 }
 
 // ── EDITABLE CAMPAIGNS ─────────────────────────────────────────────────────
@@ -4146,6 +4155,111 @@ function deleteTaskTemplateItem(channel, i) {
   tpl[channel].splice(i,1);
   saveTaskTemplates(tpl);
   renderEditorTaskTemplates();
+}
+
+// ── EDITABLE CHECKLIST ŠABLONY — podmíněný checklist (chytrý checklist
+// v detailu POS u technika). Stejný override pattern jako úkoly na místě
+// výše — beze zásahu do CHECKLIST_TEMPLATES konstanty, jen lsg/lss override.
+let edChecklistTplId = null;
+let edChecklistPreviewAnswers = {};
+
+function getChecklistTemplates() {
+  return lsg('editor_checklist_templates') || JSON.parse(JSON.stringify(CHECKLIST_TEMPLATES));
+}
+function saveChecklistTemplatesStore(t) { lss('editor_checklist_templates', t); }
+
+function renderEditorChecklistTemplates() {
+  ckActiveContext = 'editor';
+  const tpls = getChecklistTemplates();
+  const ids = Object.keys(tpls);
+  if (!edChecklistTplId || !tpls[edChecklistTplId]) edChecklistTplId = ids[0];
+  const picker = document.getElementById('ck-tpl-picker');
+  if (picker) {
+    picker.innerHTML = ids.map(id => `<option value="${id}" ${id===edChecklistTplId?'selected':''}>${tpls[id].name || id}</option>`).join('');
+    edChecklistTplId = picker.value;
+  }
+  edChecklistPreviewAnswers = {};
+  renderEditorChecklistQuestions();
+  renderEdChecklistPreview();
+}
+
+function renderEditorChecklistQuestions() {
+  const tpls = getChecklistTemplates();
+  const tpl = tpls[edChecklistTplId];
+  const el = document.getElementById('ed-checklist-questions');
+  if (!el || !tpl) return;
+  const ids = tpl.questions.map(q => q.id);
+  el.innerHTML = tpl.questions.map((q,i) => {
+    const otherIds = ids.filter(id => id !== q.id);
+    const depOpts = `<option value="">— vždy zobrazit —</option>` +
+      otherIds.map(id => `<option value="${id}" ${q.condition && q.condition.dependsOn===id ? 'selected' : ''}>${id}</option>`).join('');
+    return `
+    <div style="padding:12px 14px;border-bottom:1px solid var(--bg)">
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input value="${(q.label||'').replace(/"/g,'&quot;')}" placeholder="Text otázky" oninput="updateChecklistQuestion(${i},'label',this.value)" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:13px;outline:none"/>
+        <select onchange="updateChecklistQuestion(${i},'type',this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:12px;outline:none">
+          ${['bool','text','photo','select'].map(t => `<option value="${t}" ${q.type===t?'selected':''}>${t}</option>`).join('')}
+        </select>
+        <button onclick="deleteChecklistQuestion(${i})" style="background:none;border:none;color:var(--red);font-size:16px;cursor:pointer;padding:4px">✕</button>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted)">
+        <span>id: <code>${q.id}</code></span>
+        <span style="margin-left:auto">Závisí na</span>
+        <select onchange="updateChecklistQuestion(${i},'dependsOn',this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:6px;font-size:12px;outline:none">${depOpts}</select>
+        ${q.condition ? `<span>rovná se</span><select onchange="updateChecklistQuestion(${i},'equals',this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:6px;font-size:12px;outline:none">
+          ${['Ano','Ne'].map(v => `<option value="${v}" ${q.condition.equals===v?'selected':''}>${v}</option>`).join('')}
+        </select>` : ''}
+      </div>
+    </div>`;
+  }).join('') || '<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px">Žádné otázky</div>';
+}
+
+function updateChecklistQuestion(i, field, val) {
+  const tpls = getChecklistTemplates();
+  const tpl = tpls[edChecklistTplId];
+  const q = tpl.questions[i];
+  if (field === 'dependsOn') {
+    if (!val) delete q.condition;
+    else q.condition = { dependsOn: val, equals: (q.condition && q.condition.equals) || 'Ano' };
+  } else if (field === 'equals') {
+    if (q.condition) q.condition.equals = val;
+  } else {
+    q[field] = val;
+  }
+  saveChecklistTemplatesStore(tpls);
+  renderEditorChecklistQuestions();
+  edChecklistPreviewAnswers = {};
+  renderEdChecklistPreview();
+}
+
+function addChecklistQuestion() {
+  const tpls = getChecklistTemplates();
+  const tpl = tpls[edChecklistTplId];
+  let n = 1, id = 'nova_otazka';
+  while (tpl.questions.some(q => q.id === id)) { id = 'nova_otazka_' + (++n); }
+  tpl.questions.push({ id, label: 'Nová otázka', type: 'bool' });
+  saveChecklistTemplatesStore(tpls);
+  renderEditorChecklistQuestions();
+}
+
+function deleteChecklistQuestion(i) {
+  const tpls = getChecklistTemplates();
+  const tpl = tpls[edChecklistTplId];
+  const removedId = tpl.questions[i].id;
+  tpl.questions.splice(i,1);
+  tpl.questions.forEach(q => { if (q.condition && q.condition.dependsOn === removedId) delete q.condition; });
+  saveChecklistTemplatesStore(tpls);
+  renderEditorChecklistQuestions();
+  edChecklistPreviewAnswers = {};
+  renderEdChecklistPreview();
+}
+
+function renderEdChecklistPreview() {
+  const tpls = getChecklistTemplates();
+  const tpl = tpls[edChecklistTplId];
+  const el = document.getElementById('ed-checklist-preview');
+  if (!el || !tpl) return;
+  el.innerHTML = ChecklistEngine.renderChecklistHtml(tpl, edChecklistPreviewAnswers);
 }
 
 // ── Patch renderCampaigns to use editor campaigns ──────────────────────────
