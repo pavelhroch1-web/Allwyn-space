@@ -565,8 +565,9 @@ function makePosCard(p,ri,showAssign){
   let tags=p.v?`<span class="tag t-done">✓ Hotovo</span>`:`<span class="tag t-task">${done}/${p.taskState.length}</span>`;
   tags+=priChip(p)+typTag(p);
   const card=document.createElement('div');card.className='pos-card';
-  const right=showAssign?`<button class="asgn-btn" onclick="event.stopPropagation();openAssign('${p.id}')">+ Den</button>`:`<div class="parr">›</div>`;
-  card.innerHTML=`${p.v?'<div class="vs"></div>':''}<div class="pci"><div class="pdot ${dotCls}"></div><div class="pinfo"><div class="pname">${p.n} <span style="font-weight:600;color:var(--muted);font-size:11px">#${p.id}</span></div><div class="paddr">${p.a}</div><div class="pmeta">${tags}</div></div>${right}</div>`;
+  const right=showAssign?`<button class="asgn-btn" onclick="event.stopPropagation();openAssign('${p.id}')">+ Den</button>`:'';
+  const cta=showAssign?'':`<div class="pos-cta ${p.v?'done':''}">${p.v?'✓ Hotovo':'Zahájit návštěvu →'}</div>`;
+  card.innerHTML=`${p.v?'<div class="vs"></div>':''}<div class="pci"><div class="pdot ${dotCls}"></div><div class="pinfo"><div class="pname">${p.n} <span style="font-weight:600;color:var(--muted);font-size:11px">#${p.id}</span></div><div class="paddr">${p.a}</div><div class="pmeta">${tags}</div></div>${right}</div>${cta}`;
   card.onclick=()=>openDetail(ri);
   return card;
 }

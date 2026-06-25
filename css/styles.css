@@ -221,17 +221,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .upb-s{font-size:11px;color:var(--orange);opacity:.7;margin-top:1px}
 
 /* ── POS CARDS ── */
-.pos-card{background:#fff;margin:0 12px 8px;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.07);cursor:pointer;transition:transform .1s}
+.pos-card{background:#fff;margin:0 12px 10px;border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(26,60,71,.07);cursor:pointer;transition:transform .1s}
 .pos-card:active{transform:scale(.98)}
 .vs{height:3px;background:var(--teal)}
-.pci{padding:12px 14px;display:flex;align-items:center;gap:10px}
+.pci{padding:14px 15px;display:flex;align-items:center;gap:11px}
 .pdot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
 .pd-done{background:var(--green)}.pd-pend{background:var(--border);border:2px solid #bbb}.pd-svc{background:var(--red)}
 .dot-green{background:var(--green)}.dot-red{background:var(--red)}.dot-orange{background:var(--orange)}.dot-yellow{background:#D4A300}
 .pinfo{flex:1;min-width:0}
-.pname{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.paddr{font-size:11px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pmeta{display:flex;align-items:center;gap:5px;margin-top:5px;flex-wrap:wrap}
+.pname{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.paddr{font-size:11.5px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pmeta{display:flex;align-items:center;gap:5px;margin-top:6px;flex-wrap:wrap}
+.pos-cta{margin:0 14px 13px;padding:11px;border-radius:11px;background:var(--navy);color:var(--teal);font-size:13.5px;font-weight:700;text-align:center}
+.pos-cta.done{background:var(--gl);color:var(--green)}
 .tag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;display:inline-flex;align-items:center;gap:3px}
 .t-done{background:var(--gl);color:var(--green)}
 .t-task{background:var(--tl);color:var(--tm)}
