@@ -245,19 +245,23 @@
   <!-- BRIEFING -->
   <div class="briefing-ov" id="briefing">
     <div class="briefing-sh">
-      <div class="bf-handle"></div>
-      <div class="bf-hdr">
-        <div class="bf-emoji"><svg class="ic ic-xl"><use href="#ic-calendar"/></svg></div>
-        <div><div class="bf-title">Dobré ráno, Tomáš!</div><div class="bf-date" id="bf-date"></div></div>
+      <div class="bf-hero">
+        <div class="bf-handle"></div>
+        <div class="bf-hdr">
+          <div class="bf-emoji"><svg class="ic ic-xl"><use href="#ic-calendar"/></svg></div>
+          <div><div class="bf-title">Dobré ráno, Tomáš!</div><div class="bf-date" id="bf-date"></div></div>
+        </div>
+        <div class="bf-stats">
+          <div class="bf-stat o"><div class="bf-sv" id="bf-total">35</div><div class="bf-sl">POS týden</div></div>
+          <div class="bf-stat g"><div class="bf-sv" id="bf-today">7</div><div class="bf-sl">Dnes</div></div>
+          <div class="bf-stat r"><div class="bf-sv" id="bf-svc">2</div><div class="bf-sl">Servis</div></div>
+        </div>
       </div>
-      <div class="ai-msg" id="bf-msg"><span id="bf-typing"></span><span class="ai-badge">AI Insight</span></div>
-      <div class="bf-stats">
-        <div class="bf-stat o"><div class="bf-sv" id="bf-total">35</div><div class="bf-sl">POS týden</div></div>
-        <div class="bf-stat g"><div class="bf-sv" id="bf-today">7</div><div class="bf-sl">Dnes</div></div>
-        <div class="bf-stat r"><div class="bf-sv" id="bf-svc">2</div><div class="bf-sl">Servis</div></div>
+      <div class="bf-body">
+        <div class="ai-msg" id="bf-msg"><span id="bf-typing"></span><span class="ai-badge">AI Insight</span></div>
+        <div class="bf-items" id="bf-items"></div>
+        <button class="bf-btn" onclick="closeBriefing()">Rozumím, jdeme na to →</button>
       </div>
-      <div class="bf-items" id="bf-items"></div>
-      <button class="bf-btn" onclick="closeBriefing()">Rozumím, jdeme na to →</button>
     </div>
   </div>
 
