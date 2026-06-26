@@ -2614,6 +2614,24 @@ function renderAdminAlerts() {
     alerts.push({ t: 'orange', i: 'ic-box', title: 'Zásobování bez podpisu', sub: 'Lán Tomáš · Žádné zásobování nebylo potvrzeno podpisem', tm: 'Dnes' });
   }
 
+  // Zpoždění — reálný check-in čas vs. plánovaný příjezd (RouteEngine).
+  // Stejné pořadí/start, jaké vidí technik v Trase (applyStoredRouteOrder +
+  // getEffectiveStartLocation + getStartTime), jen porovnané s tím, co se
+  // reálně stalo (ci_<posId>.inTime) — žádný vymyšlený "plán".
+  const todayDayIdx = getTodayDayIdx();
+  if (todayDayIdx !== null) {
+    const dayPos = (posData['25'] || []).filter(p => p.d === todayDayIdx);
+    if (dayPos.length) {
+      const ordered = applyStoredRouteOrder(dayPos, '25', todayDayIdx);
+      const startLoc = getEffectiveStartLocation();
+      const calc = RouteEngine.calculateRoute(ordered, startLoc);
+      const delays = RouteEngine.checkDelays(ordered, calc, getStartTime(), live.checkins);
+      delays.forEach(d => {
+        alerts.push({ t: 'orange', i: 'ic-clock', title: `Zpoždění — ${d.posName}`, sub: `Lán Tomáš · plán ${d.plannedArrival} · reálně ${d.actualArrival} · o ${d.deltaMin} min později`, tm: 'Live' });
+      });
+    }
+  }
+
   // Týmové alerty — odvozeno z reálných POS přiřazení (FULL_POS_DATA), žádná
   // vymyšlená čísla. Pozadu = isOverdue (technicianModel), výborný výkon = pct.
   const teamTechs = deriveAllTechnicians();

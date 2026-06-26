@@ -265,6 +265,46 @@
     return result;
   }
 
+  // Práh, od kolika minut zpoždění oproti plánovanému příjezdu už je to
+  // alert pro Velín — menší odchylky jsou normální provozní šum (provoz,
+  // parkování), ne signál k zásahu.
+  const DELAY_ALERT_THRESHOLD_MIN = 20;
+
+  // ── ZPOŽDĚNÍ: reálný check-in čas vs. plánovaný příjezd ──────────────────
+  // Stejná logika příjezdu jako checkOpeningHours (sekvenčně přes legs ze
+  // calculateRoute se STEJNÝM order/startPoint) — jen místo otevírací doby
+  // porovnává plánovaný příjezd s reálným check-in časem (ci_<posId>.inTime).
+  // checkins: [{ posId, ci: { inTime, ... } }] — ze stejného zdroje jako
+  // getLiveState().checkins, žádná vymyšlená data. POS bez check-inu se
+  // přeskočí (ještě tam technik nebyl, nic k porovnání).
+  function checkDelays(order, calcResult, startTime, checkins){
+    const startMin = parseHM(startTime);
+    if (startMin === null || !calcResult || !calcResult.legs.length) return [];
+    const realOrder = order.filter(hasUsableGps);
+    if (calcResult.legs.length !== realOrder.length) return [];
+    const checkinByPos = {};
+    (checkins || []).forEach(c => { if (c && c.ci && c.ci.inTime) checkinByPos[c.posId] = c.ci; });
+    const result = [];
+    let clockMin = startMin;
+    calcResult.legs.forEach((leg, i) => {
+      clockMin += leg.travelTimeMin;
+      const pos = realOrder[i];
+      const plannedArrival = formatClock(clockMin);
+      const ci = checkinByPos[pos.id];
+      if (ci) {
+        const actualMin = parseHM(ci.inTime);
+        if (actualMin !== null) {
+          const deltaMin = actualMin - clockMin;
+          if (deltaMin >= DELAY_ALERT_THRESHOLD_MIN) {
+            result.push({ posId: pos.id, posName: pos.n, plannedArrival, actualArrival: ci.inTime, deltaMin });
+          }
+        }
+      }
+      clockMin += getVisitDurationMin(pos);
+    });
+    return result;
+  }
+
   // ── OPTIMIZATION: nearest neighbor ──────────────────────────────────────
   // startPos: výchozí bod (např. první POS dne nebo poloha technika). Pokud
   // je startPos zároveň prvkem posList (stará fleet analytika bez reálného
@@ -544,6 +584,8 @@
     checkCapacity,
     recommendCapacitySkips,
     WORKDAY_BUDGET_MIN,
+    checkDelays,
+    DELAY_ALERT_THRESHOLD_MIN,
     formatClock,
     parseHM,
     DAY_KEYS,
