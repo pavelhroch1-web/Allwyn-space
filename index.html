@@ -241,8 +241,6 @@
   </div>
 </div>
 
-<button class="switch-btn" id="switch-btn" style="display:none" onclick="logout()">⇄ Odhlásit</button>
-
 <!-- ══ TECHNIK ══ -->
 <div class="screen" id="technik-screen">
 
@@ -295,6 +293,14 @@
         </div>
       </div>
       <div class="hdr-sub" id="hdr-week-label">Načítám…</div>
+      <div style="position:relative;margin-top:8px">
+        <input type="text" id="tech-pos-search" placeholder="Najít moje POS — číslo, název, adresa…"
+          aria-label="Vyhledat POS v mém plánu"
+          oninput="onTechPosSearch(this.value)"
+          onkeydown="if(event.key==='Enter') submitTechPosSearch()"
+          style="width:100%;padding:9px 12px;border-radius:8px;border:1.5px solid rgba(255,255,255,.15);background:rgba(255,255,255,.08);color:#fff;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box"/>
+        <div id="tech-pos-search-results" style="display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.25);overflow:hidden;z-index:300"></div>
+      </div>
     </div>
     <div class="wscroll" id="week-chips"></div>
     <div class="wsum">
@@ -438,7 +444,11 @@
     </div>
 
     <div id="dtc-notes" class="det-tc" style="display:none;padding:8px 12px">
-      <textarea class="notes-ta" id="notes-ta" placeholder="Poznámky z návštěvy — stav, problémy, požadavky…" oninput="saveNote()" style="margin-top:6px"></textarea>
+      <div style="margin-bottom:8px;padding:10px 14px;background:var(--bg);border-radius:10px;font-size:11px;color:var(--muted);line-height:1.5;display:flex;gap:6px">
+        <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-info"/></svg>
+        <span>Poznámka k téhle návštěvě. Pro trvalý záznam o provozovně (platný i pro příští návštěvy) použij Kartu POS.</span>
+      </div>
+      <textarea class="notes-ta" id="notes-ta" placeholder="Poznámky z této návštěvy — stav, problémy, požadavky…" oninput="saveNote()" style="margin-top:6px"></textarea>
     </div>
     <div id="dtc-inv" class="det-tc" style="padding-top:4px">
       <!-- Inventory sub-tabs -->
@@ -471,6 +481,10 @@
       </div>
     </div>
     <div id="dtc-karta" class="det-tc" style="display:none;padding:8px 12px">
+      <div style="margin-bottom:8px;padding:10px 14px;background:var(--bg);border-radius:10px;font-size:11px;color:var(--muted);line-height:1.5;display:flex;gap:6px">
+        <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-info"/></svg>
+        <span>Trvalá historie téhle provozovny — zůstává napříč všemi návštěvami, vidí ji i Velín.</span>
+      </div>
       <div style="background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);margin-bottom:10px" id="pos-card-log"></div>
       <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Přidat záznam</div>
       <textarea class="notes-ta" id="pos-card-ta" placeholder="Např: Chystají zavřít, bude rekonstrukce, špatné osazení, nový vedoucí…" style="min-height:70px"></textarea>

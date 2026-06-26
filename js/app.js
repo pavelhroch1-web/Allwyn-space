@@ -244,6 +244,10 @@ document.addEventListener('click', (e)=>{
     const box = document.getElementById('global-pos-search-results');
     if (box) box.style.display = 'none';
   }
+  if (!e.target.closest('#tech-pos-search') && !e.target.closest('#tech-pos-search-results')) {
+    const box = document.getElementById('tech-pos-search-results');
+    if (box) box.style.display = 'none';
+  }
 });
 
 function renderUserMenus(){
@@ -273,7 +277,6 @@ function renderUserMenus(){
 function enterRole(role,opts){
   opts=opts||{};
   document.getElementById('role-screen').style.display='none';
-  document.getElementById('switch-btn').style.display='block';
   if(role==='technik'){
     document.getElementById('technik-screen').classList.add('active');
     document.getElementById('admin-screen').classList.remove('active');
@@ -289,7 +292,6 @@ function enterRole(role,opts){
 }
 function goHome(){
   document.getElementById('role-screen').style.display='flex';
-  document.getElementById('switch-btn').style.display='none';
   document.getElementById('technik-screen').classList.remove('active');
   document.getElementById('admin-screen').classList.remove('active');
   pushRoute();
@@ -840,9 +842,9 @@ function renderSupplyItems(){
       <div style="display:flex;align-items:center;gap:12px;padding:10px 14px">
         <div class="supply-item-n" style="flex:1">${x.n}${x.unit?' <span style="font-size:10px;color:var(--muted)">('+x.unit+')</span>':''}</div>
         <div class="supply-qty">
-          <button class="sq-btn" onclick="adjQty(${i},-1)" ${supplyLocked?'disabled':''}>−</button>
+          <button class="sq-btn" aria-label="Snížit množství — ${x.n}" onclick="adjQty(${i},-1)" ${supplyLocked?'disabled':''}>−</button>
           <div class="sq-val">${x.qty}</div>
-          <button class="sq-btn" onclick="adjQty(${i},1)" ${supplyLocked?'disabled':''}>+</button>
+          <button class="sq-btn" aria-label="Zvýšit množství — ${x.n}" onclick="adjQty(${i},1)" ${supplyLocked?'disabled':''}>+</button>
         </div>
       </div>
       ${x.qty>0?`<div style="display:flex;align-items:center;gap:8px;padding:0 14px 10px;border-top:1px solid var(--bg)">
@@ -970,9 +972,11 @@ function renderPhotos(){
     const slot=document.createElement('div');
     if(p.photos[i]){
       slot.className='pslot filled';
-      slot.innerHTML=`<img src="${p.photos[i]}" alt="foto"/><button class="p-rm" onclick="rmPhoto(event,${i})">✕</button>`;
+      slot.innerHTML=`<img src="${p.photos[i]}" alt="Foto ${lbls[i]||i+1}"/><button class="p-rm" aria-label="Smazat foto ${lbls[i]||i+1}" onclick="rmPhoto(event,${i})">✕</button>`;
     } else {
       slot.className='pslot';
+      slot.setAttribute('role','button');
+      slot.setAttribute('aria-label','Vyfotit '+(lbls[i]||'Foto '+(i+1)));
       slot.innerHTML=`<div class="p-ico"><svg class="ic ic-lg"><use href="#ic-camera"/></svg></div><div class="p-lbl">${lbls[i]||'Foto '+(i+1)}</div>`;
       slot.onclick=()=>{pendingSlot=i;document.getElementById('photo-input').click();};
     }
@@ -1055,8 +1059,8 @@ function renderMerch(p) {
         <div class="inv-n" style="${x.done?'text-decoration:line-through;color:var(--muted)':''}">${x.n}</div>
       </div>
       <div class="inv-btns">
-        <button class="ibtn ibtn-ok ${x.done?'on':''}" onclick="setMerch(${i},true)">✓</button>
-        <button class="ibtn ibtn-miss ${x.done===false?'on':''}" onclick="setMerch(${i},false)">✕</button>
+        <button class="ibtn ibtn-ok ${x.done?'on':''}" aria-label="Osazeno — ${x.n}" onclick="setMerch(${i},true)">✓</button>
+        <button class="ibtn ibtn-miss ${x.done===false?'on':''}" aria-label="Neosazeno — ${x.n}" onclick="setMerch(${i},false)">✕</button>
       </div>
     </div>`).join('') || '<div style="padding:16px;text-align:center;font-size:12px;color:var(--muted)">Žádné merch položky</div>';
 }
@@ -1788,6 +1792,57 @@ function submitGlobalPosSearch() {
     String(p.id).toLowerCase().includes(val.toLowerCase()) || (p.n||'').toLowerCase().includes(val.toLowerCase())
   );
   if (matches.length === 1) selectGlobalPosResult(matches[0].p.id);
+}
+
+// ── TECHNICIAN POS SEARCH — hledá jen v POS přiřazených přihlášenému
+// technikovi (přes všechny jeho týdny), ne v celé síti. Otevírá kartu POS
+// rovnou v jejím správném týdnu.
+function getTechPosFlat() {
+  const out = [];
+  for (const w of POS_WEEK_KEYS) {
+    (posData[w] || []).forEach(p => out.push({ p, week: w }));
+  }
+  return out;
+}
+function onTechPosSearch(val) {
+  const q = (val || '').trim().toLowerCase();
+  const box = document.getElementById('tech-pos-search-results');
+  if (!box) return;
+  if (!q) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  const matches = getTechPosFlat().filter(({ p }) =>
+    String(p.id).toLowerCase().includes(q) || (p.n||'').toLowerCase().includes(q) || (p.a||'').toLowerCase().includes(q)
+  ).slice(0, 6);
+  if (!matches.length) {
+    box.style.display = 'block';
+    box.innerHTML = `<div style="padding:12px 14px;font-size:12px;color:var(--muted)">Žádná POS z tvého plánu neodpovídá "${val}"</div>`;
+    return;
+  }
+  box.style.display = 'block';
+  box.innerHTML = matches.map(({ p, week }) => `
+    <div onclick="selectTechPosResult('${p.id}','${week}')" style="padding:10px 14px;border-bottom:1px solid var(--bg);cursor:pointer">
+      <div style="font-size:13px;font-weight:700;color:var(--navy)">#${p.id} · ${p.n||'—'}</div>
+      <div style="font-size:11px;color:var(--muted)">${p.a||'—'} · W${week}</div>
+    </div>`).join('');
+}
+function selectTechPosResult(posId, week) {
+  document.getElementById('tech-pos-search').value = '';
+  document.getElementById('tech-pos-search-results').style.display = 'none';
+  if (!posData[week]) return;
+  const ri = posData[week].findIndex(p => p.id === posId);
+  if (ri < 0) return;
+  cWeek = week; updateHdrLabel(); renderChips(); renderDayTabs();
+  openDetail(ri);
+}
+function submitTechPosSearch() {
+  const val = (document.getElementById('tech-pos-search').value || '').trim();
+  if (!val) return;
+  const flat = getTechPosFlat();
+  const exact = flat.find(({ p }) => String(p.id) === val);
+  if (exact) { selectTechPosResult(exact.p.id, exact.week); return; }
+  const matches = flat.filter(({ p }) =>
+    String(p.id).toLowerCase().includes(val.toLowerCase()) || (p.n||'').toLowerCase().includes(val.toLowerCase())
+  );
+  if (matches.length === 1) selectTechPosResult(matches[0].p.id, matches[0].week);
 }
 
 function buildPosNetRows() {
