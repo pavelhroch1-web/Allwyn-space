@@ -4335,7 +4335,11 @@ function renderEditorChecklistQuestions() {
   el.innerHTML = tpl.questions.map((q,i) => {
     const otherDependableIds = dependableIds.filter(id => id !== q.id);
     const depOpts = `<option value="">— vždy zobrazit —</option>` +
-      otherDependableIds.map(id => `<option value="${id}" ${q.condition && q.condition.dependsOn===id ? 'selected' : ''}>${id}</option>`).join('');
+      otherDependableIds.map(id => {
+        const depQ = tpl.questions.find(dq => dq.id === id);
+        const depLabel = (depQ && depQ.label) ? depQ.label : id;
+        return `<option value="${id}" ${q.condition && q.condition.dependsOn===id ? 'selected' : ''}>${depLabel.replace(/"/g,'&quot;')}</option>`;
+      }).join('');
     let equalsField = '';
     if (q.condition) {
       const depQ = tpl.questions.find(dq => dq.id === q.condition.dependsOn);
@@ -4354,6 +4358,10 @@ function renderEditorChecklistQuestions() {
     return `
     <div style="padding:12px 14px;border-bottom:1px solid var(--bg)">
       <div style="display:flex;gap:8px;margin-bottom:8px">
+        <div style="display:flex;flex-direction:column">
+          <button onclick="moveChecklistQuestion(${i},-1)" ${i===0?'disabled':''} style="background:none;border:none;color:${i===0?'var(--border)':'var(--muted)'};font-size:12px;cursor:${i===0?'default':'pointer'};padding:0 4px;line-height:1.2">▲</button>
+          <button onclick="moveChecklistQuestion(${i},1)" ${i===tpl.questions.length-1?'disabled':''} style="background:none;border:none;color:${i===tpl.questions.length-1?'var(--border)':'var(--muted)'};font-size:12px;cursor:${i===tpl.questions.length-1?'default':'pointer'};padding:0 4px;line-height:1.2">▼</button>
+        </div>
         <input value="${(q.label||'').replace(/"/g,'&quot;')}" placeholder="Text otázky" oninput="updateChecklistQuestion(${i},'label',this.value)" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:13px;outline:none"/>
         <select onchange="updateChecklistQuestion(${i},'type',this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:12px;outline:none">
           ${['bool','text','photo','select'].map(t => `<option value="${t}" ${q.type===t?'selected':''}>${t}</option>`).join('')}
@@ -4396,6 +4404,17 @@ function updateChecklistQuestion(i, field, val) {
   renderEdChecklistPreview();
 }
 
+function moveChecklistQuestion(i, dir) {
+  const tpls = getChecklistTemplates();
+  const tpl = tpls[edChecklistTplId];
+  const j = i + dir;
+  if (j < 0 || j >= tpl.questions.length) return;
+  [tpl.questions[i], tpl.questions[j]] = [tpl.questions[j], tpl.questions[i]];
+  saveChecklistTemplatesStore(tpls);
+  renderEditorChecklistQuestions();
+  edChecklistPreviewAnswers = {};
+  renderEdChecklistPreview();
+}
 function addChecklistQuestion() {
   const tpls = getChecklistTemplates();
   const tpl = tpls[edChecklistTplId];
