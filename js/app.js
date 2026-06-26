@@ -1017,7 +1017,7 @@ function renderCampaignChecklist(){
 // tady se nezobrazují znovu, aby nevznikala duplicitní/matoucí UI se stejnými
 // fotkami. Tahle sekce ukazuje další povinné fotky (pokladní zóna, merch
 // materiály) plus neomezený počet volných extra fotek.
-const PHOTO_LABELS=['Příchod','Odchod','Pokladní zóna','Merch materiály'];
+const PHOTO_LABELS=['Příchod','Odchod','Pokladní zóna','Plánogram / finální výstava'];
 const PHOTO_REQUIRED_COUNT=PHOTO_LABELS.length;
 const PHOTO_GRID_START=2;
 function renderPhotos(){
@@ -1173,6 +1173,8 @@ function setChecklistAnswer(id,val){
 // ── MERCH ─────────────────────────────────────────────────────────────────
 let merchItems = [];
 
+let pendingMerchIndex = null;
+
 function renderMerch(p) {
   const defaults = (MERCH_ITEMS[p.typ] || MERCH_ITEMS.IDT).map(x => ({...x}));
   const saved = lsg('merch_' + p.id + '_' + today());
@@ -1183,23 +1185,69 @@ function renderMerch(p) {
     <div class="inv-item">
       <div class="inv-info">
         <div class="inv-n" style="${x.done?'text-decoration:line-through;color:var(--muted)':''}">${x.n}</div>
+        ${x.photo?`<img src="${x.photo}" class="merch-thumb" alt="Foto — ${x.n}" onclick="openMerchPhotoLightbox(${i})"/>`:''}
       </div>
       <div class="inv-btns">
-        <button class="ibtn ibtn-ok ${x.done?'on':''}" aria-label="Osazeno — ${x.n}" onclick="setMerch(${i},true)">✓</button>
+        <button class="ibtn ibtn-ok ${x.done===true?'on':''}" aria-label="Osazeno — ${x.n}" onclick="setMerch(${i},true)">✓</button>
         <button class="ibtn ibtn-miss ${x.done===false?'on':''}" aria-label="Neosazeno — ${x.n}" onclick="setMerch(${i},false)">✕</button>
       </div>
     </div>`).join('') || '<div style="padding:16px;text-align:center;font-size:12px;color:var(--muted)">Žádné merch položky</div>';
 }
 
+// Osazení (✓) se nezapíše bez fotky položky — žádná volnost danou položku
+// jen odfajfkovat. Neosazeno (✕) foto nevyžaduje, technik tím nic neodvádí.
 function setMerch(i, done) {
   const p = posData[cWeek][cIdx];
   if (!merchItems[i]) return;
-  merchItems[i].done = merchItems[i].done === done ? null : done;
+  if (done === true) {
+    if (merchItems[i].done === true) {
+      merchItems[i].done = null;
+      merchItems[i].photo = null;
+      lss('merch_' + p.id + '_' + today(), merchItems);
+      renderMerch(p);
+      return;
+    }
+    pendingMerchIndex = i;
+    document.getElementById('merch-photo-input').click();
+    return;
+  }
+  merchItems[i].done = merchItems[i].done === false ? null : false;
+  merchItems[i].photo = null;
   lss('merch_' + p.id + '_' + today(), merchItems);
   if (typeof VisitStore !== 'undefined' && merchItems[i].done !== null) {
     VisitStore.setMaterial(p.id, p.n, p.a, null, merchItems[i].n, merchItems[i].done ? 1 : 0);
   }
   renderMerch(p);
+}
+
+function openMerchPhotoLightbox(i) {
+  const x = merchItems[i];
+  if (!x || !x.photo) return;
+  openImageLightbox(x.photo, x.n);
+}
+
+function handleMerchPhoto(e) {
+  const file = e.target.files[0];
+  const i = pendingMerchIndex;
+  if (!file || i === null || !merchItems[i]) { pendingMerchIndex = null; e.target.value = ''; return; }
+  const p = posData[cWeek][cIdx];
+  getGeoTag(geo => {
+    const r = new FileReader();
+    r.onload = ev => {
+      stampPhoto(ev.target.result, buildStampLines(p, geo).concat([merchItems[i].n]), stamped => {
+        merchItems[i].done = true;
+        merchItems[i].photo = stamped;
+        lss('merch_' + p.id + '_' + today(), merchItems);
+        if (typeof VisitStore !== 'undefined') {
+          VisitStore.setMaterial(p.id, p.n, p.a, null, merchItems[i].n, 1);
+        }
+        pendingMerchIndex = null;
+        e.target.value = '';
+        renderMerch(p);
+      });
+    };
+    r.readAsDataURL(file);
+  });
 }
 
 // ── INVENTORY TABS ─────────────────────────────────────────────────────────
@@ -1389,7 +1437,7 @@ function renderCompleteBtn(){
   } else {
     badge.innerHTML='';
     if(allDone&&photosOk){btn.textContent='Označit jako navštíveno ✓';btn.className='btn-complete active';}
-    else if(!photosOk){btn.textContent='Chybí foto příchodu/odchodu';btn.className='btn-complete disabled';}
+    else if(!photosOk){btn.textContent='Chybí povinné foto (příchod/odchod/pokladna/plánogram)';btn.className='btn-complete disabled';}
     else{const r=p.taskState.filter(t=>!t.done).length;btn.textContent=`Zbývá ${r} ${r===1?'úkol':r<5?'úkoly':'úkolů'}`;btn.className='btn-complete disabled';}
   }
 }

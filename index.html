@@ -379,8 +379,9 @@
           <div class="supply-badge" style="background:rgba(255,255,255,.2);color:#fff">Bez podpisu</div>
         </div>
         <div id="merch-items"></div>
+        <input type="file" id="merch-photo-input" accept="image/*" capture="environment" onchange="handleMerchPhoto(event)" style="display:none"/>
         <div style="padding:10px 14px;border-top:1px solid var(--bg);font-size:11px;color:var(--muted)">
-          Odklikni co bylo osazeno. Vyfotit před a po.
+          Označit ✓ vyžaduje fotku dané položky — bez fotky se osazení nezapíše.
         </div>
       </div>
     </div>
@@ -437,7 +438,7 @@
     <input type="file" id="photo-input" accept="image/*" capture="environment" onchange="handlePhoto(event)" style="display:none"/>
     <div style="padding:10px 12px;background:var(--tl);border-radius:10px;font-size:11px;color:var(--tm);line-height:1.5;margin:8px 0 4px;display:flex;gap:6px">
       <svg class="ic ic-sm" style="flex-shrink:0;margin-top:1px"><use href="#ic-bulb"/></svg>
-      <span>Foto <b>Příchod</b> a <b>Odchod</b> jsou povinné pro dokončení návštěvy. Do fotky se automaticky vloží tvoje jméno, číslo POS, čas a GPS poloha.</span>
+      <span>Foto <b>Příchod</b>, <b>Odchod</b>, <b>Pokladní zóna</b> a <b>Plánogram / finální výstava</b> jsou povinné pro dokončení návštěvy. Do fotky se automaticky vloží tvoje jméno, číslo POS, čas a GPS poloha.</span>
     </div>
 
     <!-- DETAIL TABS -->
