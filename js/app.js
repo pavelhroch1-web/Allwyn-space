@@ -1052,6 +1052,65 @@ function requiredPhotosOk(p){
   for(let i=0;i<PHOTO_REQUIRED_COUNT;i++){ if(!p.photos[i]) return false; }
   return true;
 }
+// Položky merch checklistu odklikané jako osazené (✓) musí mít foto-důkaz,
+// než lze návštěvu dokončit — ale ne hned při kliknutí (viz setMerch).
+function merchPhotosOk(){
+  return merchItems.every(x=>x.done!==true || !!x.photo);
+}
+function allPhotosOk(p){ return requiredPhotosOk(p) && merchPhotosOk(); }
+// Sesbírá všechno, co technik tvrdí že udělal, ale ještě to nedoložil fotkou —
+// použito jak pro disabled stav tlačítka Dokončit, tak pro showMissingPhotosPrompt.
+function getMissingPhotos(p){
+  const missing=[];
+  for(let i=0;i<PHOTO_REQUIRED_COUNT;i++){
+    if(!p.photos[i]) missing.push({label:PHOTO_LABELS[i],capture:()=>{pendingSlot=i;document.getElementById('photo-input').click();}});
+  }
+  merchItems.forEach((x,i)=>{
+    if(x.done===true&&!x.photo) missing.push({label:x.n,capture:()=>startMerchPhoto(i)});
+  });
+  return missing;
+}
+function showMissingPhotosPrompt(){
+  const p=posData[cWeek][cIdx];
+  const missing=getMissingPhotos(p);
+  const existing=document.getElementById('missing-photos-modal');
+  if(!missing.length){ if(existing) existing.remove(); return; }
+  const ov=existing||document.createElement('div');
+  if(!existing){
+    ov.id='missing-photos-modal';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(10,20,25,.55);z-index:910;display:flex;flex-direction:column;justify-content:flex-end';
+    document.body.appendChild(ov);
+  }
+  ov.innerHTML=`
+    <div style="background:#fff;border-radius:16px 16px 0 0;padding:18px;max-height:80vh;overflow:auto">
+      <div style="font-weight:800;font-size:15px;margin-bottom:4px">📷 Než ukončíš návštěvu</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Tyhle fotky ještě chybí — bez nich nejde návštěvu dokončit.</div>
+      <div id="missing-photos-list"></div>
+      <button class="btn-x" style="width:100%;margin-top:8px" onclick="document.getElementById('missing-photos-modal').remove()">Zavřít</button>
+    </div>`;
+  const list=ov.querySelector('#missing-photos-list');
+  missing.forEach(m=>{
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--bg)';
+    row.innerHTML=`<span style="font-size:13px;font-weight:600">${m.label}</span>`;
+    const btn=document.createElement('button');
+    btn.className='btn-ok';
+    btn.textContent='Vyfotit';
+    btn.onclick=m.capture;
+    row.appendChild(btn);
+    list.appendChild(row);
+  });
+}
+function refreshMissingPhotosPromptIfOpen(){
+  if(!document.getElementById('missing-photos-modal')) return;
+  const p=posData[cWeek][cIdx];
+  if(getMissingPhotos(p).length===0){
+    document.getElementById('missing-photos-modal').remove();
+    markVisited();
+  } else {
+    showMissingPhotosPrompt();
+  }
+}
 // Zeměpisná poloha v okamžiku focení — pokud zařízení/uživatel polohu
 // neposkytne, cb(null). Nikdy se nedomýšlí náhradní souřadnice (no fake data).
 function getGeoTag(cb){
@@ -1121,6 +1180,7 @@ function handlePhoto(e){
         if(slot===0&&!lsg('ci_'+p.id)) doCheckin();
         else if(slot===1){const ci=lsg('ci_'+p.id);if(ci&&!ci.out) doCheckout();}
         renderCheckin();
+        refreshMissingPhotosPromptIfOpen();
       });
     };
     r.readAsDataURL(file);
@@ -1185,7 +1245,9 @@ function renderMerch(p) {
     <div class="inv-item">
       <div class="inv-info">
         <div class="inv-n" style="${x.done?'text-decoration:line-through;color:var(--muted)':''}">${x.n}</div>
-        ${x.photo?`<img src="${x.photo}" class="merch-thumb" alt="Foto — ${x.n}" onclick="openMerchPhotoLightbox(${i})"/>`:''}
+        ${x.photo
+          ? `<img src="${x.photo}" class="merch-thumb" alt="Foto — ${x.n}" onclick="openMerchPhotoLightbox(${i})"/>`
+          : x.done===true ? `<button class="merch-photo-pending" onclick="startMerchPhoto(${i})">📷 Foto chybí — vyfotit</button>` : ''}
       </div>
       <div class="inv-btns">
         <button class="ibtn ibtn-ok ${x.done===true?'on':''}" aria-label="Osazeno — ${x.n}" onclick="setMerch(${i},true)">✓</button>
@@ -1194,30 +1256,30 @@ function renderMerch(p) {
     </div>`).join('') || '<div style="padding:16px;text-align:center;font-size:12px;color:var(--muted)">Žádné merch položky</div>';
 }
 
-// Osazení (✓) se nezapíše bez fotky položky — žádná volnost danou položku
-// jen odfajfkovat. Neosazeno (✕) foto nevyžaduje, technik tím nic neodvádí.
+// Odklikávání (✓/✕) je rychlé a nic nevynucuje hned — technik osadí celý
+// regál bez přerušování. Foto k položce ale musí existovat, než půjde
+// dokončit návštěvu (viz allPhotosOk/showMissingPhotosPrompt).
 function setMerch(i, done) {
   const p = posData[cWeek][cIdx];
   if (!merchItems[i]) return;
   if (done === true) {
-    if (merchItems[i].done === true) {
-      merchItems[i].done = null;
-      merchItems[i].photo = null;
-      lss('merch_' + p.id + '_' + today(), merchItems);
-      renderMerch(p);
-      return;
-    }
-    pendingMerchIndex = i;
-    document.getElementById('merch-photo-input').click();
-    return;
+    merchItems[i].done = merchItems[i].done === true ? null : true;
+    if (merchItems[i].done !== true) merchItems[i].photo = null;
+  } else {
+    merchItems[i].done = merchItems[i].done === false ? null : false;
+    merchItems[i].photo = null;
   }
-  merchItems[i].done = merchItems[i].done === false ? null : false;
-  merchItems[i].photo = null;
   lss('merch_' + p.id + '_' + today(), merchItems);
   if (typeof VisitStore !== 'undefined' && merchItems[i].done !== null) {
     VisitStore.setMaterial(p.id, p.n, p.a, null, merchItems[i].n, merchItems[i].done ? 1 : 0);
   }
   renderMerch(p);
+  renderCompleteBtn();
+}
+
+function startMerchPhoto(i) {
+  pendingMerchIndex = i;
+  document.getElementById('merch-photo-input').click();
 }
 
 function openMerchPhotoLightbox(i) {
@@ -1244,6 +1306,8 @@ function handleMerchPhoto(e) {
         pendingMerchIndex = null;
         e.target.value = '';
         renderMerch(p);
+        renderCompleteBtn();
+        refreshMissingPhotosPromptIfOpen();
       });
     };
     r.readAsDataURL(file);
@@ -1430,14 +1494,14 @@ function renderCompleteBtn(){
   const btn=document.getElementById('complete-btn');
   const badge=document.getElementById('vis-badge-slot2');
   const allDone=p.taskState.length>0&&p.taskState.every(t=>t.done);
-  const photosOk=requiredPhotosOk(p);
+  const photosOk=allPhotosOk(p);
   if(p.v){
     badge.innerHTML='<div class="vis-badge">✓ Návštěva dokončena</div>';
     btn.textContent='Znovu otevřít';btn.className='btn-complete visited';
   } else {
     badge.innerHTML='';
     if(allDone&&photosOk){btn.textContent='Označit jako navštíveno ✓';btn.className='btn-complete active';}
-    else if(!photosOk){btn.textContent='Chybí povinné foto (příchod/odchod/pokladna/plánogram)';btn.className='btn-complete disabled';}
+    else if(!photosOk){btn.textContent='Chybí povinné foto — doplnit';btn.className='btn-complete disabled';}
     else{const r=p.taskState.filter(t=>!t.done).length;btn.textContent=`Zbývá ${r} ${r===1?'úkol':r<5?'úkoly':'úkolů'}`;btn.className='btn-complete disabled';}
   }
 }
@@ -1458,7 +1522,8 @@ function markVisited(){
     }
     return;
   }
-  if(!p.taskState.every(t=>t.done)||!requiredPhotosOk(p))return;
+  if(!p.taskState.every(t=>t.done))return;
+  if(!allPhotosOk(p)){showMissingPhotosPrompt();return;}
   p.v=true;saveVisitState(p,cWeek);renderCompleteBtn();updateSummary();renderChips();renderDayTabs();
   if (typeof VisitStore !== 'undefined') {
     const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
@@ -3935,7 +4000,8 @@ markVisited = function() {
   const p = posData[cWeek][cIdx];
   if (!p) return;
   if (p.v) { _origMarkVisited2(); return; } // reopen path — žádný nový visit record
-  if (!p.taskState.every(t => t.done) || !requiredPhotosOk(p)) return;
+  if (!p.taskState.every(t => t.done)) return;
+  if (!allPhotosOk(p)) { showMissingPhotosPrompt(); return; }
   recordVisit(p.id, p.n, cWeek, cDay);
   _origMarkVisited2();
 };
