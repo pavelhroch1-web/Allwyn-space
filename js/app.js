@@ -237,6 +237,38 @@ function toggleProfileDetail(which){
     el.style.display = 'none';
   }
 }
+// Domácí výchozí bod — technik si ho jednou uloží z profilu, použije se
+// jako fallback výchozího bodu trasy, když dnes ještě nemáme GPS.
+function toggleHomeLocationDetail(which){
+  const el = document.getElementById('user-dd-'+which+'-home');
+  if (!el) return;
+  if (el.style.display === 'none'){
+    renderHomeLocationDetail(el);
+    el.style.display = 'block';
+  } else {
+    el.style.display = 'none';
+  }
+}
+function renderHomeLocationDetail(el){
+  const home = getTechnicianHome();
+  el.innerHTML = `
+    <div style="margin-bottom:6px">${home ? `Uloženo: ${home.lat.toFixed(3)}, ${home.lng.toFixed(3)}` : 'Zatím nenastaveno — použije se jen reálná GPS pozice.'}</div>
+    <button class="user-dd-item" style="background:var(--navy);color:var(--teal);border-radius:8px" onclick="captureTechnicianHome()">Uložit aktuální pozici jako domácí bod</button>
+  `;
+}
+function captureTechnicianHome(){
+  const el = document.getElementById('user-dd-tech-home');
+  if (!navigator.geolocation){
+    if (el) el.innerHTML = '<div>GPS nedostupná v tomto prohlížeči.</div>';
+    return;
+  }
+  if (el) el.innerHTML = '<div>Zjišťuji polohu…</div>';
+  navigator.geolocation.getCurrentPosition(
+    pos => { setTechnicianHome(pos.coords.latitude, pos.coords.longitude); if (el) renderHomeLocationDetail(el); },
+    () => { if (el) el.innerHTML = '<div>Poloha zamítnuta nebo nedostupná.</div>'; },
+    { enableHighAccuracy: true, timeout: 8000 }
+  );
+}
 document.addEventListener('click', (e)=>{
   if (!e.target.closest('.user-chip')) closeAllUserMenus();
   if (!e.target.closest('#global-pos-search') && !e.target.closest('#global-pos-search-results')) {
@@ -280,6 +312,7 @@ function enterRole(role,opts){
     document.getElementById('technik-screen').classList.add('active');
     document.getElementById('admin-screen').classList.remove('active');
     updateHdrLabel();renderChips();renderDayTabs();renderList();
+    silentCaptureStartLocationOnce();
     if(!opts.skipBriefing) setTimeout(showBriefing,500);
   } else {
     document.getElementById('technik-screen').classList.remove('active');
@@ -521,7 +554,7 @@ function showUnplanned(){
 // technik výslovně neklikne "Vzít návrh" — vždy je vidět i tlačítko pro
 // vlastní plánování (CLAUDE.md pravidlo 6: technik si plán dělá sám).
 function buildDayProposalCard(unpl){
-  const startLoc=getStartLocation();
+  const startLoc=getEffectiveStartLocation();
   const proposal=RouteEngine.proposeDayPlan(unpl, startLoc, {budgetMin:480, dayIdx:cDay, todayStr:today()});
   const el=document.createElement('div');
   el.style.cssText='margin:12px;padding:14px;background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:12px';
@@ -530,7 +563,7 @@ function buildDayProposalCard(unpl){
     return el;
   }
   const srcLabel = startLoc
-    ? `podle ${isStartLocationFresh()?'tvé dnešní':'tvé poslední uložené'} pozice`
+    ? `podle ${startLocationSourceLabel() === 'Domácí výchozí bod' ? 'tvého domácího bodu' : startLocationSource()==='gps-fresh' ? 'tvé dnešní pozice' : 'tvé poslední uložené pozice'}`
     : 'bez znalosti tvé pozice — jen podle priority, ne vzdálenosti';
   el.innerHTML=`
     <div style="font-size:11px;font-weight:700;color:var(--navy);letter-spacing:.03em;margin-bottom:6px">NÁVRH DNE</div>
@@ -3714,7 +3747,7 @@ function remainingRouteStartPoint(visited, fallback){
 function buildRouteSummaryCard(dayPos, week, day){
   const { visited, unvisited } = splitVisitedRoute(dayPos);
   if (unvisited.length < 2) return null;
-  const startLoc = remainingRouteStartPoint(visited, getStartLocation());
+  const startLoc = remainingRouteStartPoint(visited, getEffectiveStartLocation());
   const cmp = RouteEngine.compareRoutes(unvisited, startLoc, getStartTime(), day, today());
   const hasStoredOrder = !!getStoredRouteOrder(week, day);
   const fewerViolations = cmp.optimizedViolations != null && cmp.optimizedViolations < cmp.currentViolations;
@@ -3777,6 +3810,58 @@ function isStartLocationFresh(){
   return !!(loc && loc.date === today());
 }
 
+// Domácí výchozí bod — manuálně uložená pozice (technik si ji sám jednou
+// nastaví v profilu), použije se jako fallback, když dnes ještě nemáme GPS
+// (zamítnuto/timeout/offline). Na rozdíl od start_location se nepřepisuje
+// při každém check-inu, jen když to technik výslovně uloží znovu.
+function technicianHomeKey(){
+  const s = getSession();
+  return 'technician_home_' + ((s && s.user && s.user.id) || 'default');
+}
+function getTechnicianHome(){ return lsg(technicianHomeKey()); }
+function setTechnicianHome(lat, lng){
+  const loc = { lat, lng, ts: Date.now() };
+  lss(technicianHomeKey(), loc);
+  return loc;
+}
+
+// Reálný výchozí bod pro výpočty trasy: GPS (dnešní nebo poslední uložená)
+// má vždy přednost před domácím bodem, protože je aktuálnější. Domácí bod
+// je jen záloha, ne náhrada GPS.
+function getEffectiveStartLocation(){
+  return getStartLocation() || getTechnicianHome();
+}
+// Popisek zdroje pro UI — ať technik i Velín vidí, odkud číslo pochází
+// (žádné tiché nahrazení bez vysvětlení).
+function startLocationSource(){
+  if (getStartLocation()) return isStartLocationFresh() ? 'gps-fresh' : 'gps-stale';
+  if (getTechnicianHome()) return 'home';
+  return 'none';
+}
+function startLocationSourceLabel(){
+  switch (startLocationSource()){
+    case 'gps-fresh': return 'Dnešní pozice (GPS)';
+    case 'gps-stale': return 'Uložená pozice';
+    case 'home': return 'Domácí výchozí bod';
+    default: return null;
+  }
+}
+// Tichý pokus o GPS jednou denně při vstupu do appky — bez tlačítka, bez
+// loading badge. Pokud technik zamítl oprávnění, prohlížeč se znovu nezeptá,
+// takže tohle nikoho neobtěžuje opakovaně. Manuální tlačítko v Trase zůstává
+// jako záloha (např. když se mezi prvním vstupem a odjezdem přesunul).
+function silentCaptureStartLocationOnce(){
+  if (!navigator.geolocation || isStartLocationFresh()) return;
+  const key = 'silent_gps_attempt_' + today();
+  if (lsg(key)) return;
+  lss(key, true);
+  navigator.geolocation.getCurrentPosition(
+    pos => setStartLocation(pos.coords.latitude, pos.coords.longitude, 'gps-auto'),
+    () => {},
+    { enableHighAccuracy: true, timeout: 8000 }
+  );
+}
+
 // Čas odjezdu — potřebný pro spočítání reálného příjezdu na zastávky a
 // porovnání s otevírací dobou POS. Technik si ho může upravit, default 08:00.
 function startTimeKey(){
@@ -3823,7 +3908,7 @@ function useRecommendedRoute(week, day){
   const all = posData[week] || [];
   const dayPos = applyStoredRouteOrder(all.filter(p => p.d === day), week, day);
   const { visited, unvisited } = splitVisitedRoute(dayPos);
-  const startLoc = remainingRouteStartPoint(visited, getStartLocation());
+  const startLoc = remainingRouteStartPoint(visited, getEffectiveStartLocation());
   const cmp = RouteEngine.compareRoutes(unvisited, startLoc, getStartTime(), day, today());
   setStoredRouteOrder(week, day, [...visited.map(p => p.id), ...cmp.optimizedOrderIds]);
   recordRouteDecision(week, day, 'accepted');
@@ -3885,7 +3970,7 @@ function showRouteView(week, day){
   wrap.innerHTML = '';
   const all = posData[week] || [];
   const dayPos = applyStoredRouteOrder(all.filter(p => p.d === day), week, day);
-  const startLoc = getStartLocation();
+  const startLoc = getEffectiveStartLocation();
   const meta = WEEKS_META[week];
 
   const back = document.createElement('div');
@@ -3906,7 +3991,7 @@ function showRouteView(week, day){
   startCard.innerHTML = `
     <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:6px">Odkud a kdy dnes vyjíždíš?</div>
     <div id="route-start-status" style="margin-bottom:8px">${startLoc
-      ? `<span class="gps-badge gps-ok">✓ ${isStartLocationFresh() ? 'Dnešní pozice' : 'Uložená pozice'} · ${startLoc.lat.toFixed(3)}, ${startLoc.lng.toFixed(3)}</span>`
+      ? `<span class="gps-badge gps-ok">✓ ${startLocationSourceLabel()} · ${startLoc.lat.toFixed(3)}, ${startLoc.lng.toFixed(3)}</span>`
       : '<span class="gps-badge gps-warn"><svg class="ic ic-sm"><use href="#ic-warning"/></svg> Pozice nezjištěna</span>'}</div>
     <button onclick="captureStartLocation(()=>showRouteView('${week}',${day}))" style="width:100%;padding:9px;background:var(--navy);color:var(--teal);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:8px">Zjistit moji pozici</button>
     <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Čas odjezdu</label>
@@ -4085,7 +4170,7 @@ function showRouteView(week, day){
 function buildMorningBriefCard(todayPos, week, day){
   const s = getSession();
   const firstName = ((s && s.user && s.user.name) || '').trim().split(/\s+/).pop() || '';
-  const startLoc = getStartLocation();
+  const startLoc = getEffectiveStartLocation();
   const { visited, unvisited } = splitVisitedRoute(todayPos);
   const fullCalc = RouteEngine.calculateRoute(todayPos, startLoc);
   const totalMin = fullCalc.totalMin;
