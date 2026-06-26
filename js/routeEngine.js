@@ -237,6 +237,34 @@
     return { budgetMin: budget, totalMin, overMin, overBudget: overMin > 0 };
   }
 
+  // ── DOPORUČENÍ: vynechat nízkoprioritní POS při přetížení ───────────────
+  // Při přetížení dne (checkCapacity().overBudget) navrhne, které POS by šlo
+  // přesunout na jiný den — NIKDY je sám nepřesune, jen doporučí (Velín i
+  // technik vidí stejné doporučení a rozhodují sami).
+  //
+  // Pravidlo: nikdy nedoporučí POS s aktivním servisem/vysokou prioritou/
+  // blížícím se termínem (getSlaWeight > 0) — to jsou pravidla z CLAUDE.md
+  // (priorita servis > template > on_top > own), kapacita je nikdy nepřebije.
+  // Mezi zbylými (weight === 0) kandidáty navrhne nejdřív ty s nejdelší
+  // odhadovanou návštěvou — uvolní nejvíc času na nejméně přesunů.
+  function recommendCapacitySkips(posList, startPoint, elapsedMin, budgetMin, todayStr){
+    const calc = calculateRoute(posList, startPoint);
+    const cap = checkCapacity({ totalMin: (elapsedMin || 0) + calc.totalMin }, budgetMin);
+    if (!cap.overBudget) return [];
+    const candidates = posList
+      .filter(p => getSlaWeight(p, todayStr) === 0)
+      .map(p => ({ posId: p.id, posName: p.n, durationMin: getVisitDurationMin(p) }))
+      .sort((a, b) => b.durationMin - a.durationMin);
+    const result = [];
+    let remainingOverMin = cap.overMin;
+    for (const c of candidates){
+      if (remainingOverMin <= 0) break;
+      result.push(c);
+      remainingOverMin -= c.durationMin;
+    }
+    return result;
+  }
+
   // ── OPTIMIZATION: nearest neighbor ──────────────────────────────────────
   // startPos: výchozí bod (např. první POS dne nebo poloha technika). Pokud
   // je startPos zároveň prvkem posList (stará fleet analytika bez reálného
@@ -514,6 +542,7 @@
     getOpeningHours,
     checkOpeningHours,
     checkCapacity,
+    recommendCapacitySkips,
     WORKDAY_BUDGET_MIN,
     formatClock,
     parseHM,

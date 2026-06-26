@@ -4074,14 +4074,24 @@ function showRouteView(week, day){
 
     // Kapacita dne — porovnání odhadovaného celkového času (jízda + práce,
     // včetně už uplynulého času na hotových POS) s rozpočtem pracovní doby.
-    // Jen upozornění, nikdy automatické vynechání POS (to je budoucí krok 4).
+    // Jen upozornění + doporučení, nikdy automatické vynechání POS — technik
+    // i Velín vidí stejné doporučení a o přesunu rozhoduje technik sám.
     const capCheck = RouteEngine.checkCapacity({ totalMin: elapsedMin + baseCalc.totalMin });
     if (capCheck.overBudget) {
+      const skipSuggestions = RouteEngine.recommendCapacitySkips(unvisited, effectiveStart, elapsedMin, undefined, today());
       const capCard = document.createElement('div');
       capCard.style.cssText = 'margin:0 12px 10px;padding:14px;background:#fff7e6;border:1.5px solid #f5c542;border-radius:12px';
       capCard.innerHTML = `
         <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:6px"><svg class="ic ic-sm" style="color:#b8860b"><use href="#ic-warning"/></svg> Kapacita dne</div>
-        <div style="font-size:12px;color:var(--td)">Odhad ${RouteEngine.formatHM(capCheck.totalMin)} přesahuje pracovní dobu (${RouteEngine.formatHM(capCheck.budgetMin)}) o ${RouteEngine.formatHM(capCheck.overMin)}. Zvaž přesun méně urgentní POS na jiný den.</div>
+        <div style="font-size:12px;color:var(--td);margin-bottom:${skipSuggestions.length ? '8px' : '0'}">Odhad ${RouteEngine.formatHM(capCheck.totalMin)} přesahuje pracovní dobu (${RouteEngine.formatHM(capCheck.budgetMin)}) o ${RouteEngine.formatHM(capCheck.overMin)}.</div>
+        ${skipSuggestions.length ? `
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Bez vysoké priority/termínu — zvaž přesun na jiný den:</div>
+        ${skipSuggestions.map(s => `
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px">
+            <div style="font-size:12px;color:var(--td)">#${s.posId} ${s.posName} <span style="color:var(--muted)">(${RouteEngine.formatHM(s.durationMin)})</span></div>
+            <button onclick="openAssign('${s.posId}')" style="background:none;color:var(--teal);border:1.5px solid var(--teal);border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0">Naplánovat jinam</button>
+          </div>
+        `).join('')}` : `<div style="font-size:11px;color:var(--muted)">Žádné nízkoprioritní POS k přesunu — všechny zbývající mají servis/termín.</div>`}
       `;
       wrap.appendChild(capCard);
     }
