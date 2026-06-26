@@ -727,10 +727,19 @@ function doCheckin(){
   }
   renderCheckin();
 }
+// Anti-fraud: check-out dřív než MIN_VISIT_MIN minut po check-inu se
+// neprovede — bránilo by to okamžitému "odfajfkování" bez reálné práce.
+const MIN_VISIT_MIN = 2;
 function doCheckout(){
   const p=posData[cWeek][cIdx];
   const ci=lsg('ci_'+p.id);if(!ci)return;
   const now=new Date();
+  const elapsedMin=(now.getTime()-ci.inTs)/60000;
+  if(elapsedMin<MIN_VISIT_MIN){
+    const el=document.getElementById('ci-s');
+    if(el) el.textContent=`Check-out zablokován — na místě musíš být alespoň ${MIN_VISIT_MIN} minuty (zatím ${Math.max(0,Math.round(elapsedMin*10)/10)} min)`;
+    return;
+  }
   const timeStr=now.toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'});
   const dur=Math.round((now.getTime()-ci.inTs)/60000);
   lss('ci_'+p.id,{...ci,out:true,outTime:timeStr,outTs:now.getTime(),dur});
@@ -1952,7 +1961,7 @@ function renderAdminDashboard() {
   // Attention feed — servisy, GPS flagy, krátké návštěvy, technici pozadu
   const attnItems = [];
   live.servisOpen.forEach(p => attnItems.push({ icon: 'ic-wrench', sev: 'red', text: `Servis čeká: <strong>${p.n}</strong>` }));
-  gpsCritical.forEach(f => attnItems.push({ icon: 'ic-pin', sev: 'red', text: `GPS anomálie: <strong>${f.posName}</strong> · ${f.dist != null ? f.dist.toFixed(1) + 'km' : ''} od POS` }));
+  gpsCritical.forEach(f => attnItems.push({ icon: 'ic-pin', sev: 'red', text: f.blocked ? `Check-in zablokován (GPS): <strong>${f.posName}</strong> · ${f.dist != null ? f.dist.toFixed(1) + 'km' : ''} od POS — pokus o check-in mimo lokaci` : `GPS anomálie: <strong>${f.posName}</strong> · ${f.dist != null ? f.dist.toFixed(1) + 'km' : ''} od POS` }));
   gpsWarnings.forEach(f => attnItems.push({ icon: 'ic-pin', sev: 'orange', text: `GPS odchylka (varování): <strong>${f.posName}</strong> · ${f.dist != null ? Math.round(f.dist * 1000) + 'm' : ''} od POS` }));
   shortVisits.forEach(v => attnItems.push({ icon: 'ic-clock', sev: 'orange', text: `Krátká návštěva: <strong>${v.posName}</strong> · ${v.dur} min` }));
   behind.forEach(t => attnItems.push({ icon: 'ic-warning', sev: 'orange', text: `<strong>${t.name}</strong> je pozadu — ${t.done}/${t.total} POS` }));
@@ -3144,7 +3153,17 @@ doCheckin = function() {
   verifyGPS(posLat, posLng, (lat, lng, dist) => {
     const now = new Date();
     const timeStr = now.toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'});
-    const gpsFlag = dist !== null && dist > 1;
+    // Anti-fraud tvrdý blok: >1km od POS = check-in se nezapíše. Pokus se ale
+    // zaloguje a uvidí ho Velín jako blokovaný pokus — ne jen tichá flag.
+    if (dist !== null && dist > 1) {
+      const flags = lsg('gps_flags_' + today(), []);
+      flags.push({posId: p.id, posName: p.n, time: timeStr, dist: dist, lat, lng, severity: 'critical', blocked: true, action: 'checkin'});
+      lss('gps_flags_' + today(), flags);
+      const el = document.getElementById('gps-status');
+      if (el) el.innerHTML = `<span class="gps-badge gps-err"><svg class="ic ic-sm"><use href="#ic-flag"/></svg> ${dist.toFixed(1)}km od POS — check-in zablokován, musíš být na místě</span>`;
+      return;
+    }
+    const gpsFlag = dist !== null && dist >= 0.3;
     lss('ci_' + p.id, {
       inTs: now.getTime(), inTime: timeStr, out: false,
       gpsLat: lat, gpsLng: lng, gpsDist: dist,
@@ -3153,12 +3172,11 @@ doCheckin = function() {
     if (!lsg('daystart_' + today())) {
       lss('daystart_' + today(), {ts: now.getTime(), time: timeStr, posId: p.id, posName: p.n});
     }
-    // Log GPS flag for admin — >1km je kritická anomálie, 300m-1km jen
-    // varování (vidí ho i technik v UI), ale i to musí být vidět ve velínu,
-    // ať admin nemá falešný pocit krytí v celém pásmu pod 1km.
-    if (dist !== null && dist >= 0.3) {
+    // Log GPS flag for admin — 300m-1km je varování (vidí ho i technik v UI),
+    // ale i to musí být vidět ve velínu, ať admin nemá falešný pocit krytí.
+    if (gpsFlag) {
       const flags = lsg('gps_flags_' + today(), []);
-      flags.push({posId: p.id, posName: p.n, time: timeStr, dist: dist, lat, lng, severity: dist > 1 ? 'critical' : 'warning'});
+      flags.push({posId: p.id, posName: p.n, time: timeStr, dist: dist, lat, lng, severity: 'warning'});
       lss('gps_flags_' + today(), flags);
     }
     renderCheckin();
