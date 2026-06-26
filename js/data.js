@@ -139,6 +139,89 @@ const MERCH_ITEMS = {
     {n:'Odstranění starých materiálů — veškerá Sazka visibilita',done:null},
   ],
 };
+// Servisní dotazník — datově řízený strom polí (žádná logika tu není,
+// jen popis formuláře; renderer chodí podle type/children v app.js).
+// Typy uzlů:
+//   select  — výběr jedné položky z options (každá option může mít children)
+//   radio   — malá skupina přepínačů (Oprava/Výměna apod.), options s children
+//   toggle  — ano/ne přepínač, při zapnutí zobrazí children
+//   text    — volný text
+//   barcode — dvojice čísel (původní/nové) — ruční zadání, bez skenování
+function igtDeviceNode(id, label) {
+  return {
+    id, label, type:'toggle',
+    children: [
+      {
+        id:id+'_akce', label:'Co se provedlo', type:'radio',
+        options: [
+          {value:'oprava', label:'Oprava na místě'},
+          {
+            value:'vymena', label:'Výměna kusu',
+            children: [
+              {id:id+'_serial', label:'Sériové číslo', type:'barcode',
+                fields:[{key:'puvodni', label:'Původní číslo'},{key:'nove', label:'Nové číslo'}]},
+            ],
+          },
+        ],
+      },
+      {id:id+'_pozn', label:'Poznámka k zásahu', type:'text'},
+    ],
+  };
+}
+const SERVIS_FORM_SCHEMA = {
+  id:'kategorie', label:'Typ servisu', type:'select',
+  options: [
+    {
+      value:'igt', label:'IGT zařízení',
+      children: [
+        igtDeviceNode('igt_terminal', 'Terminál'),
+        igtDeviceNode('igt_tiskarna', 'Tiskárna'),
+        igtDeviceNode('igt_modem', 'Modem'),
+        igtDeviceNode('igt_kabel', 'Kabel'),
+        igtDeviceNode('igt_cdu', 'CDU'),
+        igtDeviceNode('igt_vcu', 'VCU'),
+        igtDeviceNode('igt_ds', 'DS'),
+        igtDeviceNode('igt_tv', 'TV'),
+        igtDeviceNode('igt_iso', 'ISO'),
+        igtDeviceNode('igt_eso', 'ESO'),
+        igtDeviceNode('igt_ctecka', 'Čtečka losů'),
+      ],
+    },
+    {
+      // MVP stub — Pavlovy screenshoty popisovaly hlavně IGT větev do
+      // hloubky; tyto 3 kategorie mají zatím jen základní pole, dokud
+      // nebude jasné jejich přesné kroky. Rozšíření = přidat data zde,
+      // ne měnit renderer.
+      value:'maly_terminal', label:'Malý terminál',
+      children: [
+        {id:'mt_akce', label:'Co se provedlo', type:'radio',
+          options:[{value:'oprava',label:'Oprava na místě'},{value:'vymena',label:'Výměna kusu',
+            children:[{id:'mt_serial', label:'Sériové číslo', type:'barcode',
+              fields:[{key:'puvodni', label:'Původní číslo'},{key:'nove', label:'Nové číslo'}]}]}]},
+        {id:'mt_pozn', label:'Poznámka k zásahu', type:'text'},
+      ],
+    },
+    {
+      value:'balikovna', label:'Balíkovna tiskárna — oprava',
+      children: [
+        {id:'bt_akce', label:'Co se provedlo', type:'radio',
+          options:[{value:'oprava',label:'Oprava na místě'},{value:'vymena',label:'Výměna kusu',
+            children:[{id:'bt_serial', label:'Sériové číslo', type:'barcode',
+              fields:[{key:'puvodni', label:'Původní číslo'},{key:'nove', label:'Nové číslo'}]}]}]},
+        {id:'bt_pozn', label:'Poznámka k zásahu', type:'text'},
+      ],
+    },
+    {
+      value:'demontaz', label:'Demontáž zařízení',
+      children: [
+        {id:'dm_zarizeni', label:'Jaké zařízení se demontovalo', type:'text'},
+        {id:'dm_serial', label:'Sériové číslo demontovaného kusu', type:'barcode',
+          fields:[{key:'puvodni', label:'Původní číslo'}]},
+        {id:'dm_pozn', label:'Poznámka k zásahu', type:'text'},
+      ],
+    },
+  ],
+};
 const SUPPLY_DEFAULT = [
   {n:'Kotouče papíru do terminálu',qty:0,sap:'SAP-MOCK-001',unit:'role'},
   {n:'Samolepky na terminál — Allwyn',qty:0,sap:'SAP-MOCK-002',unit:'ks'},

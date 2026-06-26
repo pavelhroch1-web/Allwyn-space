@@ -652,6 +652,8 @@ function openDetail(ri){
   renderRefs();
   renderMerch(p);
   renderSupply(p);
+  document.getElementById('merch-section').style.display=p.servisOnly?'none':'';
+  document.getElementById('supply-section').style.display=p.servisOnly?'none':'';
   renderTasks();
   renderCampaignChecklist();
   renderPhotos();
@@ -955,7 +957,8 @@ function renderTasks(){
     tasks.forEach(task=>{
       const ti=p.taskState.indexOf(task);
       const item=document.createElement('div');item.className='titem';
-      item.innerHTML=`<div class="trow" onclick="toggleTask(${ti})"><div class="tchk ${task.done?'on':''}"></div><div class="ttxt ${task.done?'done':''}">${task.text}</div></div>${task.note?`<div class="tnote">${task.note}</div>`:''}`;
+      const onclick=src==='servis'?`openServisModal(${ti})`:`toggleTask(${ti})`;
+      item.innerHTML=`<div class="trow" onclick="${onclick}"><div class="tchk ${task.done?'on':''}"></div><div class="ttxt ${task.done?'done':''}">${task.text}</div></div>${task.note?`<div class="tnote">${task.note}</div>`:''}`;
       list.appendChild(item);
     });
   });
@@ -1027,7 +1030,7 @@ function renderPhotos(){
   for(let i=PHOTO_GRID_START;i<slots;i++){
     const slot=document.createElement('div');
     const lbl=PHOTO_LABELS[i]||'Foto '+(i+1);
-    const required=i<PHOTO_REQUIRED_COUNT;
+    const required=i<requiredPhotoCount(p);
     if(p.photos[i]){
       slot.className='pslot filled';
       slot.innerHTML=`<img src="${p.photos[i]}" alt="Foto ${lbl}"/><button class="p-rm" aria-label="Smazat foto ${lbl}" onclick="rmPhoto(event,${i})">✕</button>`;
@@ -1048,8 +1051,11 @@ function renderPhotos(){
   addBtn.onclick=()=>{pendingSlot=null;document.getElementById('photo-input').click();};
   grid.appendChild(addBtn);
 }
+// Servisní návštěva bez merch kola nepotřebuje fotky pokladní zóny/plánogramu —
+// jen důkaz příchodu/odchodu (slot 0/1), zbytek se týká merch osazení.
+function requiredPhotoCount(p){ return p.servisOnly ? 2 : PHOTO_REQUIRED_COUNT; }
 function requiredPhotosOk(p){
-  for(let i=0;i<PHOTO_REQUIRED_COUNT;i++){ if(!p.photos[i]) return false; }
+  for(let i=0;i<requiredPhotoCount(p);i++){ if(!p.photos[i]) return false; }
   return true;
 }
 // Položky merch checklistu odklikané jako osazené (✓) musí mít foto-důkaz,
@@ -1062,10 +1068,10 @@ function allPhotosOk(p){ return requiredPhotosOk(p) && merchPhotosOk(); }
 // použito jak pro disabled stav tlačítka Dokončit, tak pro showMissingPhotosPrompt.
 function getMissingPhotos(p){
   const missing=[];
-  for(let i=0;i<PHOTO_REQUIRED_COUNT;i++){
+  for(let i=0;i<requiredPhotoCount(p);i++){
     if(!p.photos[i]) missing.push({label:PHOTO_LABELS[i],capture:()=>{pendingSlot=i;document.getElementById('photo-input').click();}});
   }
-  merchItems.forEach((x,i)=>{
+  if(!p.servisOnly) merchItems.forEach((x,i)=>{
     if(x.done===true&&!x.photo) missing.push({label:x.n,capture:()=>startMerchPhoto(i)});
   });
   return missing;
@@ -1110,6 +1116,109 @@ function refreshMissingPhotosPromptIfOpen(){
   } else {
     showMissingPhotosPrompt();
   }
+}
+// ══════════════════════════════════════════════════════
+// SERVISNÍ DOTAZNÍK — datově řízený formulář (SERVIS_FORM_SCHEMA v data.js).
+// Klik na servisní úkol otevře tenhle modal místo prostého odškrtnutí —
+// technik popíše, co se na zařízení dělalo, než se úkol uzavře.
+// ══════════════════════════════════════════════════════
+let servisModal={ti:null,answers:{}};
+function servisAnswersKey(posId){return 'servis_'+posId;}
+function getServisAnswers(posId){return lsg(servisAnswersKey(posId),{});}
+function saveServisAnswers(posId,answers){lss(servisAnswersKey(posId),answers);}
+function openServisModal(ti){
+  const p=posData[cWeek][cIdx];
+  if(p.v) return;
+  servisModal={ti,answers:getServisAnswers(p.id)};
+  let ov=document.getElementById('servis-modal');
+  if(!ov){
+    ov=document.createElement('div');
+    ov.id='servis-modal';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(10,20,25,.55);z-index:920;display:flex;flex-direction:column;justify-content:flex-end';
+    document.body.appendChild(ov);
+  }
+  renderServisModal();
+}
+function closeServisModal(){
+  const ov=document.getElementById('servis-modal');
+  if(ov) ov.remove();
+}
+function renderServisModal(){
+  const ov=document.getElementById('servis-modal');
+  if(!ov) return;
+  ov.innerHTML=`
+    <div style="background:#fff;border-radius:16px 16px 0 0;padding:18px;max-height:88vh;overflow:auto">
+      <div style="font-weight:800;font-size:15px;margin-bottom:4px"><svg class="ic ic-sm"><use href="#ic-wrench"/></svg> Servisní dotazník</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Vyber, co se na místě řešilo. Uloží se k téhle návštěvě.</div>
+      <div id="servis-modal-body"></div>
+      <div class="add-acts" style="margin-top:14px">
+        <button class="btn-x" onclick="closeServisModal()">Zrušit</button>
+        <button class="btn-ok" onclick="confirmServisModal()">Potvrdit</button>
+      </div>
+    </div>`;
+  ov.querySelector('#servis-modal-body').innerHTML=renderServisNode(SERVIS_FORM_SCHEMA);
+}
+function setServisAnswer(id,value){
+  servisModal.answers[id]=value;
+  renderServisModal();
+}
+function setServisTextSilent(id,value){ servisModal.answers[id]=value; }
+function setServisBarcodeFieldSilent(id,key,value){
+  const cur=servisModal.answers[id]||{};
+  cur[key]=value;
+  servisModal.answers[id]=cur;
+}
+function renderServisNode(node){
+  if(!node) return '';
+  let html='';
+  if(node.type==='select'){
+    html+=`<div class="ef-label">${node.label}</div><select class="ef-select" onchange="setServisAnswer('${node.id}',this.value)"><option value="">— vyber —</option>`;
+    node.options.forEach(o=>{
+      html+=`<option value="${o.value}" ${servisModal.answers[node.id]===o.value?'selected':''}>${o.label}</option>`;
+    });
+    html+=`</select>`;
+    const chosen=node.options.find(o=>o.value===servisModal.answers[node.id]);
+    if(chosen&&chosen.children){
+      html+=`<div style="margin-left:10px;border-left:2px solid var(--bg);padding-left:10px;margin-top:8px">${chosen.children.map(renderServisNode).join('')}</div>`;
+    }
+  } else if(node.type==='radio'){
+    html+=`<div class="ef-label">${node.label}</div><div class="ef-chips">`;
+    node.options.forEach(o=>{
+      html+=`<div class="ef-chip ${servisModal.answers[node.id]===o.value?'on':''}" onclick="setServisAnswer('${node.id}','${o.value}')">${o.label}</div>`;
+    });
+    html+=`</div>`;
+    const chosen=node.options.find(o=>o.value===servisModal.answers[node.id]);
+    if(chosen&&chosen.children){
+      html+=`<div style="margin-left:10px;border-left:2px solid var(--bg);padding-left:10px;margin-top:8px">${chosen.children.map(renderServisNode).join('')}</div>`;
+    }
+  } else if(node.type==='toggle'){
+    const on=!!servisModal.answers[node.id];
+    html+=`<div class="trow" onclick="setServisAnswer('${node.id}',${!on})" style="cursor:pointer"><div class="tchk ${on?'on':''}"></div><div class="ttxt">${node.label}</div></div>`;
+    if(on&&node.children){
+      html+=`<div style="margin-left:24px;border-left:2px solid var(--bg);padding-left:10px;margin:6px 0 10px">${node.children.map(renderServisNode).join('')}</div>`;
+    }
+  } else if(node.type==='text'){
+    const val=servisModal.answers[node.id]||'';
+    html+=`<div class="ef-label">${node.label}</div><textarea class="ef-textarea" oninput="setServisTextSilent('${node.id}',this.value)">${val}</textarea>`;
+  } else if(node.type==='barcode'){
+    html+=`<div class="ef-label">${node.label}</div>`;
+    (node.fields||[]).forEach(f=>{
+      const val=(servisModal.answers[node.id]||{})[f.key]||'';
+      html+=`<input class="ef-input" type="text" placeholder="${f.label}" value="${val}" oninput="setServisBarcodeFieldSilent('${node.id}','${f.key}',this.value)" style="margin-bottom:6px"/>`;
+    });
+  }
+  return `<div class="servis-node" style="margin-bottom:12px">${html}</div>`;
+}
+function confirmServisModal(){
+  const p=posData[cWeek][cIdx];
+  saveServisAnswers(p.id,servisModal.answers);
+  if(servisModal.ti!=null&&p.taskState[servisModal.ti]){
+    p.taskState[servisModal.ti].done=true;
+    saveVisitState(p,cWeek);
+  }
+  closeServisModal();
+  renderTasks();
+  renderCompleteBtn();
 }
 // Zeměpisná poloha v okamžiku focení — pokud zařízení/uživatel polohu
 // neposkytne, cb(null). Nikdy se nedomýšlí náhradní souřadnice (no fake data).
@@ -2602,13 +2711,14 @@ function injectAdminTasksIntoPosData() {
         if (exists) return;
         p.taskState.push({
           text: task.text,
-          src: 'on_top',
+          src: task.priority === 'servis' ? 'servis' : 'on_top',
           done: false,
           adminTaskId: task.id,
           note: task.deadline ? `Deadline: ${task.deadline}` : undefined,
           priority: task.priority,
           deadline: task.deadline || undefined,
         });
+        if (task.priority === 'servis' && task.servisOnly) p.servisOnly = true;
       });
     });
   });
@@ -2705,6 +2815,13 @@ function renderEditModalBody(mode) {
     <div class="ef-chip" onclick="setPriority('normal',this)"><span class="pdot dot-yellow" style="display:inline-block;margin-right:3px"></span>Standardní</div>
   </div>
 
+  <div id="ef-servisonly-wrap" style="display:none;margin-top:10px">
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer">
+      <input type="checkbox" id="ef-servisonly" />
+      Jen servis — bez merch a povinných fotek osazení
+    </label>
+  </div>
+
   <div class="ef-row" style="margin-top:14px">
     <div>
       <label class="ef-label" style="margin-top:0">Deadline</label>
@@ -2762,6 +2879,11 @@ function setPriority(p, btn) {
   editPriority = p;
   document.querySelectorAll('#ef-priority .ef-chip').forEach(c => c.classList.remove('on'));
   btn.classList.add('on');
+  const wrap = document.getElementById('ef-servisonly-wrap');
+  if (wrap) {
+    wrap.style.display = p === 'servis' ? 'block' : 'none';
+    if (p !== 'servis') { const cb = document.getElementById('ef-servisonly'); if (cb) cb.checked = false; }
+  }
 }
 function updatePosCount() {
   const el = document.getElementById('ef-pos-count'); if (!el) return;
@@ -2815,6 +2937,7 @@ function saveEditTask() {
     region: editRegionFilter,
     technikName: editModalMode === 'technik' ? document.getElementById('ef-technik')?.value : null,
     posId: editModalMode === 'pos' ? editPosSel : null,
+    servisOnly: editPriority === 'servis' && !!document.getElementById('ef-servisonly')?.checked,
   };
   if (editModalMode === 'pos' && !editPosSel) { alert('Vyber konkrétní POS.'); return; }
   saveAdminTask(task);
