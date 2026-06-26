@@ -610,7 +610,8 @@ function makePosCard(p,ri,showAssign){
   let tags=p.v?`<span class="tag t-done">✓ Hotovo</span>`:`<span class="tag t-task">${done}/${p.taskState.length}</span>`;
   tags+=priChip(p)+typTag(p);
   const card=document.createElement('div');card.className='pos-card';
-  const right=showAssign?`<button class="asgn-btn" onclick="event.stopPropagation();openAssign('${p.id}')">+ Den</button>`:'';
+  // navigace je nejčastější akce technika — patří hned do seznamu, ne schovaná v detailu
+  const right=showAssign?`<button class="asgn-btn" onclick="event.stopPropagation();openAssign('${p.id}')">+ Den</button>`:`<button class="nav-btn" onclick="event.stopPropagation();navigateToPOS('${p.id}')" aria-label="Navigovat"><svg class="ic"><use href="#ic-map"/></svg></button>`;
   const cta=showAssign?'':`<div class="pos-cta ${p.v?'done':''}">${p.v?'✓ Hotovo':'Zahájit návštěvu →'}</div>`;
   card.innerHTML=`${p.v?'<div class="vs"></div>':''}<div class="pci"><div class="pdot ${dotCls}"></div><div class="pinfo"><div class="pname">${p.n} <span style="font-weight:600;color:var(--muted);font-size:11px">#${p.id}</span></div><div class="paddr">${p.a}</div><div class="pmeta">${tags}</div></div>${right}</div>${cta}`;
   card.onclick=()=>openDetail(ri);
@@ -1693,7 +1694,31 @@ function saveNote(){
   p.notes=val;
   lss('visitnote_'+p.id+'_'+cWeek, val);
 }
-function openMap(){const p=posData[cWeek][cIdx];window.open(`https://maps.google.com/?q=${encodeURIComponent(p.a)}`,'_blank');}
+function openMap(){const p=posData[cWeek][cIdx];navigateToPOS(p.id);}
+// Navigace na POS — Waze primárně (technici ho v terénu reálně používají), Google Maps jako fallback.
+// GPS souřadnice mají přednost před adresou, pokud existují.
+function navigateToPOS(posId){
+  const all=posData[cWeek]||[];
+  const p=all.find(x=>String(x.id)===String(posId));
+  if(!p)return;
+  const hasGps=typeof p.lat==='number'&&typeof p.lng==='number';
+  // waze:// (vlastní URL schéma) — pokud appka chybí, prohlížeč na rozdíl od https://waze.com/... nikam nepřejde,
+  // takže nám zůstane čas na fallback. Univerzální https odkaz by vždy reálně otevřel Waze web.
+  const wazeUrl=hasGps
+    ?`waze://?ll=${p.lat},${p.lng}&navigate=yes`
+    :`waze://?q=${encodeURIComponent(p.a)}&navigate=yes`;
+  const gmapsUrl=hasGps
+    ?`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`
+    :`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(p.a)}`;
+  // Pokud telefon přepne do appky Waze, stránka ztratí focus a fallback se zruší.
+  // Pokud Waze nenainstalovaná, stránka zůstane aktivní → po krátké pauze otevřeme Google Maps.
+  const cancelFallback=()=>{clearTimeout(timer);};
+  const timer=setTimeout(()=>{
+    if(document.hasFocus())window.open(gmapsUrl,'_blank');
+  },1200);
+  window.addEventListener('blur',cancelFallback,{once:true});
+  window.location.href=wazeUrl;
+}
 function renderCompleteBtn(){
   const p=posData[cWeek][cIdx];
   const btn=document.getElementById('complete-btn');
