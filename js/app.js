@@ -3179,6 +3179,13 @@ doCheckin = function() {
       flags.push({posId: p.id, posName: p.n, time: timeStr, dist: dist, lat, lng, severity: 'warning'});
       lss('gps_flags_' + today(), flags);
     }
+    // GPS patch nahradila celou doCheckin — bez tohohle se ztratí audit log
+    // (VisitStore) z původní funkce, technik by check-in udělal "potichu".
+    if (typeof VisitStore !== 'undefined') {
+      const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
+      VisitStore.setVisitField(tech, p.id, p.n, p.a, null, { status: 'in_progress', started_at: now.toISOString() });
+      VisitStore.logEvent(tech, 'checkin:' + p.id + (gpsFlag ? ':gps_warn:' + dist.toFixed(2) + 'km' : ''));
+    }
     renderCheckin();
   });
 };
