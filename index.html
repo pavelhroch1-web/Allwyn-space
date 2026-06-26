@@ -868,8 +868,13 @@
       <div id="ed-sec-checklist" style="display:none">
         <div class="adm-sh" style="margin-bottom:10px">
           <div class="adm-st">Šablona</div>
+          <button onclick="addChecklistTemplate()" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Šablona</button>
         </div>
-        <select class="ck-select" id="ck-tpl-picker" onchange="renderEditorChecklistTemplates()" style="margin-bottom:14px;width:100%"></select>
+        <select class="ck-select" id="ck-tpl-picker" onchange="renderEditorChecklistTemplates()" style="margin-bottom:10px;width:100%"></select>
+        <div style="display:flex;gap:8px;margin-bottom:14px">
+          <input id="ck-tpl-name" placeholder="Název šablony" oninput="renameChecklistTemplate(this.value)" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:13px;outline:none"/>
+          <button onclick="deleteChecklistTemplate()" style="background:var(--rl);color:var(--red);border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">Smazat šablonu</button>
+        </div>
 
         <div class="adm-sh" style="margin-bottom:10px">
           <div class="adm-st">Otázky</div>

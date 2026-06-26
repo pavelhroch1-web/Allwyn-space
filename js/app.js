@@ -4285,9 +4285,43 @@ function renderEditorChecklistTemplates() {
     picker.innerHTML = ids.map(id => `<option value="${id}" ${id===edChecklistTplId?'selected':''}>${tpls[id].name || id}</option>`).join('');
     edChecklistTplId = picker.value;
   }
+  const nameInput = document.getElementById('ck-tpl-name');
+  if (nameInput) nameInput.value = (tpls[edChecklistTplId] && tpls[edChecklistTplId].name) || '';
   edChecklistPreviewAnswers = {};
   renderEditorChecklistQuestions();
   renderEdChecklistPreview();
+}
+function addChecklistTemplate() {
+  const tpls = getChecklistTemplates();
+  let n = 1, id = 'nova-sablona';
+  while (tpls[id]) { id = 'nova-sablona-' + (++n); }
+  tpls[id] = { id, name: 'Nová šablona', questions: [] };
+  saveChecklistTemplatesStore(tpls);
+  edChecklistTplId = id;
+  renderEditorChecklistTemplates();
+}
+function renameChecklistTemplate(val) {
+  const tpls = getChecklistTemplates();
+  const tpl = tpls[edChecklistTplId];
+  if (!tpl) return;
+  tpl.name = val;
+  saveChecklistTemplatesStore(tpls);
+  renderEditorChecklistTemplates();
+}
+function deleteChecklistTemplate() {
+  const tpls = getChecklistTemplates();
+  const ids = Object.keys(tpls);
+  if (ids.length <= 1) { alert('Musí zůstat alespoň jedna šablona.'); return; }
+  const usedBy = getEditorCampaigns().filter(c => c.checklistTemplateId === edChecklistTplId);
+  if (usedBy.length) {
+    alert('Šablonu nelze smazat — používá ji kampaň "' + usedBy[0].name + '". Nejdřív jí v Kampaních vyber jinou šablonu.');
+    return;
+  }
+  if (!confirm('Smazat šablonu "' + (tpls[edChecklistTplId].name || edChecklistTplId) + '"?')) return;
+  delete tpls[edChecklistTplId];
+  saveChecklistTemplatesStore(tpls);
+  edChecklistTplId = Object.keys(tpls)[0];
+  renderEditorChecklistTemplates();
 }
 
 function renderEditorChecklistQuestions() {
