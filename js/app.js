@@ -3364,7 +3364,19 @@ function renderRouteMap(dayPos, startLoc){
   }
   try {
     techRouteMap = L.map('route-map', { zoomControl: true, attributionControl: false });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 18 }).addTo(techRouteMap);
+    const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 18 }).addTo(techRouteMap);
+    let tilesLoaded = 0, tilesErrored = 0;
+    tiles.on('load', () => { tilesLoaded++; });
+    tiles.on('tileerror', () => {
+      tilesErrored++;
+      if (tilesErrored >= 4 && tilesLoaded === 0) {
+        mapEl.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">
+          Podkladová mapa se nenačetla — zkontroluj připojení k internetu.<br>
+          <button style="margin-top:10px;padding:8px 16px;border-radius:8px;border:1.5px solid var(--border);background:var(--w);color:var(--text);font-size:12px;font-weight:600;cursor:pointer" onclick="renderRouteMap(window.__lastRouteDayPos||[], window.__lastRouteStartLoc)">Zkusit znovu</button>
+        </div>`;
+      }
+    });
+    window.__lastRouteDayPos = dayPos; window.__lastRouteStartLoc = startLoc;
     const coords = [];
     if (startLoc) {
       coords.push([startLoc.lat, startLoc.lng]);
@@ -4188,7 +4200,7 @@ function getEditorCampaigns() {
   return [
     {type:'Losy', name:'Zlatá rybka — nová emise', dates:'W23–W28', deadline:'2025-07-11', items:'POUZE nová emise Zlaté rybky — ne původní!\nPlakát A4 nad displej\nStojánek 20 Mega'},
     {type:'Loterie', name:'EuroJackpot', dates:'W23–W28', deadline:'2025-07-11', items:'Plakát A4 EuroJackpot nad displej\nNa Corn totem: 2 plakáty (losy + loterie)'},
-    {type:'Rebranding', name:'Rebranding — 2 POS/den', dates:'Probíhá', deadline:'2025-07-11', items:'Norma 2 rebrandované POS/den\nOdstranit samolepky Sazka mobil\nORLEN: jen výměna losů, NE rebranding'},
+    {type:'Rebranding', name:'Rebranding — 2 POS/den', dates:'Probíhá', deadline:'2025-07-11', items:'Norma 2 rebrandované POS/den\nOdstranit samolepky Sazka mobil\nORLEN: jen výměna losů, NE rebranding', checklistTemplateId:'rebranding-idt-kam'},
   ];
 }
 function saveEditorCampaigns(camps) { lss('editor_campaigns', camps); }
