@@ -643,8 +643,8 @@ function openDetail(ri){
   // info
   document.getElementById('info-area').textContent=(p.area||'—')+' · '+p.k;
   document.getElementById('info-typ').textContent=p.typ==='CORN'?'Corn — zvláštní kanál':p.typ==='KA'?`Klíčový partner · ${p.partner}`:p.typ==='PETROL'?`Petrol · ${p.partner}`:'IDT — Independent Dealer';
-  // notes
-  document.getElementById('notes-ta').value=p.notes||'';
+  // notes — per-visit poznámka, perzistovaná lokálně per POS+týden
+  document.getElementById('notes-ta').value=lsg('visitnote_'+p.id+'_'+cWeek, p.notes||'');
   // reset tabs
   showDetTab('inv',document.querySelector('.det-tab'));
   // render sections
@@ -1244,7 +1244,12 @@ function addPosCardNote(){
 // ══════════════════════════════════════════════════════
 // NOTES / MAP / COMPLETE
 // ══════════════════════════════════════════════════════
-function saveNote(){posData[cWeek][cIdx].notes=document.getElementById('notes-ta').value;}
+function saveNote(){
+  const p=posData[cWeek][cIdx];
+  const val=document.getElementById('notes-ta').value;
+  p.notes=val;
+  lss('visitnote_'+p.id+'_'+cWeek, val);
+}
 function openMap(){const p=posData[cWeek][cIdx];window.open(`https://maps.google.com/?q=${encodeURIComponent(p.a)}`,'_blank');}
 function renderCompleteBtn(){
   const p=posData[cWeek][cIdx];
@@ -1262,7 +1267,16 @@ function renderCompleteBtn(){
 }
 function markVisited(){
   const p=posData[cWeek][cIdx];
-  if(p.v||!p.taskState.every(t=>t.done))return;
+  if(p.v){
+    p.v=false;saveVisitState(p,cWeek);renderCompleteBtn();updateSummary();renderChips();renderDayTabs();
+    if (typeof VisitStore !== 'undefined') {
+      const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
+      VisitStore.setVisitField(tech, p.id, p.n, p.a, null, { status: 'in_progress', completed_at: null });
+      VisitStore.logEvent(tech, 'visit_reopened:' + p.id);
+    }
+    return;
+  }
+  if(!p.taskState.every(t=>t.done))return;
   p.v=true;saveVisitState(p,cWeek);renderCompleteBtn();updateSummary();renderChips();renderDayTabs();
   if (typeof VisitStore !== 'undefined') {
     const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
@@ -3737,7 +3751,9 @@ makePosCard = function(p, ri, showAssign, locked) {
 const _origMarkVisited2 = markVisited;
 markVisited = function() {
   const p = posData[cWeek][cIdx];
-  if (!p || p.v || !p.taskState.every(t => t.done)) return;
+  if (!p) return;
+  if (p.v) { _origMarkVisited2(); return; } // reopen path — žádný nový visit record
+  if (!p.taskState.every(t => t.done)) return;
   recordVisit(p.id, p.n, cWeek, cDay);
   _origMarkVisited2();
 };

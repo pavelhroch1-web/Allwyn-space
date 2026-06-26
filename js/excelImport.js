@@ -54,14 +54,11 @@
     return Math.floor(stableUnit(id+'|day')*5);
   }
 
-  // Minulé týdny ~90 % hotovo, aktuální týden dle dne (realistické "rozjeté
-  // ráno"), budoucí týdny nikdy navštíveno.
-  function computeVisited(id, week, currentWeek, dayIdx, todayIdx){
-    if(Number(week) < Number(currentWeek)) return stableUnit(id+'|hist') > 0.10;
-    if(Number(week) > Number(currentWeek)) return false;
-    const effectiveToday = (todayIdx===null||todayIdx===undefined) ? 4 : todayIdx;
-    if(dayIdx < effectiveToday) return stableUnit(id+'|past') > 0.12;
-    if(dayIdx === effectiveToday) return stableUnit(id+'|today') > 0.55;
+  // Tourplan obsahuje jen PLÁN (kdo/kam/kdy), ne historii návštěv — import
+  // proto nikdy nesmí vymýšlet, že POS byla už navštívena. To by byl fake
+  // výkon technika (zakázáno, CLAUDE.md). Reálný stav `v` přichází výhradně
+  // z reálné návštěvy technika (markVisited), uložené ve VisitStore/localStorage.
+  function computeVisited(){
     return false;
   }
 
