@@ -55,7 +55,6 @@ function augmentRawPos(p, assignedTechnician){
     region: withCoords.area || PosModel.DEFAULT_REGION,
     photos:[],notes:'',
     taskState,
-    refs:(REFS[typ]||REFS[rawTyp]||REFS.IDT),
     inventory,
   };
 }
@@ -773,11 +772,38 @@ function campCard(c,cls,lbl){
 }
 
 // ══════════════════════════════════════════════════════
-// REFS
+// REFS — referenční materiály (admin-editovatelné z Velína, ne hardcoded)
 // ══════════════════════════════════════════════════════
+function getEditorRefs(){
+  const saved = lsg('editor_refs');
+  if (saved) return saved;
+  // Seed z výchozích REFS (js/data.js) — KA se zabalí do {default:[...]} ,
+  // aby šlo doplnit referenci per konkrétní partner bez ztráty výchozí sady.
+  return {
+    IDT: JSON.parse(JSON.stringify(REFS.IDT||[])),
+    PETROL: JSON.parse(JSON.stringify(REFS.PETROL||[])),
+    CORN: JSON.parse(JSON.stringify(REFS.CORN||[])),
+    KA: { default: JSON.parse(JSON.stringify(REFS.KA||[])) },
+  };
+}
+function saveEditorRefs(store){ lss('editor_refs', store); }
+
+// Vrací reference platné pro konkrétní POS — u KA hledá nejdřív referenci
+// pro konkrétního partnera (p.partner = kategorie kód z Tourplan importu),
+// jinak padá na výchozí KA sadu.
+function getRefsForPos(p){
+  const store = getEditorRefs();
+  if (p.typ === 'KA') {
+    const partner = p.partner;
+    if (partner && store.KA[partner] && store.KA[partner].length) return store.KA[partner];
+    return store.KA.default || [];
+  }
+  return store[p.typ] || store.IDT || [];
+}
+
 function renderRefs(){
   const p=posData[cWeek][cIdx];
-  const refs=p.refs||[];
+  const refs=getRefsForPos(p);
 
   // Channel color per type
   const chColor={
@@ -806,8 +832,8 @@ function renderRefs(){
 
   const cards=refs.map(r=>`
     <div style="flex-shrink:0;width:210px;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.08)">
-      <div style="width:100%;height:120px;background:${bg};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px">
-        <div style="font-size:36px">${r.i}</div>
+      <div style="width:100%;height:120px;background:${bg};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;overflow:hidden">
+        ${r.img ? `<img src="${r.img}" alt="${r.l||''}" style="width:100%;height:100%;object-fit:cover"/>` : `<div style="font-size:36px">${r.i||'🖼️'}</div>`}
       </div>
       <div style="padding:8px 12px 4px;font-size:12px;font-weight:800;color:var(--navy)">${r.l}</div>
       <div style="padding:0 12px 10px;font-size:11px;color:var(--muted);line-height:1.5">${r.d}</div>
@@ -4196,7 +4222,7 @@ function makePlanCard(p, ri, selectable) {
 // EDITOR SECTIONS (texty / kampaně / inventory katalog)
 // ══════════════════════════════════════════════════════════════════════════
 function showEditorSection(sec, btn) {
-  ['texty','kampane','inventory','ukoly','checklist'].forEach(s => {
+  ['texty','kampane','inventory','ukoly','checklist','refs'].forEach(s => {
     const el = document.getElementById('ed-sec-' + s);
     if (el) el.style.display = s === sec ? 'block' : 'none';
   });
@@ -4206,6 +4232,7 @@ function showEditorSection(sec, btn) {
   if (sec === 'inventory') renderEditorCatalog();
   if (sec === 'ukoly') renderEditorTaskTemplates();
   if (sec === 'checklist') renderEditorChecklistTemplates();
+  if (sec === 'refs') renderEditorRefs();
 }
 
 // ── EDITABLE CAMPAIGNS ─────────────────────────────────────────────────────
@@ -4304,6 +4331,128 @@ function deleteCatalogItem(section, i) {
   cat[section].splice(i,1);
   saveInvCatalog(cat);
   renderEditorCatalog();
+}
+
+// ── EDITABLE REFERENCE MATERIÁLY ────────────────────────────────────────────
+// Partnerské kódy se berou z reálně naimportovaných POS (p.partner = kategorie
+// z Tourplan exportu) — žádný vymyšlený seznam partnerů.
+function getKaPartnerCodes() {
+  const set = new Set();
+  Object.values(FULL_POS_DATA).forEach(week => week.forEach(p => {
+    if (p.typ === 'KA' && p.partner) set.add(p.partner);
+  }));
+  return Array.from(set).sort();
+}
+
+function refCardHtml(card, removeFn) {
+  return `
+    <div class="editor-item" style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--bg)">
+      <div style="width:64px;height:64px;flex-shrink:0;border-radius:8px;overflow:hidden;background:var(--bg);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative" onclick="this.querySelector('input[type=file]').click()">
+        ${card.img ? `<img src="${card.img}" style="width:100%;height:100%;object-fit:cover"/>` : `<span style="font-size:24px">${card.i||'🖼️'}</span>`}
+        <input type="file" accept="image/*" style="display:none" onchange="${card._onImg}"/>
+      </div>
+      <div style="flex:1">
+        <input value="${(card.l||'').replace(/"/g,'&quot;')}" placeholder="Název" oninput="${card._onLabel}" style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:7px;font-size:13px;font-weight:700;outline:none;margin-bottom:6px"/>
+        <textarea placeholder="Popis — co a kam přesně" oninput="${card._onDesc}" style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:7px;font-size:12px;font-family:inherit;resize:none;min-height:44px;outline:none;line-height:1.4">${card.d||''}</textarea>
+      </div>
+      <button onclick="${removeFn}" style="background:none;border:none;color:var(--red);font-size:16px;cursor:pointer;padding:4px;flex-shrink:0">✕</button>
+    </div>`;
+}
+
+function renderEditorRefsChannel(channel) {
+  const el = document.getElementById('ed-refs-' + channel);
+  if (!el) return;
+  const store = getEditorRefs();
+  const cards = store[channel] || [];
+  el.innerHTML = cards.map((card, i) => {
+    card._onImg = `handleRefImage(event,'${channel}',${i})`;
+    card._onLabel = `updateRefCard('${channel}',${i},'l',this.value)`;
+    card._onDesc = `updateRefCard('${channel}',${i},'d',this.value)`;
+    return refCardHtml(card, `deleteRefCard('${channel}',${i})`);
+  }).join('') || '<div style="padding:14px;text-align:center;color:var(--muted);font-size:12px">Žádné reference</div>';
+}
+function addRefCard(channel) {
+  const store = getEditorRefs();
+  if (!store[channel]) store[channel] = [];
+  store[channel].push({ i: '🖼️', l: 'Nová reference', d: '' });
+  saveEditorRefs(store);
+  renderEditorRefsChannel(channel);
+}
+function updateRefCard(channel, i, field, val) {
+  const store = getEditorRefs();
+  store[channel][i][field] = val;
+  saveEditorRefs(store);
+}
+function deleteRefCard(channel, i) {
+  const store = getEditorRefs();
+  store[channel].splice(i, 1);
+  saveEditorRefs(store);
+  renderEditorRefsChannel(channel);
+}
+function handleRefImage(e, channel, i) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const store = getEditorRefs();
+    if (channel === 'KA') {
+      const key = document.getElementById('ed-refs-ka-key').value;
+      store.KA[key][i].img = ev.target.result;
+    } else {
+      store[channel][i].img = ev.target.result;
+    }
+    saveEditorRefs(store);
+    if (channel === 'KA') renderEditorRefsKa(); else renderEditorRefsChannel(channel);
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderEditorRefsKaPicker() {
+  const sel = document.getElementById('ed-refs-ka-key');
+  if (!sel) return;
+  const partners = getKaPartnerCodes();
+  sel.innerHTML = `<option value="default">Výchozí (všichni KA partneři)</option>` +
+    partners.map(p => `<option value="${p}">${p}</option>`).join('');
+}
+function renderEditorRefsKa() {
+  const key = document.getElementById('ed-refs-ka-key').value || 'default';
+  const store = getEditorRefs();
+  if (!store.KA[key]) store.KA[key] = [];
+  const el = document.getElementById('ed-refs-KA');
+  const cards = store.KA[key];
+  el.innerHTML = cards.map((card, i) => {
+    card._onImg = `handleRefImage(event,'KA',${i})`;
+    card._onLabel = `updateRefCardKa(${i},'l',this.value)`;
+    card._onDesc = `updateRefCardKa(${i},'d',this.value)`;
+    return refCardHtml(card, `deleteRefCardKa(${i})`);
+  }).join('') || '<div style="padding:14px;text-align:center;color:var(--muted);font-size:12px">Žádné reference — použije se výchozí sada</div>';
+}
+function addRefCardKa() {
+  const key = document.getElementById('ed-refs-ka-key').value || 'default';
+  const store = getEditorRefs();
+  if (!store.KA[key]) store.KA[key] = [];
+  store.KA[key].push({ i: '🖼️', l: 'Nová reference', d: '' });
+  saveEditorRefs(store);
+  renderEditorRefsKa();
+}
+function updateRefCardKa(i, field, val) {
+  const key = document.getElementById('ed-refs-ka-key').value || 'default';
+  const store = getEditorRefs();
+  store.KA[key][i][field] = val;
+  saveEditorRefs(store);
+}
+function deleteRefCardKa(i) {
+  const key = document.getElementById('ed-refs-ka-key').value || 'default';
+  const store = getEditorRefs();
+  store.KA[key].splice(i, 1);
+  saveEditorRefs(store);
+  renderEditorRefsKa();
+}
+
+function renderEditorRefs() {
+  ['IDT', 'PETROL', 'CORN'].forEach(renderEditorRefsChannel);
+  renderEditorRefsKaPicker();
+  renderEditorRefsKa();
 }
 
 // ── EDITABLE TASK TEMPLATES — "Úkoly na místě" šablona per kanál (IDT/

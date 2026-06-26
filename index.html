@@ -797,6 +797,7 @@
         <button class="ed-subnav" onclick="showEditorSection('inventory',this)"><svg class="ic ic-sm"><use href="#ic-box"/></svg> Inventory katalog</button>
         <button class="ed-subnav" onclick="showEditorSection('ukoly',this)"><svg class="ic ic-sm"><use href="#ic-check-circle"/></svg> Úkoly na místě</button>
         <button class="ed-subnav" onclick="showEditorSection('checklist',this)"><svg class="ic ic-sm"><use href="#ic-box"/></svg> Checklist šablony</button>
+        <button class="ed-subnav" onclick="showEditorSection('refs',this)"><svg class="ic ic-sm"><use href="#ic-image"/></svg> Reference</button>
       </div>
 
       <!-- TEXTY -->
@@ -906,6 +907,35 @@
           <span>"Závisí na" + "rovná se" určuje, kdy se otázka zobrazí (např. otázka se ukáže jen když předchozí Ano/Ne otázka byla "Ne"). Změny se ihned promítnou do náhledu v detailu POS u technika.</span>
         </div>
       </div>
+
+      <!-- REFERENCE — admin-editovatelné referenční materiály per kanál / KA partner -->
+      <div id="ed-sec-refs" style="display:none">
+        <div class="adm-sh" style="margin-bottom:10px"><div class="adm-st">IDT</div>
+          <button onclick="addRefCard('IDT')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Reference</button>
+        </div>
+        <div class="editor-card" id="ed-refs-IDT"></div>
+
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">PETROL</div>
+          <button onclick="addRefCard('PETROL')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Reference</button>
+        </div>
+        <div class="editor-card" id="ed-refs-PETROL"></div>
+
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">CORN</div>
+          <button onclick="addRefCard('CORN')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Reference</button>
+        </div>
+        <div class="editor-card" id="ed-refs-CORN"></div>
+
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">KA partner</div>
+          <button onclick="addRefCardKa()" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Reference</button>
+        </div>
+        <select id="ed-refs-ka-key" onchange="renderEditorRefsKa()" style="width:100%;margin-bottom:10px;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:13px;outline:none"></select>
+        <div class="editor-card" id="ed-refs-KA"></div>
+
+        <div style="padding:12px;background:var(--tl);border-radius:10px;font-size:12px;color:var(--tm);line-height:1.5;margin-top:8px;display:flex;gap:6px">
+          <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-bulb"/></svg>
+          <span>Reference se zobrazí technikovi v detailu POS ("Reference — jak to má vypadat"). Klikni na obrázek a nahraj reálnou fotku. KA partner bez vlastní reference použije výchozí sadu.</span>
+        </div>
+      </div>
     </div>
     <!-- FOTO -->
     <div class="adm-page" id="adm-foto">
@@ -921,18 +951,18 @@
   </div>
 </div>
 
-<script src="js/data.js?v=20260625a"></script>
-<script src="js/geo.js?v=20260625a"></script>
-<script src="js/tourplanRaw.js?v=20260625a"></script>
-<script src="js/excelImport.js?v=20260625a"></script>
-<script src="js/posMasterData.js?v=20260625a"></script><script src="js/checklistTemplates.js?v=20260625a"></script>
-<script src="js/checklistEngine.js?v=20260625a"></script>
-<script src="js/dataProvider.js?v=20260625a"></script>
-<script src="js/routeEngine.js?v=20260625a"></script>
-<script src="js/posModel.js?v=20260625a"></script>
-<script src="js/technicianModel.js?v=20260625a"></script>
-<script src="js/app.js?v=20260625c"></script>
-<script src="js/visitStore.js?v=20260625a"></script>
-<script src="js/sync.js?v=20260625a"></script>
+<script src="js/data.js?v=20260626a"></script>
+<script src="js/geo.js?v=20260626a"></script>
+<script src="js/tourplanRaw.js?v=20260626a"></script>
+<script src="js/excelImport.js?v=20260626a"></script>
+<script src="js/posMasterData.js?v=20260626a"></script><script src="js/checklistTemplates.js?v=20260626a"></script>
+<script src="js/checklistEngine.js?v=20260626a"></script>
+<script src="js/dataProvider.js?v=20260626a"></script>
+<script src="js/routeEngine.js?v=20260626a"></script>
+<script src="js/posModel.js?v=20260626a"></script>
+<script src="js/technicianModel.js?v=20260626a"></script>
+<script src="js/app.js?v=20260626a"></script>
+<script src="js/visitStore.js?v=20260626a"></script>
+<script src="js/sync.js?v=20260626a"></script>
 </body>
 </html>
