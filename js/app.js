@@ -619,6 +619,14 @@ function closeModal(){document.getElementById('assign-modal').classList.remove('
 // ══════════════════════════════════════════════════════
 // DETAIL
 // ══════════════════════════════════════════════════════
+function renderDetailChips(p,m){
+  const chips=[];
+  chips.push(`<span class="chip ch-area"><svg class="ic ic-sm"><use href="#ic-pin"/></svg> ${p.area||'—'}</span>`);
+  if(p.d!==null&&p.d!==undefined) chips.push(`<span class="chip ch-day"><svg class="ic ic-sm"><use href="#ic-calendar"/></svg> ${DAYS[p.d]} ${m.dd[p.d]}</span>`);
+  if(p.taskState.some(t=>t.src==='servis'&&!t.done)) chips.push(`<span class="chip ch-pri1"><svg class="ic ic-sm"><use href="#ic-wrench"/></svg> Servis</span>`);
+  if((p.terminals||[]).length) chips.push(`<span class="chip ch-typ"><svg class="ic ic-sm"><use href="#ic-monitor"/></svg> ${p.terminals.length>1?`${p.terminals.length} terminály`:`Terminál ${p.terminals[0].id}`}</span>`);
+  document.getElementById('d-chips').innerHTML=chips.join('');
+}
 function openDetail(ri){
   cIdx=ri;
   const p=posData[cWeek][ri];
@@ -627,13 +635,7 @@ function openDetail(ri){
   document.getElementById('d-id').textContent=p.id;
   document.getElementById('d-fullname').textContent=p.n;
   document.getElementById('d-addr').textContent=p.a;
-  // chips
-  const chips=[];
-  chips.push(`<span class="chip ch-area"><svg class="ic ic-sm"><use href="#ic-pin"/></svg> ${p.area||'—'}</span>`);
-  if(p.d!==null&&p.d!==undefined) chips.push(`<span class="chip ch-day"><svg class="ic ic-sm"><use href="#ic-calendar"/></svg> ${DAYS[p.d]} ${m.dd[p.d]}</span>`);
-  if(p.taskState.some(t=>t.src==='servis'&&!t.done)) chips.push(`<span class="chip ch-pri1"><svg class="ic ic-sm"><use href="#ic-wrench"/></svg> Servis</span>`);
-  if((p.terminals||[]).length) chips.push(`<span class="chip ch-typ"><svg class="ic ic-sm"><use href="#ic-monitor"/></svg> ${p.terminals.length>1?`${p.terminals.length} terminály`:`Terminál ${p.terminals[0].id}`}</span>`);
-  document.getElementById('d-chips').innerHTML=chips.join('');
+  renderDetailChips(p,m);
   // otevírací doba — fakt o tom, co je teď, žádný odhad
   const dHoursEl=document.getElementById('d-hours');
   const statusInfo=getOpeningStatusInfo(p);
@@ -1126,6 +1128,21 @@ let servisModal={ti:null,answers:{}};
 function servisAnswersKey(posId){return 'servis_'+posId;}
 function getServisAnswers(posId){return lsg(servisAnswersKey(posId),{});}
 function saveServisAnswers(posId,answers){lss(servisAnswersKey(posId),answers);}
+// Technik si servis spustí i sám, bez čekání na zadání od Velína —
+// vytvoří se reálný src:'servis' úkol na téhle návštěvě a otevře se dotazník.
+function openServisOnDemand(){
+  const p=posData[cWeek][cIdx];
+  if(p.v) return;
+  let ti=p.taskState.findIndex(t=>t.src==='servis'&&!t.done);
+  if(ti===-1){
+    p.taskState.push({text:'Servisní zásah',src:'servis',done:false});
+    ti=p.taskState.length-1;
+    saveVisitState(p,cWeek);
+    renderTasks();
+    renderDetailChips(p,WEEKS_META[cWeek]);
+  }
+  openServisModal(ti);
+}
 function openServisModal(ti){
   const p=posData[cWeek][cIdx];
   if(p.v) return;
@@ -1219,6 +1236,7 @@ function confirmServisModal(){
   closeServisModal();
   renderTasks();
   renderCompleteBtn();
+  renderDetailChips(p,WEEKS_META[cWeek]);
 }
 // Zeměpisná poloha v okamžiku focení — pokud zařízení/uživatel polohu
 // neposkytne, cb(null). Nikdy se nedomýšlí náhradní souřadnice (no fake data).
