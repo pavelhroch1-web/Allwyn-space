@@ -431,41 +431,7 @@
     <div class="sec-lbl">Aktuální kampaně</div>
     <div class="camp-wrap" id="camp-wrap"></div>
 
-    <!-- TASKS — úkoly pro tuhle návštěvu, hned za kampaněmi (připraveno i pro budoucí "Mission" rozšíření) -->
-    <div class="sec-lbl">Úkoly na místě</div>
-    <div class="tsec" id="tasks-list"></div>
-    <div class="add-wrap">
-      <button class="add-dashed" id="add-btn" onclick="showAddForm()">+ Přidat vlastní úkol</button>
-      <div class="add-form" id="add-form">
-        <input type="text" id="new-task-input" placeholder="Co je potřeba udělat?" />
-        <div class="add-acts">
-          <button class="btn-x" onclick="hideAddForm()">Zrušit</button>
-          <button class="btn-ok" onclick="addTask()">Přidat</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- CAMPAIGN CHECKLIST (podmíněný checklist napojený na aktivní kampaň) -->
-    <div id="campaign-checklist-wrap" style="display:none">
-      <div class="sec-lbl" id="campaign-checklist-title">Kontrolní checklist</div>
-      <div class="tsec" id="campaign-checklist-list"></div>
-    </div>
-
-    <!-- VÍCE INFORMACÍ — region/typ partnerství nejsou potřeba při běžné návštěvě, schované pod rozbalení -->
-    <details style="margin:0 12px 8px;border-radius:10px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.05);overflow:hidden">
-      <summary style="padding:11px 14px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px"><svg class="ic ic-sm"><use href="#ic-info"/></svg> Více informací</summary>
-      <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-top:1px solid var(--bg)">
-        <div style="width:20px;text-align:center;color:var(--teal)"><svg class="ic"><use href="#ic-pin"/></svg></div>
-        <div><div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Oblast / Region</div><div style="font-size:13px;font-weight:600;margin-top:1px" id="info-area">—</div></div>
-      </div>
-      <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-top:1px solid var(--bg)">
-        <div style="width:20px;text-align:center;color:var(--teal)"><svg class="ic"><use href="#ic-store"/></svg></div>
-        <div><div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Typ partnerství</div><div style="font-size:13px;font-weight:600;margin-top:1px" id="info-typ">—</div></div>
-      </div>
-      <div style="padding:11px 14px;border-top:1px solid var(--bg);display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--teal)" onclick="openMap()"><svg class="ic"><use href="#ic-map"/></svg> Navigovat na místo</div>
-    </details>
-
-    <!-- REFS -->
+    <!-- REFS — ukázka jak to má vypadat, technik se na to dívá ještě před osazením -->
     <div class="sec-lbl">Reference — jak to má vypadat</div>
     <div id="refs-wrap"></div>
 
@@ -485,9 +451,12 @@
       </div>
     </div>
 
-    <!-- SPOTŘEBNÍ MATERIÁL -->
-    <div id="supply-section">
-      <div class="sec-lbl">Spotřební materiál — předání</div>
+    <!-- SPOTŘEBNÍ MATERIÁL — sbalené, technik s ním ve většině návštěv nepracuje -->
+    <details id="supply-section">
+      <summary class="sec-lbl sec-lbl-collapsible">
+        <span>Spotřební materiál — předání</span>
+        <span class="sec-lbl-summary" id="supply-summary">Beze změn</span>
+      </summary>
       <div class="supply-card" style="margin:0 12px 8px">
         <div class="supply-hdr">
           <div class="supply-hdr-t"><svg class="ic ic-sm"><use href="#ic-box"/></svg> Spotřební materiál</div>
@@ -509,6 +478,26 @@
           <div class="sig-done-msg" id="sig-done" style="display:none">✓ Zásobování potvrzeno a uloženo</div>
         </div>
       </div>
+    </details>
+
+    <!-- TASKS — detailní úkoly, technik je otevře až ve chvíli kdy reálně začíná pracovat -->
+    <div class="sec-lbl">Úkoly na místě</div>
+    <div class="tsec" id="tasks-list"></div>
+    <div class="add-wrap">
+      <button class="add-dashed" id="add-btn" onclick="showAddForm()">+ Přidat vlastní úkol</button>
+      <div class="add-form" id="add-form">
+        <input type="text" id="new-task-input" placeholder="Co je potřeba udělat?" />
+        <div class="add-acts">
+          <button class="btn-x" onclick="hideAddForm()">Zrušit</button>
+          <button class="btn-ok" onclick="addTask()">Přidat</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CAMPAIGN CHECKLIST (podmíněný checklist napojený na aktivní kampaň) -->
+    <div id="campaign-checklist-wrap" style="display:none">
+      <div class="sec-lbl" id="campaign-checklist-title">Kontrolní checklist</div>
+      <div class="tsec" id="campaign-checklist-list"></div>
     </div>
 
     <!-- PHOTOS -->
@@ -519,6 +508,20 @@
       <svg class="ic ic-sm" style="flex-shrink:0;margin-top:1px"><use href="#ic-bulb"/></svg>
       <span>Foto <b>Příchod</b>, <b>Odchod</b>, <b>Pokladní zóna</b> a <b>Plánogram / finální výstava</b> jsou povinné pro dokončení návštěvy. Do fotky se automaticky vloží tvoje jméno, číslo POS, čas a GPS poloha.</span>
     </div>
+
+    <!-- VÍCE INFORMACÍ — region/typ partnerství nejsou potřeba při běžné návštěvě, schované pod rozbalení -->
+    <details style="margin:0 12px 8px;border-radius:10px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.05);overflow:hidden">
+      <summary style="padding:11px 14px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px"><svg class="ic ic-sm"><use href="#ic-info"/></svg> Více informací</summary>
+      <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-top:1px solid var(--bg)">
+        <div style="width:20px;text-align:center;color:var(--teal)"><svg class="ic"><use href="#ic-pin"/></svg></div>
+        <div><div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Oblast / Region</div><div style="font-size:13px;font-weight:600;margin-top:1px" id="info-area">—</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-top:1px solid var(--bg)">
+        <div style="width:20px;text-align:center;color:var(--teal)"><svg class="ic"><use href="#ic-store"/></svg></div>
+        <div><div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Typ partnerství</div><div style="font-size:13px;font-weight:600;margin-top:1px" id="info-typ">—</div></div>
+      </div>
+      <div style="padding:11px 14px;border-top:1px solid var(--bg);display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--teal)" onclick="openMap()"><svg class="ic"><use href="#ic-map"/></svg> Navigovat na místo</div>
+    </details>
 
     <!-- DETAIL TABS -->
     <div class="det-tabs">
