@@ -106,6 +106,12 @@ Doporučený stack (návrh, ne dogma): frontend buď ponechat vanilla/lehký fra
 
 10. **Admin má plnou kontrolu a transparentnost.** Manažer předpokládá že technici podvádějí — každá funkce, která zvyšuje viditelnost (GPS, časy, fotky, AI flagy, schvalování) je hodnotná. Nikdy ji neoslabuj kvůli pohodlí.
 
+   **Standing princip (Pavel, 2026-06-26): "vždycky se snaží nás ochcat... oni vždycky hledají tu nejjednodušší cestu."** Při návrhu JAKÉKOLIV nové funkce nebo zjednodušení flow pro technika si vždy polož otázku: "jak by se tohle dalo obejít/ošvindlovat nejjednodušší cestou, a jak to Velínu nezůstane skryté?" Konkrétní důsledky:
+   - Když dáváš technikovi rychlejší/odloženou cestu (např. check-in bez focení hned, merch odškrtnutí bez focení), vždy musí existovat tvrdý gate, který to dožene později (Zbývá vyfotit), NIKDY úplné odstranění požadavku.
+   - Velín musí mít vždy možnost dohledat, kde technik "zkrátil cestu" — kdy a co odložil, ne jen výsledný stav.
+   - Default nastavení (co vyžaduje foto, GPS přísnost, atd.) volí Velín, ne technik a ne hardcoded "pohodlné" defaulty — ale i defaulty navrhuj s myšlenkou, kde by šlo nejsnáz podvádět.
+   - Při jakékoliv budoucí featuře s odkladem/zjednodušením pro technika vždy znovu prober s Pavlem, jak to nejde obejít — neproaktivně to nezeslabuj kvůli UX bez téhle úvahy.
+
 11. **Allwyn branding.** Navy `#1A3C47` + teal `#2ECDC0`. Žlutá je legacy Sazka — nepoužívat jako brand barvu.
 
 12. **AI klíč nikdy ve frontendu.** Anthropic API volání jen server-side po migraci na backend. **Pozor:** v prototypu se volá `https://api.anthropic.com/v1/messages` přímo z frontendu — to je dočasné řešení specifické pro prostředí prototypu a MUSÍ se přesunout na server v Fázi 4.
