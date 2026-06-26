@@ -1013,28 +1013,45 @@ function renderCampaignChecklist(){
 // ══════════════════════════════════════════════════════
 // PHOTOS
 // ══════════════════════════════════════════════════════
+// Foto 0/1 (Příchod/Odchod) se řeší přímo přes check-in lištu (renderCheckin) —
+// tady se nezobrazují znovu, aby nevznikala duplicitní/matoucí UI se stejnými
+// fotkami. Tahle sekce ukazuje další povinné fotky (pokladní zóna, merch
+// materiály) plus neomezený počet volných extra fotek.
+const PHOTO_LABELS=['Příchod','Odchod','Pokladní zóna','Merch materiály'];
+const PHOTO_REQUIRED_COUNT=PHOTO_LABELS.length;
+const PHOTO_GRID_START=2;
 function renderPhotos(){
   const p=posData[cWeek][cIdx];
   const grid=document.getElementById('photos-grid');grid.innerHTML='';
-  const lbls=['Příchod','Odchod','Detail'];
-  const required=[true,true,false];
-  const slots=Math.max(3,p.photos.length+1);
-  for(let i=0;i<slots;i++){
+  const slots=Math.max(PHOTO_REQUIRED_COUNT,p.photos.length);
+  for(let i=PHOTO_GRID_START;i<slots;i++){
     const slot=document.createElement('div');
+    const lbl=PHOTO_LABELS[i]||'Foto '+(i+1);
+    const required=i<PHOTO_REQUIRED_COUNT;
     if(p.photos[i]){
       slot.className='pslot filled';
-      slot.innerHTML=`<img src="${p.photos[i]}" alt="Foto ${lbls[i]||i+1}"/><button class="p-rm" aria-label="Smazat foto ${lbls[i]||i+1}" onclick="rmPhoto(event,${i})">✕</button>`;
+      slot.innerHTML=`<img src="${p.photos[i]}" alt="Foto ${lbl}"/><button class="p-rm" aria-label="Smazat foto ${lbl}" onclick="rmPhoto(event,${i})">✕</button>`;
     } else {
-      slot.className='pslot'+(required[i]?' pslot-req':'');
+      slot.className='pslot'+(required?' pslot-req':'');
       slot.setAttribute('role','button');
-      slot.setAttribute('aria-label','Vyfotit '+(lbls[i]||'Foto '+(i+1)));
-      slot.innerHTML=`<div class="p-ico"><svg class="ic ic-lg"><use href="#ic-camera"/></svg></div><div class="p-lbl">${lbls[i]||'Foto '+(i+1)}${required[i]?' *':''}</div>`;
+      slot.setAttribute('aria-label','Vyfotit '+lbl);
+      slot.innerHTML=`<div class="p-ico"><svg class="ic ic-lg"><use href="#ic-camera"/></svg></div><div class="p-lbl">${lbl}${required?' *':''}</div>`;
       slot.onclick=()=>{pendingSlot=i;document.getElementById('photo-input').click();};
     }
     grid.appendChild(slot);
   }
+  const addBtn=document.createElement('div');
+  addBtn.className='pslot pslot-add';
+  addBtn.setAttribute('role','button');
+  addBtn.setAttribute('aria-label','Přidat další fotku');
+  addBtn.innerHTML=`<div class="p-ico" style="font-size:22px;font-weight:700">+</div><div class="p-lbl">Přidat fotku</div>`;
+  addBtn.onclick=()=>{pendingSlot=null;document.getElementById('photo-input').click();};
+  grid.appendChild(addBtn);
 }
-function requiredPhotosOk(p){ return !!(p.photos[0] && p.photos[1]); }
+function requiredPhotosOk(p){
+  for(let i=0;i<PHOTO_REQUIRED_COUNT;i++){ if(!p.photos[i]) return false; }
+  return true;
+}
 // Zeměpisná poloha v okamžiku focení — pokud zařízení/uživatel polohu
 // neposkytne, cb(null). Nikdy se nedomýšlí náhradní souřadnice (no fake data).
 function getGeoTag(cb){
@@ -1092,8 +1109,13 @@ function handlePhoto(e){
     const r=new FileReader();
     r.onload=ev=>{
       stampPhoto(ev.target.result, buildStampLines(p, geo), stamped=>{
-        if(slot!==null&&slot<p.photos.length)p.photos[slot]=stamped;
-        else p.photos.push(stamped);
+        if(slot!==null){
+          while(p.photos.length<=slot)p.photos.push(null);
+          p.photos[slot]=stamped;
+        } else {
+          while(p.photos.length<PHOTO_REQUIRED_COUNT)p.photos.push(null);
+          p.photos.push(stamped);
+        }
         pendingSlot=null;saveVisitState(p,cWeek);renderPhotos();e.target.value='';
         pushPhotosMeta(p);renderCompleteBtn();
         if(slot===0&&!lsg('ci_'+p.id)) doCheckin();
