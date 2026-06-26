@@ -26,7 +26,7 @@ const SYNC_CONFIG = {
 // Per-technika klíče (prefix match) — viz docs/CLAUDE.md "Klíče v localStorage".
 const SYNC_PER_TECH_PREFIXES = ['ci_','vlog_','daystart_','supply_','merch_','poscard_','visits_','assign_','gps_flags_','approval_','visitnote_'];
 // Globální klíče editované Velínem — musí být vidět na všech zařízeních.
-const SYNC_GLOBAL_KEYS = ['admin_tasks','editor_briefing','editor_alert','editor_idt','editor_ka','editor_campaigns','inv_catalog','editor_task_templates','editor_merch_items','editor_checklist_templates','editor_refs'];
+const SYNC_GLOBAL_KEYS = ['admin_tasks','editor_briefing','editor_alert','editor_idt','editor_ka','editor_campaigns','inv_catalog','editor_task_templates','editor_merch_items','editor_checklist_templates','editor_refs','tourplanImportOverride','posMasterDataOverride'];
 
 let _syncClient = null;
 let _syncChannel = null;
