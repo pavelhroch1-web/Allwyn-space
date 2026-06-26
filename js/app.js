@@ -680,13 +680,25 @@ function renderCheckin(){
   } else if(ci&&!ci.out){
     bar.className='ci-bar active';
     t.textContent='● Na místě od '+ci.inTime;
-    btn.textContent='Check-out';btn.className='ci-btn out';btn.onclick=doCheckout;
+    if(p.photos[1]){
+      btn.textContent='Check-out';btn.className='ci-btn out';btn.onclick=doCheckout;
+    } else {
+      btn.textContent='Vyfotit odchod';btn.className='ci-btn pending';btn.onclick=startDepartureCheckout;
+    }
     startCiTimer(ci.inTs,s);
   } else {
-    bar.className='ci-bar';
-    t.textContent='Check-in na POS';s.textContent='Potvrď příjezd na provozovnu';
-    btn.textContent='Check-in';btn.className='ci-btn';btn.onclick=doCheckin;
+    bar.className='ci-bar pending';
+    t.textContent='📷 Vyfoť příchod, než začneš';s.textContent='Bez fotky exteriéru/vstupu nejde otevřít práci na POS';
+    btn.textContent='Vyfotit příchod';btn.className='ci-btn pending';btn.onclick=startArrivalCheckin;
   }
+}
+function startArrivalCheckin(){
+  pendingSlot=0;
+  document.getElementById('photo-input').click();
+}
+function startDepartureCheckout(){
+  pendingSlot=1;
+  document.getElementById('photo-input').click();
 }
 function doCheckin(){
   const p=posData[cWeek][cIdx];
@@ -832,7 +844,7 @@ function renderRefs(){
 
   const cards=refs.map(r=>`
     <div style="flex-shrink:0;width:210px;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.08)">
-      <div style="width:100%;height:120px;background:${bg};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;overflow:hidden">
+      <div style="width:100%;height:120px;background:${bg};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;overflow:hidden${r.img?';cursor:zoom-in':''}" ${r.img?`onclick="openImageLightbox('${r.img.replace(/'/g,"\\'")}','${(r.l||'').replace(/'/g,"\\'").replace(/"/g,'&quot;')}')"`:''}>
         ${r.img ? `<img src="${r.img}" alt="${r.l||''}" style="width:100%;height:100%;object-fit:cover"/>` : `<div style="font-size:36px">${r.i||'🖼️'}</div>`}
       </div>
       <div style="padding:8px 12px 4px;font-size:12px;font-weight:800;color:var(--navy)">${r.l}</div>
@@ -841,6 +853,18 @@ function renderRefs(){
 
   document.getElementById('refs-wrap').innerHTML = channelBadge +
     (refs.length ? `<div style="display:flex;gap:10px;overflow-x:auto;padding:0 12px 6px;-webkit-overflow-scrolling:touch">${cards}</div>` : '');
+}
+function openImageLightbox(url, caption){
+  const old=document.getElementById('img-lightbox');if(old)old.remove();
+  const ov=document.createElement('div');
+  ov.id='img-lightbox';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(10,20,25,.92);z-index:900;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
+  ov.onclick=()=>ov.remove();
+  ov.innerHTML=`
+    <img src="${url}" style="max-width:100%;max-height:80vh;border-radius:10px;object-fit:contain"/>
+    ${caption?`<div style="color:#fff;font-size:13px;font-weight:700;margin-top:12px;text-align:center">${caption}</div>`:''}
+    <button aria-label="Zavřít" style="position:absolute;top:16px;right:16px;background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:50%;width:36px;height:36px;font-size:18px;cursor:pointer">✕</button>`;
+  document.body.appendChild(ov);
 }
 
 // ══════════════════════════════════════════════════════
@@ -1057,7 +1081,7 @@ function stampPhoto(dataUrl, lines, cb){
 function pushPhotosMeta(p){
   if (typeof VisitStore === 'undefined') return;
   const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
-  const meta = p.photos.map((dataUrl, i) => ({ slot: i, sizeBytes: Math.round(dataUrl.length * 0.75), takenAt: new Date().toISOString() }));
+  const meta = p.photos.map((dataUrl, i) => dataUrl ? { slot: i, sizeBytes: Math.round(dataUrl.length * 0.75), takenAt: new Date().toISOString() } : null).filter(Boolean);
   VisitStore.setVisitField(tech, p.id, p.n, p.a, null, { photos_meta: meta });
 }
 function handlePhoto(e){
@@ -1072,6 +1096,9 @@ function handlePhoto(e){
         else p.photos.push(stamped);
         pendingSlot=null;saveVisitState(p,cWeek);renderPhotos();e.target.value='';
         pushPhotosMeta(p);renderCompleteBtn();
+        if(slot===0&&!lsg('ci_'+p.id)) doCheckin();
+        else if(slot===1){const ci=lsg('ci_'+p.id);if(ci&&!ci.out) doCheckout();}
+        renderCheckin();
       });
     };
     r.readAsDataURL(file);
@@ -1347,7 +1374,13 @@ function renderCompleteBtn(){
 function markVisited(){
   const p=posData[cWeek][cIdx];
   if(p.v){
-    p.v=false;saveVisitState(p,cWeek);renderCompleteBtn();updateSummary();renderChips();renderDayTabs();
+    p.v=false;
+    // Reopen znamená novou práci na místě — staré foto odchodu už není
+    // důkazem aktuálního stavu, technik musí vyfotit nový odchod.
+    if(p.photos[1]){p.photos[1]=null;pushPhotosMeta(p);}
+    const ci=lsg('ci_'+p.id);
+    if(ci&&ci.out) lss('ci_'+p.id,{...ci,out:false,outTime:null,outTs:null,dur:null});
+    saveVisitState(p,cWeek);renderCompleteBtn();updateSummary();renderChips();renderDayTabs();renderPhotos();renderCheckin();
     if (typeof VisitStore !== 'undefined') {
       const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
       VisitStore.setVisitField(tech, p.id, p.n, p.a, null, { status: 'in_progress', completed_at: null });
@@ -1458,7 +1491,7 @@ function getLiveState() {
     photos: (() => {
       const all = posData['25'] || [];
       const photos = [];
-      all.forEach(p => { p.photos.forEach((ph, i) => photos.push({ posName: p.n, posId: p.id, url: ph, slot: ['Před','Po','Detail'][i] || ('Foto '+(i+1)) })); });
+      all.forEach(p => { p.photos.forEach((ph, i) => { if(ph) photos.push({ posName: p.n, posId: p.id, url: ph, slot: ['Příchod','Odchod','Detail'][i] || ('Foto '+(i+1)) }); }); });
       return photos;
     })(),
     supplies: (() => {
