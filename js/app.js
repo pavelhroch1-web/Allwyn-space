@@ -3748,10 +3748,15 @@ function buildRouteSummaryCard(dayPos, week, day){
   const { visited, unvisited } = splitVisitedRoute(dayPos);
   if (unvisited.length < 2) return null;
   const startLoc = remainingRouteStartPoint(visited, getEffectiveStartLocation());
-  const cmp = RouteEngine.compareRoutes(unvisited, startLoc, getStartTime(), day, today());
+  let elapsedMin = visited.reduce((sum, p) => sum + RouteEngine.getVisitDurationMin(p), 0);
+  if (getEffectiveStartLocation() && visited.length) {
+    elapsedMin = RouteEngine.calculateRoute(visited, getEffectiveStartLocation()).totalMin;
+  }
+  const cmp = RouteEngine.compareRoutes(unvisited, startLoc, getStartTime(), day, today(), { elapsedMin });
   const hasStoredOrder = !!getStoredRouteOrder(week, day);
   const fewerViolations = cmp.optimizedViolations != null && cmp.optimizedViolations < cmp.currentViolations;
   const showOptimize = cmp.savedKm > 0.5 || fewerViolations;
+  const overBudget = cmp.currentCapacity && cmp.currentCapacity.overBudget;
   const el = document.createElement('div');
   el.style.cssText = 'margin:8px 12px;padding:14px;background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:12px';
   el.innerHTML = `
@@ -3761,8 +3766,9 @@ function buildRouteSummaryCard(dayPos, week, day){
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
       <div><div style="font-size:11px;color:var(--muted)">Jízda</div><div style="font-size:15px;font-weight:700">${RouteEngine.formatKm(cmp.before.drivingKm)}</div><div style="font-size:11px;color:var(--muted)">${RouteEngine.formatHM(cmp.before.drivingMin)}</div></div>
       <div><div style="font-size:11px;color:var(--muted)">Práce na POS</div><div style="font-size:15px;font-weight:700">${RouteEngine.formatHM(cmp.before.workMin)}</div></div>
-      <div><div style="font-size:11px;color:var(--muted)">Celkem</div><div style="font-size:15px;font-weight:700">${RouteEngine.formatHM(cmp.before.totalMin)}</div></div>
+      <div><div style="font-size:11px;color:var(--muted)">Celkem</div><div style="font-size:15px;font-weight:700${overBudget ? ';color:#b8860b' : ''}">${RouteEngine.formatHM(cmp.before.totalMin)}</div></div>
     </div>
+    ${overBudget ? `<div style="font-size:11px;color:#b8860b;font-weight:700;margin-top:6px"><svg class="ic ic-sm"><use href="#ic-warning"/></svg> Přetížený den — o ${RouteEngine.formatHM(cmp.currentCapacity.overMin)} nad pracovní dobou</div>` : ''}
     ${showOptimize ? `
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
       <div style="font-size:12px;color:var(--teal);font-weight:700;display:flex;align-items:center;gap:5px">
@@ -4065,12 +4071,26 @@ function showRouteView(week, day){
       `;
       wrap.appendChild(ohCard);
     }
+
+    // Kapacita dne — porovnání odhadovaného celkového času (jízda + práce,
+    // včetně už uplynulého času na hotových POS) s rozpočtem pracovní doby.
+    // Jen upozornění, nikdy automatické vynechání POS (to je budoucí krok 4).
+    const capCheck = RouteEngine.checkCapacity({ totalMin: elapsedMin + baseCalc.totalMin });
+    if (capCheck.overBudget) {
+      const capCard = document.createElement('div');
+      capCard.style.cssText = 'margin:0 12px 10px;padding:14px;background:#fff7e6;border:1.5px solid #f5c542;border-radius:12px';
+      capCard.innerHTML = `
+        <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:6px"><svg class="ic ic-sm" style="color:#b8860b"><use href="#ic-warning"/></svg> Kapacita dne</div>
+        <div style="font-size:12px;color:var(--td)">Odhad ${RouteEngine.formatHM(capCheck.totalMin)} přesahuje pracovní dobu (${RouteEngine.formatHM(capCheck.budgetMin)}) o ${RouteEngine.formatHM(capCheck.overMin)}. Zvaž přesun méně urgentní POS na jiný den.</div>
+      `;
+      wrap.appendChild(capCard);
+    }
   }
 
   // Porovnání + volba (jen pokud je co porovnávat — minimálně 2 nenavštívené
   // zastávky; hotové POS jsou zamčené a optimalizace se jich nedotýká)
   if (unvisited.length > 1) {
-    const cmp = RouteEngine.compareRoutes(unvisited, effectiveStart, effectiveStartTime, day, today());
+    const cmp = RouteEngine.compareRoutes(unvisited, effectiveStart, effectiveStartTime, day, today(), { elapsedMin });
     const fewerViolations = cmp.optimizedViolations != null && cmp.optimizedViolations < cmp.currentViolations;
     const showOpportunity = cmp.savedKm > 0.5 || fewerViolations;
     const slaCount = unvisited.filter(p => RouteEngine.getSlaWeight(p, today()) > 0).length;
@@ -4079,6 +4099,7 @@ function showRouteView(week, day){
       <div style="font-size:12px;color:var(--td);margin-bottom:2px">✓ Zkontrolováno ${unvisited.length} zbývajících POS${visited.length ? ` (${visited.length} hotovo, zamčeno)` : ''}${cmp.exact ? ' (porovnána všechna pořadí)' : ' (optimalizace 2-opt)'}</div>
       <div style="font-size:12px;color:var(--td);margin-bottom:2px">✓ Zkontrolována vzdálenost trasy</div>
       <div style="font-size:12px;color:var(--td);margin-bottom:2px">${cmp.currentViolations != null ? '✓ Zkontrolována otevírací doba' : '○ Otevírací dobu nelze ověřit — chybí pozice/čas odjezdu'}</div>
+      <div style="font-size:12px;color:var(--td);margin-bottom:2px">${cmp.currentCapacity ? `✓ Zkontrolována kapacita dne${cmp.currentCapacity.overBudget ? ` — přetížení o ${RouteEngine.formatHM(cmp.currentCapacity.overMin)}` : ' — v rámci pracovní doby'}` : '○ Kapacitu dne nelze ověřit'}</div>
       <div style="font-size:12px;color:var(--td);margin-bottom:10px">${slaCount > 0 ? `✓ Zkontrolována priorita/SLA — ${slaCount} ${slaCount === 1 ? 'POS' : 'POS'} s vyšší prioritou zohledněno v pořadí` : '✓ Zkontrolována priorita/SLA — žádné POS s blížícím se termínem'}</div>
     `;
     const cmpCard = document.createElement('div');
@@ -4174,6 +4195,7 @@ function buildMorningBriefCard(todayPos, week, day){
   const { visited, unvisited } = splitVisitedRoute(todayPos);
   const fullCalc = RouteEngine.calculateRoute(todayPos, startLoc);
   const totalMin = fullCalc.totalMin;
+  const dayCapacity = RouteEngine.checkCapacity({ totalMin });
   // Návrh lepší trasy se vztahuje jen na zbytek dne — hotové POS jsou zamčené.
   const effectiveStart = remainingRouteStartPoint(visited, startLoc);
   const cmp = unvisited.length > 1 ? RouteEngine.compareRoutes(unvisited, effectiveStart, getStartTime(), day, today()) : null;
@@ -4185,7 +4207,7 @@ function buildMorningBriefCard(todayPos, week, day){
   el.innerHTML = `
     <div style="font-size:15px;font-weight:800">Dobré ráno${firstName ? ', ' + firstName : ''}</div>
     <div style="font-size:12px;color:rgba(255,255,255,.75);margin-top:6px">
-      Dnes: <strong style="color:#fff">${todayPos.length} POS</strong> naplánováno · Odhad <strong style="color:#fff">${RouteEngine.formatHM(totalMin)}</strong>
+      Dnes: <strong style="color:#fff">${todayPos.length} POS</strong> naplánováno · Odhad <strong style="color:${dayCapacity.overBudget ? '#ffd166' : '#fff'}">${RouteEngine.formatHM(totalMin)}</strong>${dayCapacity.overBudget ? ` <span style="color:#ffd166;font-weight:700">(o ${RouteEngine.formatHM(dayCapacity.overMin)} nad pracovní dobou)</span>` : ''}
     </div>
     ${hasSuggestion ? `
     <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.15);display:flex;align-items:center;justify-content:space-between;gap:10px">

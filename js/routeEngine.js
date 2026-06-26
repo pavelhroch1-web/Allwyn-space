@@ -28,6 +28,12 @@
 
   const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
+  // Výchozí kapacita pracovní doby technika v minutách (8h). Stejná hodnota
+  // jako default v `proposeDayPlan` — dokud neexistuje reálný datový zdroj
+  // skutečné kapacity technika, je to jediné nefiktivní výchozí číslo, které
+  // umíme pojmenovat (pracovní doba = 8h, viz docs/CLAUDE.md pravidlo #4).
+  const WORKDAY_BUDGET_MIN = 480;
+
   // ── HAVERSINE ──────────────────────────────────────────────────────────
   function haversineKm(a, b){
     const R = 6371;
@@ -219,6 +225,18 @@
     return issues;
   }
 
+  // ── KAPACITA DNE ─────────────────────────────────────────────────────────
+  // Porovná totalMin (jízda + práce na POS) z calculateRoute() s rozpočtem
+  // pracovní doby. Nerozhoduje, které POS vynechat (to je budoucí krok 4
+  // roadmapy) — jen řekne, o kolik je den přetížený, aby to šlo zobrazit
+  // Velínu i technikovi a zohlednit v cost function (routeCost).
+  function checkCapacity(calcResult, budgetMin){
+    const budget = budgetMin != null ? budgetMin : WORKDAY_BUDGET_MIN;
+    const totalMin = calcResult ? calcResult.totalMin : 0;
+    const overMin = Math.max(0, totalMin - budget);
+    return { budgetMin: budget, totalMin, overMin, overBudget: overMin > 0 };
+  }
+
   // ── OPTIMIZATION: nearest neighbor ──────────────────────────────────────
   // startPos: výchozí bod (např. první POS dne nebo poloha technika). Pokud
   // je startPos zároveň prvkem posList (stará fleet analytika bez reálného
@@ -266,7 +284,15 @@
   // SLA penalizace nepočítá (zpětná kompatibilita s fleet analytikou).
   const HOURS_VIOLATION_PENALTY_KM = 1000;
   const SLA_POSITION_PENALTY_KM = 3;
-  function routeCost(order, startPoint, startTime, dayIdx, todayStr){
+  // Penalizace za přetížení dne je úmyslně malá (mnohem menší než porušení
+  // otevírací doby) — slouží jen k tomu, aby optimalizace mezi víceméně
+  // rovnocennými pořadími preferovala to s menším přetížením, nikdy
+  // nepřebije reálnou otevírací dobu ani SLA.
+  const CAPACITY_OVER_PENALTY_KM_PER_MIN = 0.5;
+  // capacityOpts: { budgetMin, elapsedMin } — nepovinné, zpětně kompatibilní.
+  // elapsedMin = čas už spotřebovaný dnes (např. navštívené POS) před tímto
+  // pořadím; bez capacityOpts se kapacita do cost function nepromítá.
+  function routeCost(order, startPoint, startTime, dayIdx, todayStr, capacityOpts){
     const calc = calculateRoute(order, startPoint);
     let violations = 0;
     if (startTime != null && dayIdx != null) {
@@ -280,7 +306,13 @@
         if (weight > 0) slaPenalty += weight * idx * SLA_POSITION_PENALTY_KM;
       });
     }
-    return calc.drivingKm + violations * HOURS_VIOLATION_PENALTY_KM + slaPenalty;
+    let capacityPenalty = 0;
+    if (capacityOpts) {
+      const elapsedMin = capacityOpts.elapsedMin || 0;
+      const cap = checkCapacity({ totalMin: elapsedMin + calc.totalMin }, capacityOpts.budgetMin);
+      capacityPenalty = cap.overMin * CAPACITY_OVER_PENALTY_KM_PER_MIN;
+    }
+    return calc.drivingKm + violations * HOURS_VIOLATION_PENALTY_KM + slaPenalty + capacityPenalty;
   }
 
   // ── OPTIMIZATION: exact (brute force) pro malé počty zastávek ───────────
@@ -297,10 +329,10 @@
     }
     return result;
   }
-  function exactBestOrder(posList, startPoint, startTime, dayIdx, todayStr){
+  function exactBestOrder(posList, startPoint, startTime, dayIdx, todayStr, capacityOpts){
     let best = posList, bestCost = Infinity;
     for (const perm of permute(posList)){
-      const cost = routeCost(perm, startPoint, startTime, dayIdx, todayStr);
+      const cost = routeCost(perm, startPoint, startTime, dayIdx, todayStr, capacityOpts);
       if (cost < bestCost){ bestCost = cost; best = perm; }
     }
     return best;
@@ -310,9 +342,9 @@
   // Začne od nearest-neighbor pořadí a opakovaně zkouší obrátit úseky trasy,
   // dokud nalezne zlepšení (kratší/bez porušení otevírací doby). Standardní
   // heuristika pro TSP — odstraňuje typické "zacuknutí" nearest-neighbor.
-  function twoOptImprove(initialOrder, startPoint, startTime, dayIdx, todayStr){
+  function twoOptImprove(initialOrder, startPoint, startTime, dayIdx, todayStr, capacityOpts){
     let order = initialOrder.slice();
-    let bestCost = routeCost(order, startPoint, startTime, dayIdx, todayStr);
+    let bestCost = routeCost(order, startPoint, startTime, dayIdx, todayStr, capacityOpts);
     let improved = true;
     while (improved){
       improved = false;
@@ -321,7 +353,7 @@
           const candidate = order.slice();
           const seg = candidate.slice(i, j + 1).reverse();
           candidate.splice(i, seg.length, ...seg);
-          const cost = routeCost(candidate, startPoint, startTime, dayIdx, todayStr);
+          const cost = routeCost(candidate, startPoint, startTime, dayIdx, todayStr, capacityOpts);
           if (cost < bestCost - 1e-9){
             bestCost = cost; order = candidate; improved = true;
           }
@@ -333,28 +365,34 @@
 
   // bestOrder(): hlavní vstupní bod optimalizace. Vrací pořadí POS (bez
   // startPoint v poli — startPoint je jen výchozí bod pro výpočet vzdáleností).
-  function bestOrder(posList, startPoint, startTime, dayIdx, todayStr){
+  function bestOrder(posList, startPoint, startTime, dayIdx, todayStr, capacityOpts){
     if (posList.length <= 1) return posList.slice();
     if (posList.length <= EXACT_SEARCH_LIMIT) {
-      return exactBestOrder(posList, startPoint, startTime, dayIdx, todayStr);
+      return exactBestOrder(posList, startPoint, startTime, dayIdx, todayStr, capacityOpts);
     }
     const seeded = nearestNeighborOrder(posList, startPoint).filter(p => posList.indexOf(p) !== -1);
-    return twoOptImprove(seeded, startPoint, startTime, dayIdx, todayStr);
+    return twoOptImprove(seeded, startPoint, startTime, dayIdx, todayStr, capacityOpts);
   }
 
   // ── COMPARISON: current order vs optimized ───────────────────────────────
   // startPoint: volitelný reálný start technika. startTime/dayIdx: pokud jsou
   // známé, optimalizace zohlední i otevírací dobu (ne jen vzdálenost) —
   // bez nich (např. fleet analytika) se optimalizuje čistě podle vzdálenosti.
-  function compareRoutes(posList, startPoint, startTime, dayIdx, todayStr){
+  function compareRoutes(posList, startPoint, startTime, dayIdx, todayStr, capacityOpts){
     const current = calculateRoute(posList, startPoint);
-    const optimizedOrder = bestOrder(posList, startPoint, startTime, dayIdx, todayStr);
+    const optimizedOrder = bestOrder(posList, startPoint, startTime, dayIdx, todayStr, capacityOpts);
     const optimized = calculateRoute(optimizedOrder, startPoint);
     const hasTimeContext = startTime != null && dayIdx != null;
     const currentViolations = hasTimeContext
       ? checkOpeningHours(posList, current, startTime, dayIdx).length : null;
     const optimizedViolations = hasTimeContext
       ? checkOpeningHours(optimizedOrder, optimized, startTime, dayIdx).length : null;
+    const elapsedMin = capacityOpts ? (capacityOpts.elapsedMin || 0) : 0;
+    const budgetMin = capacityOpts ? capacityOpts.budgetMin : null;
+    const currentCapacity = capacityOpts
+      ? checkCapacity({ totalMin: elapsedMin + current.totalMin }, budgetMin) : null;
+    const optimizedCapacity = capacityOpts
+      ? checkCapacity({ totalMin: elapsedMin + optimized.totalMin }, budgetMin) : null;
     return {
       before: current,
       after: optimized,
@@ -363,6 +401,8 @@
       optimizedOrderIds: optimized.order,
       currentViolations,
       optimizedViolations,
+      currentCapacity,
+      optimizedCapacity,
       exact: posList.length <= EXACT_SEARCH_LIMIT,
     };
   }
@@ -473,6 +513,8 @@
     getSlaWeight,
     getOpeningHours,
     checkOpeningHours,
+    checkCapacity,
+    WORKDAY_BUDGET_MIN,
     formatClock,
     parseHM,
     DAY_KEYS,
