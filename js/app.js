@@ -1303,7 +1303,8 @@ function stampPhoto(dataUrl, lines, cb){
 function pushPhotosMeta(p){
   if (typeof VisitStore === 'undefined') return;
   const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
-  const meta = p.photos.map((dataUrl, i) => dataUrl ? { slot: i, sizeBytes: Math.round(dataUrl.length * 0.75), takenAt: new Date().toISOString() } : null).filter(Boolean);
+  const urls = p.photoUrls || {};
+  const meta = p.photos.map((dataUrl, i) => dataUrl ? { slot: i, sizeBytes: Math.round(dataUrl.length * 0.75), takenAt: new Date().toISOString(), url: urls[i] || null } : null).filter(Boolean);
   VisitStore.setVisitField(tech, p.id, p.n, p.a, null, { photos_meta: meta });
 }
 function handlePhoto(e){
@@ -1314,12 +1315,15 @@ function handlePhoto(e){
     const r=new FileReader();
     r.onload=ev=>{
       stampPhoto(ev.target.result, buildStampLines(p, geo), stamped=>{
+        let targetSlot;
         if(slot!==null){
           while(p.photos.length<=slot)p.photos.push(null);
           p.photos[slot]=stamped;
+          targetSlot=slot;
         } else {
           while(p.photos.length<PHOTO_REQUIRED_COUNT)p.photos.push(null);
           p.photos.push(stamped);
+          targetSlot=p.photos.length-1;
         }
         pendingSlot=null;saveVisitState(p,cWeek);renderPhotos();e.target.value='';
         pushPhotosMeta(p);renderCompleteBtn();
@@ -1327,6 +1331,17 @@ function handlePhoto(e){
         else if(slot===1){const ci=lsg('ci_'+p.id);if(ci&&!ci.out) doCheckout();}
         renderCheckin();
         refreshMissingPhotosPromptIfOpen();
+        // Skutečné bajty fotky navíc do Supabase Storage (fire-and-forget) —
+        // lokální dataURL výše zůstává beze změny, tohle jen dodá URL, kterou
+        // uvidí i jiné zařízení (viz pullVisitState/mergeIntoPos v visitStore.js).
+        if (typeof VisitStore !== 'undefined' && VisitStore.enabled()) {
+          VisitStore.uploadPhoto(p.id, cWeek, targetSlot, stamped).then(url => {
+            if (!url) return;
+            p.photoUrls = p.photoUrls || {};
+            p.photoUrls[targetSlot] = url;
+            pushPhotosMeta(p);
+          });
+        }
       });
     };
     r.readAsDataURL(file);
@@ -1335,7 +1350,17 @@ function handlePhoto(e){
 function rmPhoto(e,i){
   e.stopPropagation();
   const p=posData[cWeek][cIdx];
-  p.photos.splice(i,1);saveVisitState(p,cWeek);renderPhotos();
+  p.photos.splice(i,1);
+  if (p.photoUrls) {
+    const shifted = {};
+    Object.keys(p.photoUrls).forEach(k => {
+      const ki = +k;
+      if (ki < i) shifted[ki] = p.photoUrls[ki];
+      else if (ki > i) shifted[ki-1] = p.photoUrls[ki];
+    });
+    p.photoUrls = shifted;
+  }
+  saveVisitState(p,cWeek);renderPhotos();
   pushPhotosMeta(p);renderCompleteBtn();
 }
 
@@ -2685,13 +2710,14 @@ markVisited = function() {
 function visitStateKey(posId, weekKey) { return 'visitstate_' + posId + '_' + weekKey; }
 function getVisitState(posId, weekKey) { return lsg(visitStateKey(posId, weekKey)); }
 function saveVisitState(p, weekKey) {
-  lss(visitStateKey(p.id, weekKey), { v: p.v, taskState: p.taskState, photos: p.photos });
+  lss(visitStateKey(p.id, weekKey), { v: p.v, taskState: p.taskState, photos: p.photos, photoUrls: p.photoUrls });
 }
 function applyVisitState(p, weekKey) {
   const saved = getVisitState(p.id, weekKey);
   if (!saved) return;
   p.v = saved.v;
   if (saved.photos) p.photos = saved.photos;
+  if (saved.photoUrls) p.photoUrls = saved.photoUrls;
   if (saved.taskState) {
     saved.taskState.forEach(st => {
       const match = p.taskState.find(t => t.text === st.text && t.src === st.src);

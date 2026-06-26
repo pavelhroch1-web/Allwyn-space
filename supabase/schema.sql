@@ -123,3 +123,23 @@ create policy "pilot test — anon full access" on public.sync_events for all us
 alter publication supabase_realtime add table public.visits;
 alter publication supabase_realtime add table public.visit_tasks;
 alter publication supabase_realtime add table public.materials;
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- KROK 2 (perzistence fotek) — skutečný obsah fotky (JPEG bajty) jde do
+-- Supabase Storage, ne do JSON sloupce. visits.photos_meta výše teď nese i
+-- "url" pro každý slot, na kterou tohle ukazuje. Bucket je veřejně čitelný
+-- (stejné pilotní riziko jako anon RLS výše — 5 lidí na kontrolovaných
+-- zařízeních) — nahradit signed URLs / auth před širším nasazením.
+-- ══════════════════════════════════════════════════════════════════════════
+
+insert into storage.buckets (id, name, public)
+values ('visit-photos', 'visit-photos', true)
+on conflict (id) do nothing;
+
+create policy "pilot test — anon read visit-photos"
+  on storage.objects for select
+  using (bucket_id = 'visit-photos');
+
+create policy "pilot test — anon write visit-photos"
+  on storage.objects for insert
+  with check (bucket_id = 'visit-photos');
