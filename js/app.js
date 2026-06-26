@@ -992,7 +992,8 @@ function renderCampaignChecklist(){
 function renderPhotos(){
   const p=posData[cWeek][cIdx];
   const grid=document.getElementById('photos-grid');grid.innerHTML='';
-  const lbls=['Před','Po','Detail'];
+  const lbls=['Příchod','Odchod','Detail'];
+  const required=[true,true,false];
   const slots=Math.max(3,p.photos.length+1);
   for(let i=0;i<slots;i++){
     const slot=document.createElement('div');
@@ -1000,14 +1001,58 @@ function renderPhotos(){
       slot.className='pslot filled';
       slot.innerHTML=`<img src="${p.photos[i]}" alt="Foto ${lbls[i]||i+1}"/><button class="p-rm" aria-label="Smazat foto ${lbls[i]||i+1}" onclick="rmPhoto(event,${i})">✕</button>`;
     } else {
-      slot.className='pslot';
+      slot.className='pslot'+(required[i]?' pslot-req':'');
       slot.setAttribute('role','button');
       slot.setAttribute('aria-label','Vyfotit '+(lbls[i]||'Foto '+(i+1)));
-      slot.innerHTML=`<div class="p-ico"><svg class="ic ic-lg"><use href="#ic-camera"/></svg></div><div class="p-lbl">${lbls[i]||'Foto '+(i+1)}</div>`;
+      slot.innerHTML=`<div class="p-ico"><svg class="ic ic-lg"><use href="#ic-camera"/></svg></div><div class="p-lbl">${lbls[i]||'Foto '+(i+1)}${required[i]?' *':''}</div>`;
       slot.onclick=()=>{pendingSlot=i;document.getElementById('photo-input').click();};
     }
     grid.appendChild(slot);
   }
+}
+function requiredPhotosOk(p){ return !!(p.photos[0] && p.photos[1]); }
+// Zeměpisná poloha v okamžiku focení — pokud zařízení/uživatel polohu
+// neposkytne, cb(null). Nikdy se nedomýšlí náhradní souřadnice (no fake data).
+function getGeoTag(cb){
+  if(!navigator.geolocation){ cb(null); return; }
+  navigator.geolocation.getCurrentPosition(
+    pos => cb({ lat: pos.coords.latitude, lng: pos.coords.longitude, acc: Math.round(pos.coords.accuracy||0) }),
+    () => cb(null),
+    { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+  );
+}
+function buildStampLines(p, geo){
+  const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
+  const now = new Date();
+  const ts = now.toLocaleDateString('cs-CZ') + ' ' + now.toLocaleTimeString('cs-CZ', {hour:'2-digit', minute:'2-digit'});
+  const gpsLine = geo ? `GPS: ${geo.lat.toFixed(5)}, ${geo.lng.toFixed(5)} (±${geo.acc} m)` : 'GPS: nedostupné';
+  return [tech, `POS ${p.id}`, ts, gpsLine];
+}
+// Vypálí jméno technika / POS ID / čas / GPS přímo do pixelů fotky (ne jen do
+// metadat) — jinak důkaz jde oddělit od obrázku kopií/přesunem. Zmenšení na
+// max šířku 1280px navíc řeší růst localStorage při desítkách fotek/den.
+function stampPhoto(dataUrl, lines, cb){
+  const img = new Image();
+  img.onload = () => {
+    const maxW = 1280;
+    const scale = Math.min(1, maxW / img.width);
+    const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, w, h);
+    const lineH = Math.round(h*0.032)+8, pad = Math.round(h*0.018)+6;
+    const barH = lines.length * lineH + pad * 2;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(0, h - barH, w, barH);
+    ctx.font = Math.round(lineH*0.72)+'px -apple-system, Arial, sans-serif';
+    ctx.fillStyle = '#fff';
+    ctx.textBaseline = 'top';
+    lines.forEach((line, i) => ctx.fillText(line, pad, h - barH + pad + i * lineH));
+    cb(canvas.toDataURL('image/jpeg', 0.82));
+  };
+  img.onerror = () => cb(dataUrl);
+  img.src = dataUrl;
 }
 function pushPhotosMeta(p){
   if (typeof VisitStore === 'undefined') return;
@@ -1017,20 +1062,26 @@ function pushPhotosMeta(p){
 }
 function handlePhoto(e){
   const file=e.target.files[0];if(!file)return;
-  const r=new FileReader();
-  r.onload=ev=>{
-    const p=posData[cWeek][cIdx];
-    if(pendingSlot!==null&&pendingSlot<p.photos.length)p.photos[pendingSlot]=ev.target.result;
-    else p.photos.push(ev.target.result);
-    pendingSlot=null;saveVisitState(p,cWeek);renderPhotos();e.target.value='';
-    pushPhotosMeta(p);
-  };r.readAsDataURL(file);
+  const p=posData[cWeek][cIdx];
+  const slot=pendingSlot;
+  getGeoTag(geo=>{
+    const r=new FileReader();
+    r.onload=ev=>{
+      stampPhoto(ev.target.result, buildStampLines(p, geo), stamped=>{
+        if(slot!==null&&slot<p.photos.length)p.photos[slot]=stamped;
+        else p.photos.push(stamped);
+        pendingSlot=null;saveVisitState(p,cWeek);renderPhotos();e.target.value='';
+        pushPhotosMeta(p);renderCompleteBtn();
+      });
+    };
+    r.readAsDataURL(file);
+  });
 }
 function rmPhoto(e,i){
   e.stopPropagation();
   const p=posData[cWeek][cIdx];
   p.photos.splice(i,1);saveVisitState(p,cWeek);renderPhotos();
-  pushPhotosMeta(p);
+  pushPhotosMeta(p);renderCompleteBtn();
 }
 
 // ══════════════════════════════════════════════════════
@@ -1282,12 +1333,14 @@ function renderCompleteBtn(){
   const btn=document.getElementById('complete-btn');
   const badge=document.getElementById('vis-badge-slot2');
   const allDone=p.taskState.length>0&&p.taskState.every(t=>t.done);
+  const photosOk=requiredPhotosOk(p);
   if(p.v){
     badge.innerHTML='<div class="vis-badge">✓ Návštěva dokončena</div>';
     btn.textContent='Znovu otevřít';btn.className='btn-complete visited';
   } else {
     badge.innerHTML='';
-    if(allDone){btn.textContent='Označit jako navštíveno ✓';btn.className='btn-complete active';}
+    if(allDone&&photosOk){btn.textContent='Označit jako navštíveno ✓';btn.className='btn-complete active';}
+    else if(!photosOk){btn.textContent='Chybí foto příchodu/odchodu';btn.className='btn-complete disabled';}
     else{const r=p.taskState.filter(t=>!t.done).length;btn.textContent=`Zbývá ${r} ${r===1?'úkol':r<5?'úkoly':'úkolů'}`;btn.className='btn-complete disabled';}
   }
 }
@@ -1302,7 +1355,7 @@ function markVisited(){
     }
     return;
   }
-  if(!p.taskState.every(t=>t.done))return;
+  if(!p.taskState.every(t=>t.done)||!requiredPhotosOk(p))return;
   p.v=true;saveVisitState(p,cWeek);renderCompleteBtn();updateSummary();renderChips();renderDayTabs();
   if (typeof VisitStore !== 'undefined') {
     const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
@@ -3779,7 +3832,7 @@ markVisited = function() {
   const p = posData[cWeek][cIdx];
   if (!p) return;
   if (p.v) { _origMarkVisited2(); return; } // reopen path — žádný nový visit record
-  if (!p.taskState.every(t => t.done)) return;
+  if (!p.taskState.every(t => t.done) || !requiredPhotosOk(p)) return;
   recordVisit(p.id, p.n, cWeek, cDay);
   _origMarkVisited2();
 };

@@ -376,6 +376,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .pslot{aspect-ratio:1;border-radius:8px;background:var(--bg);border:2px dashed var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;overflow:hidden;position:relative;transition:border-color .15s}
 .pslot:active,.pslot:hover{border-color:var(--teal)}
 .pslot.filled{border:none}
+.pslot-req{border-color:var(--red)}
+.pslot-req .p-lbl{color:var(--red)}
 .pslot img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
 .p-ico{color:var(--muted)}
 .p-lbl{font-size:10px;font-weight:700;color:var(--muted);text-align:center}
