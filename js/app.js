@@ -942,6 +942,27 @@ function renderSupply(p){
   document.getElementById('sig-done').style.display=saved&&saved.confirmed?'block':'none';
   document.querySelector('.sig-conf').style.display=saved&&saved.confirmed?'none':'block';
   initSig();
+  renderSupplySummary();
+}
+// Shrnutí pro sbalenou hlavičku — technik vidí na první pohled, jestli je potřeba materiál otevírat,
+// aniž by sekci musel rozbalovat.
+function renderSupplySummary(){
+  const el=document.getElementById('supply-summary');if(!el)return;
+  const p=posData[cWeek][cIdx];
+  const isCorn=p.typ==='CORN'||p.kat==='9'||p.k==='9';
+  const defaults=isCorn?SUPPLY_CORN:SUPPLY_DEFAULT;
+  const saved=lsg('supply_'+p.id+'_'+today());
+  const changedCount=supplyItems.filter((x,i)=>x.qty!==(defaults[i]?defaults[i].qty:0)).length;
+  if(saved&&saved.confirmed){
+    el.textContent='✓ Předáno';
+    el.classList.add('has-changes');
+  } else if(changedCount>0){
+    el.textContent=`${changedCount} ${changedCount===1?'položka':'položky'}`;
+    el.classList.add('has-changes');
+  } else {
+    el.textContent='Beze změn';
+    el.classList.remove('has-changes');
+  }
 }
 function renderSupplyItems(){
   document.getElementById('supply-items').innerHTML=supplyItems.map((x,i)=>`
@@ -961,7 +982,7 @@ function renderSupplyItems(){
       </div>`:''}
     </div>`).join('');
 }
-function adjQty(i,d){if(supplyLocked)return;supplyItems[i].qty=Math.max(0,supplyItems[i].qty+d);renderSupplyItems();}
+function adjQty(i,d){if(supplyLocked)return;supplyItems[i].qty=Math.max(0,supplyItems[i].qty+d);renderSupplyItems();renderSupplySummary();}
 function initSig(){
   const c=document.getElementById('sig-canvas');if(!c)return;
   sigCanvas=c;sigCtx=c.getContext('2d');
@@ -991,6 +1012,7 @@ function confirmSupply(){
   renderSupplyItems();
   document.getElementById('sig-done').style.display='block';
   document.querySelector('.sig-conf').style.display='none';
+  renderSupplySummary();
 }
 
 // ══════════════════════════════════════════════════════
