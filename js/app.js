@@ -669,6 +669,10 @@ function openDetail(ri){
 // ══════════════════════════════════════════════════════
 // CHECK-IN
 // ══════════════════════════════════════════════════════
+// Check-in/check-out se odemyká okamžitě, foto příchodu/odchodu se nevynucuje
+// hned — stejný odložený model jako u merch (setMerch): technik klikne a jede
+// dál, chybějící fotky doplní kdykoliv, blokují až dokončení návštěvy
+// (viz getMissingPhotos/showMissingPhotosPrompt).
 function renderCheckin(){
   const p=posData[cWeek][cIdx];
   const ci=lsg('ci_'+p.id);
@@ -684,17 +688,23 @@ function renderCheckin(){
   } else if(ci&&!ci.out){
     bar.className='ci-bar active';
     t.textContent='● Na místě od '+ci.inTime;
-    if(p.photos[1]){
-      btn.textContent='Check-out';btn.className='ci-btn out';btn.onclick=doCheckout;
-    } else {
-      btn.textContent='Vyfotit odchod';btn.className='ci-btn pending';btn.onclick=startDepartureCheckout;
-    }
+    btn.textContent='Check-out';btn.className='ci-btn out';btn.onclick=doCheckout;
     startCiTimer(ci.inTs,s);
   } else {
     bar.className='ci-bar pending';
-    t.textContent='📷 Vyfoť příchod, než začneš';s.textContent='Bez fotky exteriéru/vstupu nejde otevřít práci na POS';
-    btn.textContent='Vyfotit příchod';btn.className='ci-btn pending';btn.onclick=startArrivalCheckin;
+    t.textContent='Check-in na POS';s.textContent='Potvrď příjezd na provozovnu';
+    btn.textContent='Check-in';btn.className='ci-btn pending';btn.onclick=doCheckin;
   }
+  renderCiPhotoPending(p);
+}
+function renderCiPhotoPending(p){
+  const el=document.getElementById('ci-photo-pending');
+  if(!el) return;
+  const ci=lsg('ci_'+p.id);
+  const btns=[];
+  if(ci&&!p.photos[0]) btns.push(`<button class="merch-photo-pending" onclick="startArrivalCheckin()">📷 Foto příchodu chybí — vyfotit</button>`);
+  if(ci&&ci.out&&!p.photos[1]) btns.push(`<button class="merch-photo-pending" onclick="startDepartureCheckout()">📷 Foto odchodu chybí — vyfotit</button>`);
+  el.innerHTML=btns.join(' ');
 }
 function startArrivalCheckin(){
   pendingSlot=0;
@@ -1063,7 +1073,7 @@ function requiredPhotosOk(p){
 // Položky merch checklistu odklikané jako osazené (✓) musí mít foto-důkaz,
 // než lze návštěvu dokončit — ale ne hned při kliknutí (viz setMerch).
 function merchPhotosOk(){
-  return merchItems.every(x=>x.done!==true || !!x.photo);
+  return merchItems.every(x=>x.done!==true || !x.reqPhoto || !!x.photo);
 }
 function allPhotosOk(p){ return requiredPhotosOk(p) && merchPhotosOk(); }
 // Sesbírá všechno, co technik tvrdí že udělal, ale ještě to nedoložil fotkou —
@@ -1074,7 +1084,7 @@ function getMissingPhotos(p){
     if(!p.photos[i]) missing.push({label:PHOTO_LABELS[i],capture:()=>{pendingSlot=i;document.getElementById('photo-input').click();}});
   }
   if(!p.servisOnly) merchItems.forEach((x,i)=>{
-    if(x.done===true&&!x.photo) missing.push({label:x.n,capture:()=>startMerchPhoto(i)});
+    if(x.done===true&&x.reqPhoto&&!x.photo) missing.push({label:x.n,capture:()=>startMerchPhoto(i)});
   });
   return missing;
 }
@@ -1363,7 +1373,8 @@ let merchItems = [];
 let pendingMerchIndex = null;
 
 function renderMerch(p) {
-  const defaults = (MERCH_ITEMS[p.typ] || MERCH_ITEMS.IDT).map(x => ({...x}));
+  const tpl = getMerchTemplates();
+  const defaults = (tpl[p.typ] || tpl.IDT).map(x => ({...x}));
   const saved = lsg('merch_' + p.id + '_' + today());
   merchItems = saved || defaults;
   const el = document.getElementById('merch-items');
@@ -1374,7 +1385,7 @@ function renderMerch(p) {
         <div class="inv-n" style="${x.done?'text-decoration:line-through;color:var(--muted)':''}">${x.n}</div>
         ${x.photo
           ? `<img src="${x.photo}" class="merch-thumb" alt="Foto — ${x.n}" onclick="openMerchPhotoLightbox(${i})"/>`
-          : x.done===true ? `<button class="merch-photo-pending" onclick="startMerchPhoto(${i})">📷 Foto chybí — vyfotit</button>` : ''}
+          : x.done===true && x.reqPhoto ? `<button class="merch-photo-pending" onclick="startMerchPhoto(${i})">📷 Foto chybí — vyfotit</button>` : ''}
       </div>
       <div class="inv-btns">
         <button class="ibtn ibtn-ok ${x.done===true?'on':''}" aria-label="Osazeno — ${x.n}" onclick="setMerch(${i},true)">✓</button>
@@ -4585,7 +4596,7 @@ function makePlanCard(p, ri, selectable) {
 // EDITOR SECTIONS (texty / kampaně / inventory katalog)
 // ══════════════════════════════════════════════════════════════════════════
 function showEditorSection(sec, btn) {
-  ['texty','kampane','inventory','ukoly','checklist','refs'].forEach(s => {
+  ['texty','kampane','inventory','ukoly','checklist','merch','refs'].forEach(s => {
     const el = document.getElementById('ed-sec-' + s);
     if (el) el.style.display = s === sec ? 'block' : 'none';
   });
@@ -4595,6 +4606,7 @@ function showEditorSection(sec, btn) {
   if (sec === 'inventory') renderEditorCatalog();
   if (sec === 'ukoly') renderEditorTaskTemplates();
   if (sec === 'checklist') renderEditorChecklistTemplates();
+  if (sec === 'merch') renderEditorMerchItems();
   if (sec === 'refs') renderEditorRefs();
 }
 
@@ -4857,6 +4869,37 @@ function deleteTaskTemplateItem(channel, i) {
   tpl[channel].splice(i,1);
   saveTaskTemplates(tpl);
   renderEditorTaskTemplates();
+}
+
+// ── EDITABLE MERCH ITEMS — Velín volí, které merch položky vyžadují foto-
+// důkaz při osazení. Většina položek foto nepotřebuje, jen vybrané (např.
+// citlivé/kontrolní). Stejný override pattern jako úkoly na místě výše —
+// beze zásahu do MERCH_ITEMS konstanty, jen lsg/lss override nad ní.
+function getMerchTemplates() {
+  return lsg('editor_merch_items') || JSON.parse(JSON.stringify(MERCH_ITEMS));
+}
+function saveMerchTemplates(t) { lss('editor_merch_items', t); }
+
+function renderEditorMerchItems() {
+  const tpl = getMerchTemplates();
+  Object.keys(MERCH_ITEMS).forEach(channel => {
+    const el = document.getElementById('ed-merch-' + channel);
+    if (!el) return;
+    const items = tpl[channel] || [];
+    el.innerHTML = items.map((x,i) => `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--bg)">
+        <div style="flex:1;font-size:13px">${x.n}</div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer">
+          <input type="checkbox" ${x.reqPhoto?'checked':''} onchange="toggleMerchReqPhoto('${channel}',${i},this.checked)"/>
+          Vyžaduje foto
+        </label>
+      </div>`).join('') || '<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px">Žádné položky</div>';
+  });
+}
+function toggleMerchReqPhoto(channel, i, val) {
+  const tpl = getMerchTemplates();
+  tpl[channel][i].reqPhoto = val;
+  saveMerchTemplates(tpl);
 }
 
 // ── EDITABLE CHECKLIST ŠABLONY — podmíněný checklist (chytrý checklist

@@ -18,7 +18,7 @@
   window.ALLWYN_SUPABASE_URL = 'https://lpnorveltzcmgfouufx.supabase.co';
   window.ALLWYN_SUPABASE_ANON_KEY = 'sb_publishable_Yk_JFXeWpSfqAtyMJqzlyw_xbo4i3D3';
 </script>
-<link rel="stylesheet" href="css/styles.css?v=20260626f">
+<link rel="stylesheet" href="css/styles.css?v=20260626g">
 </head>
 <body>
 <!-- ICON SPRITE (unified line-icon set, replaces emoji glyphs across the app) -->
@@ -344,6 +344,7 @@
       </div>
       <button class="ci-btn" id="ci-btn" onclick="doCheckin()">Check-in</button>
     </div>
+    <div id="ci-photo-pending"></div>
 
     <div id="admin-alert-banner"></div>
     <div id="vis-badge-slot"></div>
@@ -805,6 +806,7 @@
         <button class="ed-subnav" onclick="showEditorSection('inventory',this)"><svg class="ic ic-sm"><use href="#ic-box"/></svg> Inventory katalog</button>
         <button class="ed-subnav" onclick="showEditorSection('ukoly',this)"><svg class="ic ic-sm"><use href="#ic-check-circle"/></svg> Úkoly na místě</button>
         <button class="ed-subnav" onclick="showEditorSection('checklist',this)"><svg class="ic ic-sm"><use href="#ic-box"/></svg> Checklist šablony</button>
+        <button class="ed-subnav" onclick="showEditorSection('merch',this)"><svg class="ic ic-sm"><use href="#ic-check-circle"/></svg> Merch položky</button>
         <button class="ed-subnav" onclick="showEditorSection('refs',this)"><svg class="ic ic-sm"><use href="#ic-image"/></svg> Reference</button>
       </div>
 
@@ -887,6 +889,22 @@
         </div>
       </div>
 
+      <!-- MERCH POLOŽKY — výběr, které položky vyžadují foto-důkaz při osazení -->
+      <div id="ed-sec-merch" style="display:none">
+        <div class="adm-sh" style="margin-bottom:10px"><div class="adm-st">IDT</div></div>
+        <div class="editor-card" id="ed-merch-IDT"></div>
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">PETROL</div></div>
+        <div class="editor-card" id="ed-merch-PETROL"></div>
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">KA</div></div>
+        <div class="editor-card" id="ed-merch-KA"></div>
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">CORN</div></div>
+        <div class="editor-card" id="ed-merch-CORN"></div>
+        <div style="padding:12px;background:var(--tl);border-radius:10px;font-size:12px;color:var(--tm);line-height:1.5;margin-top:8px;display:flex;gap:6px">
+          <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-bulb"/></svg>
+          <span>Foto-důkaz se u technika vyžaduje jen u položek se zaškrtnutým "Vyžaduje foto". Většina položek foto nepotřebuje — zapni jen tam, kde to dává smysl.</span>
+        </div>
+      </div>
+
       <!-- CHECKLIST ŠABLONY -->
       <div id="ed-sec-checklist" style="display:none">
         <div class="adm-sh" style="margin-bottom:10px">
@@ -959,18 +977,18 @@
   </div>
 </div>
 
-<script src="js/data.js?v=20260626f"></script>
-<script src="js/geo.js?v=20260626f"></script>
-<script src="js/tourplanRaw.js?v=20260626f"></script>
-<script src="js/excelImport.js?v=20260626f"></script>
-<script src="js/posMasterData.js?v=20260626f"></script><script src="js/checklistTemplates.js?v=20260626f"></script>
-<script src="js/checklistEngine.js?v=20260626f"></script>
-<script src="js/dataProvider.js?v=20260626f"></script>
-<script src="js/routeEngine.js?v=20260626f"></script>
-<script src="js/posModel.js?v=20260626f"></script>
-<script src="js/technicianModel.js?v=20260626f"></script>
-<script src="js/app.js?v=20260626f"></script>
-<script src="js/visitStore.js?v=20260626f"></script>
-<script src="js/sync.js?v=20260626f"></script>
+<script src="js/data.js?v=20260626g"></script>
+<script src="js/geo.js?v=20260626g"></script>
+<script src="js/tourplanRaw.js?v=20260626g"></script>
+<script src="js/excelImport.js?v=20260626g"></script>
+<script src="js/posMasterData.js?v=20260626g"></script><script src="js/checklistTemplates.js?v=20260626g"></script>
+<script src="js/checklistEngine.js?v=20260626g"></script>
+<script src="js/dataProvider.js?v=20260626g"></script>
+<script src="js/routeEngine.js?v=20260626g"></script>
+<script src="js/posModel.js?v=20260626g"></script>
+<script src="js/technicianModel.js?v=20260626g"></script>
+<script src="js/app.js?v=20260626g"></script>
+<script src="js/visitStore.js?v=20260626g"></script>
+<script src="js/sync.js?v=20260626g"></script>
 </body>
 </html>
