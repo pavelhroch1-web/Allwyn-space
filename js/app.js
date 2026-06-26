@@ -2124,6 +2124,87 @@ function renderAdminDashboard() {
   }
 
   renderFleetRouteAnalytics();
+  renderDecisionFeed();
+}
+
+// ══════════════════════════════════════════════════════
+// DECISION LAYER — MVP Action Feed (viz docs/PLANNER_ARCHITECTURE.md Vrstva 4)
+// ══════════════════════════════════════════════════════
+// 'decisions' je globální klíč (jako admin_tasks/editor_*) — Velín ho edituje,
+// musí být vidět na všech zařízeních, proto je v SYNC_GLOBAL_KEYS (js/sync.js)
+// a jede přes existující sync_kv mirroring, žádná nová Supabase tabulka.
+// AI/engine pouze navrhuje (DecisionEngine, čistá funkce nad reálnými Tourplan
+// počty) — o reálném dopadu rozhoduje výhradně Velín (#11a v docs/CLAUDE.md).
+function getDecisions() { return lsg('decisions', []); }
+function saveDecisions(list) { lss('decisions', list); }
+
+// Vygeneruje nové capacity_overload kandidáty a přidá jen ty, pro které ještě
+// neexistuje žádný záznam (type+technician+week) — jednou rozhodnuté se znovu
+// nenabízí, i když DecisionEngine běží při každém otevření dashboardu.
+function generateAndPersistCapacityDecisions() {
+  const weeklyCounts = {};
+  PosModel.PILOT_TECHNICIANS.forEach(name => {
+    weeklyCounts[name] = {};
+    POS_WEEK_KEYS.forEach(w => {
+      weeklyCounts[name][w] = (FULL_POS_DATA[w] || []).filter(p => p.assignedTechnician === name).length;
+    });
+  });
+  const candidates = DecisionEngine.generateCapacityDecisions(weeklyCounts, CURRENT_OPS_WEEK);
+  const existing = getDecisions();
+  const alreadyExists = (c) => existing.some(d => d.type === c.type && d.technicianId === c.technicianId && d.week === c.week);
+  const fresh = candidates.filter(c => !alreadyExists(c));
+  if (fresh.length) {
+    const now = new Date().toISOString();
+    fresh.forEach(c => existing.push({
+      id: 'dec_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8),
+      ...c,
+      status: 'pending',
+      decidedBy: null,
+      decidedAt: null,
+      modifiedNote: null,
+      actualOutcome: null,
+      createdAt: now,
+    }));
+    saveDecisions(existing);
+  }
+  return existing;
+}
+
+function decideOnDecision(id, status) {
+  const list = getDecisions();
+  const d = list.find(x => x.id === id);
+  if (!d) return;
+  let note = null;
+  if (status === 'modified') note = prompt('Krátká poznámka, co se na návrhu upravuje:') || '';
+  else if (status === 'deferred') note = prompt('Na kdy se odkládá / proč:') || '';
+  else if (status === 'rejected') note = prompt('Důvod zamítnutí:') || '';
+  d.status = status;
+  d.decidedBy = (getSession() && getSession().user && getSession().user.name) || 'Velín';
+  d.decidedAt = new Date().toISOString();
+  if (note) d.modifiedNote = note;
+  saveDecisions(list);
+  renderDecisionFeed();
+}
+
+function renderDecisionFeed() {
+  const el = document.getElementById('dash-decisions');
+  if (!el) return;
+  const pending = generateAndPersistCapacityDecisions().filter(d => d.status === 'pending');
+  if (!pending.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-i"><svg class="ic ic-xl"><use href="#ic-check-circle"/></svg></div><div class="empty-t">Žádné návrhy k rozhodnutí</div><div class="empty-s">Decision Engine nenašel přetížení nad rámec běžné zátěže.</div></div>';
+    return;
+  }
+  el.innerHTML = pending.map(d => `
+    <div style="padding:14px;border-bottom:1px solid var(--bg)">
+      <div style="font-size:13px;font-weight:700">${d.recommendation}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">Přínos: ${d.estimatedBenefit} · Jistota: ${d.confidence}</div>
+      <div style="display:flex;gap:6px;margin-top:10px">
+        <button onclick="decideOnDecision('${d.id}','approved')" style="flex:1;padding:8px;background:var(--gl);color:var(--green);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✓ Schválit</button>
+        <button onclick="decideOnDecision('${d.id}','modified')" style="flex:1;padding:8px;background:var(--bg);color:var(--ink);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Upravit</button>
+        <button onclick="decideOnDecision('${d.id}','deferred')" style="flex:1;padding:8px;background:var(--bg);color:var(--ink);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Odložit</button>
+        <button onclick="decideOnDecision('${d.id}','rejected')" style="flex:1;padding:8px;background:var(--rl);color:var(--red);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✕ Zamítnout</button>
+      </div>
+    </div>`).join('');
 }
 
 // ══════════════════════════════════════════════════════

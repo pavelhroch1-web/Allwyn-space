@@ -186,11 +186,18 @@ dnes — žádné tlačítko "Přesunout" v Decision Layer samotném).
 **Technik nikdy neschvaluje.** Jeho check-in/fotky/poznámky jsou vstup pro
 `evidence`/`actualOutcome`, ne rozhodovací krok.
 
-**Dnešní stav:** koncept, v kódu neexistuje. Nejmenší smysluplný první
-krok: Decision objekt jen pro typy, které už mají datový zdroj dnes
-(`capacity_allocation` z Tourplan kapacity, budoucí `region_reassignment`
-až doběhne datová brána Vrstvy 3) — `campaign_timing`/`priority_change`
-čekají na `salesValue`/kampaňovou návratovou metriku (žádná fake data).
+**Dnešní stav:** MVP implementováno (2026-06-26) — `js/decisionEngine.js`
+generuje jediný typ, `capacity_overload`: technik, jehož počet POS v
+aktuálním Tourplan týdnu (`CURRENT_OPS_WEEK`) překročí svůj vlastní
+historický průměr (ostatní dostupné týdny) o víc než 20 % a alespoň o 5 POS
+(stejný práh jako existující region-capacity doporučení v dashboardu).
+Decision objekty se ukládají do `decisions` (globální localStorage klíč,
+synchronizovaný přes `js/sync.js` jako `admin_tasks`/`editor_*`) a Velín je
+vidí jako Action Feed na dashboardu ("Návrhy k rozhodnutí") se 4 tlačítky
+(Schválit/Upravit/Odložit/Zamítnout) — `js/app.js` `renderDecisionFeed()`.
+Žádný automatický zápis přiřazení, žádný AI volný text (`recommendation` je
+šablona z reálných čísel). `region_reassignment` čeká na datovou bránu
+Vrstvy 3, `campaign_timing`/`priority_change` na `salesValue`.
 
 ### Učení je vlastnost vrstev, ne vrstva navíc
 

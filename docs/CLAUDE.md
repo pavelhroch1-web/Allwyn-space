@@ -37,7 +37,7 @@ přiřazení POS, ověř, do které vrstvy patří.
 
 ### Práce s daty
 - **localStorage je dočasný** — migrujeme na backend (viz plán). Ale dokud běží, neměň formát klíčů bez migrace, ať uživatel nepřijde o testovací data.
-- Klíče v localStorage (současné, ověřeno v kódu — viz CODE_AUDIT.md): `ci_{posId}` (check-in), `vlog_{date}` (visit log), `daystart_{date}`, `supply_{posId}_{date}`, `merch_{posId}_{date}`, `poscard_{posId}`, `visits_{posId}` (historie), `assign_{posId}` (přiřazení dne), `admin_tasks`, `editor_briefing`, `editor_alert`, `editor_idt`, `editor_ka`, `editor_campaigns`, `inv_catalog`, `gps_flags_{date}`, `approval_{posId}`.
+- Klíče v localStorage (současné, ověřeno v kódu — viz CODE_AUDIT.md): `ci_{posId}` (check-in), `vlog_{date}` (visit log), `daystart_{date}`, `supply_{posId}_{date}`, `merch_{posId}_{date}`, `poscard_{posId}`, `visits_{posId}` (historie), `assign_{posId}` (přiřazení dne), `admin_tasks`, `editor_briefing`, `editor_alert`, `editor_idt`, `editor_ka`, `editor_campaigns`, `inv_catalog`, `gps_flags_{date}`, `approval_{posId}`, `decisions` (Decision Layer, Vrstva 4 — viz `PLANNER_ARCHITECTURE.md`).
 
 ---
 
