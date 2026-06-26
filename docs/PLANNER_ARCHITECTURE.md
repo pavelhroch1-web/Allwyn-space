@@ -137,13 +137,88 @@ jakoukoliv budoucí implementaci Vrstvy 1, ne jen jako nice-to-have.
 
 ---
 
+## Vrstva 4 — Decision Layer
+
+**Otázka:** Z doporučení, která vyprodukovaly Vrstvy 1–3 (nebo budoucí
+Campaign Intelligence), které má dopad na byznys napříč technikem/regionem/
+obdobím — a tedy nesmí se provést samo, jen navrhnout?
+
+**Princip (Pavel, 2026-06-26 — viz `docs/CLAUDE.md` pravidlo #11a):**
+Decision Engine nikdy nenahrazuje Operations Managera. Připravuje kvalitní
+návrh z dat, **rozhoduje vždy člověk**. Toto je jediná nová persistovaná
+entita v celém Decision Layer — žádný samostatný "Learning Engine" ani
+"Outcome" modul vedle ní; učení je rozšíření existujících vrstev (1–3),
+ne nová vrstva nad nimi (viz níže "Učení je vlastnost vrstev, ne vrstva
+navíc").
+
+**Lifecycle:** `Data → Analýza → Návrh → Schválení člověkem → Akce → Vyhodnocení`
+
+**Decision objekt:**
+```
+Decision {
+  id, type,                  // 'region_reassignment' | 'capacity_allocation'
+                              // | 'campaign_timing' | 'priority_change'
+  createdAt, sourceLayer,    // která vrstva (1/2/3) návrh vyprodukovala
+  recommendation,            // šablonový text, nikdy AI volný text
+  evidence,                  // reálná čísla, traceable zdroj
+  estimatedBenefit, confidence,
+  status,                    // 'pending'|'approved'|'modified'|'deferred'|'rejected'
+  decidedBy, decidedAt,
+  actualOutcome              // vyplní se až po faktu, ne v okamžiku návrhu
+}
+```
+
+**Co je strategické (jde přes Decision objekt, schvaluje Velín):**
+přesun POS mezi regiony/techniky, alokace kapacity mezi technikem,
+zařazení/časování kampaně, změna priorit/vah Business Score.
+
+**Co je rutinní (běží automaticky podle už schválených pravidel, žádný
+Decision objekt):** pořadí návštěv v rámci dne (Vrstva 2), doporučení
+vynechat nízkou prioritu při přetížení dnes (`recommendCapacitySkips`),
+GPS/zpožďovací alerty, noční kalibrace časové normy — to je úprava
+interního parametru, ne byznys rozhodnutí, loguje se transparentně, ale
+neschvaluje se za každou instanci.
+
+**Akce se neprovádí uvnitř Decision Layer.** Po schválení/úpravě jde
+zápis vždy přes existující admin/editor flow (stejně jako Region Advisor
+dnes — žádné tlačítko "Přesunout" v Decision Layer samotném).
+
+**Technik nikdy neschvaluje.** Jeho check-in/fotky/poznámky jsou vstup pro
+`evidence`/`actualOutcome`, ne rozhodovací krok.
+
+**Dnešní stav:** koncept, v kódu neexistuje. Nejmenší smysluplný první
+krok: Decision objekt jen pro typy, které už mají datový zdroj dnes
+(`capacity_allocation` z Tourplan kapacity, budoucí `region_reassignment`
+až doběhne datová brána Vrstvy 3) — `campaign_timing`/`priority_change`
+čekají na `salesValue`/kampaňovou návratovou metriku (žádná fake data).
+
+### Učení je vlastnost vrstev, ne vrstva navíc
+
+Žádná univerzální "Learning Layer" tabulka napříč celým systémem — to by
+byla architektura navíc tam, kde existující vrstvy umí být chytřejší
+samy:
+- norma návštěvy se učí uvnitř Vrstvy 2 (`routeEngine.js` si sám upravuje
+  `VISIT_DURATION_MIN` z reálných check-in/check-out časů)
+- Health Score je pole na POS kartě (Vrstva 1/POS Master), ne nový modul
+- validace přesunu regionu zůstává uvnitř Vrstvy 3, jak ji popisuje
+  `ROUTE_INTELLIGENCE_ROADMAP.md` Fáze 2
+- hodnota kampaně/typu POS bude pole na existujícím objektu (kampaň/POS),
+  až bude mít datový zdroj — ne nová tabulka
+
+Simulation Mode = dry-run zavolání Vrstvy 2/3 s hypotetickým vstupem, bez
+persistovaného Decision objektu a bez schvalování — stejná logika, jiný
+režim spuštění, ne nový modul.
+
+---
+
 ## Shrnutí — kdy se která vrstva dotýká kódu
 
 | Vrstva | Co řeší | Dnešní implementace | Budoucí rozšíření |
 |---|---|---|---|
-| 1 — Business Selection | Co navštívit | technik vybírá sám, `posModel.js` placeholdery | Modular Business Score, Explainable Planning |
-| 2 — Route Engine | Jak to objet | `js/routeEngine.js`, hotovo a funkční | Google Maps provider, F1/F2 roadmapa |
+| 1 — Business Selection | Co navštívit | technik vybírá sám, `posModel.js` placeholdery | Modular Business Score, Explainable Planning, Health Score |
+| 2 — Route Engine | Jak to objet | `js/routeEngine.js`, hotovo a funkční | Google Maps provider, F1/F2 roadmapa, noční kalibrace normy |
 | 3 — Region Optimization | Kdo by měl dlouhodobě obsluhovat | navrženo v roadmapě | čeká na 6–8 týdnů dat |
+| 4 — Decision Layer | Které návrhy patří člověku, ne automatice | koncept, neimplementováno | Decision objekt + Velín Action Feed |
 
 Při jakékoliv budoucí změně plánovače se nejdřív urči, do které vrstvy
 patří — pokud zasahuje do dvou, je to signál, že návrh je potřeba

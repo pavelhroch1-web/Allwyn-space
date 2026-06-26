@@ -119,6 +119,12 @@ Doporučený stack (návrh, ne dogma): frontend buď ponechat vanilla/lehký fra
 
 11. **Allwyn branding.** Navy `#1A3C47` + teal `#2ECDC0`. Žlutá je legacy Sazka — nepoužívat jako brand barvu.
 
+11a. **Decision Engine nikdy nerozhoduje, jen navrhuje — strategická rozhodnutí patří Operations Managerovi.** (Pavel, 2026-06-26, schváleno jako architektonická zásada pro Decision Layer, viz `PLANNER_ARCHITECTURE.md` Vrstva 4.) Rozliš dvě úrovně:
+   - **Strategická rozhodnutí** (alokace lidí, přesun POS mezi regiony/techniky, zařazení/časování kampaní, změna priorit/vah, jakýkoliv dopad na byznys napříč technikem/regionem/obdobím) → systém připraví návrh (Decision objekt s evidencí a confidence), **rozhoduje výhradně člověk** (Pavel/Operations Manager ve Velínu). Nikdy automatický zápis do dat, akce jen přes existující admin/editor flow.
+   - **Rutinní operace podle už schválených pravidel** (pořadí návštěv v rámci dne, doporučení vynechat nízkou prioritu při přetížení, GPS/zpožďovací alerty, noční kalibrace časové normy) → mohou běžet automaticky, bez schvalování za každou instanci — pravidlo už jednou schválil Velín, systém ho jen vykonává.
+   - **Technik nikdy nevstupuje jako schvalovací role.** Jeho úkolem je realizace schválených rozhodnutí a zpětná vazba z terénu (check-in, fotky, poznámky) — ta zpětná vazba je vstup, ze kterého se systém učí, ne rozhodnutí samo.
+   - Decision objekt má stav `pending|approved|modified|deferred|rejected` — `modified` a `deferred` jsou plnohodnotný výsledek, ne jen ano/ne, a systém se z nich učí stejně jako z approved/rejected (např. `modified` říká, že směr návrhu byl správný, ale rozsah/práh byl špatně odhadnutý).
+
 12. **AI klíč nikdy ve frontendu.** Anthropic API volání jen server-side po migraci na backend. **Pozor:** v prototypu se volá `https://api.anthropic.com/v1/messages` přímo z frontendu — to je dočasné řešení specifické pro prostředí prototypu a MUSÍ se přesunout na server v Fázi 4.
 
 13. **Čeština ve všem co vidí uživatel.**
