@@ -114,6 +114,16 @@
       <div class="rs-quote">„Pomáháme každému technikovi věnovat víc času hodnotě v terénu — míň jízdě, hledání a koordinaci.“</div>
 
       <div class="rs-vsection">
+        <div class="rs-vtitle">Proč Allwyn Space vzniká</div>
+        <div class="rs-why-grid">
+          <div class="rs-why-item"><div class="rs-why-l">Problém</div><div class="rs-why-t">Manažer neví, co technici v terénu reálně dělají. Plánování je ruční Excel. Majetek na POS mizí bez evidence.</div></div>
+          <div class="rs-why-item"><div class="rs-why-l">Hodnota pro technika</div><div class="rs-why-t">Méně jízdy a hledání, jasné pořadí návštěv, méně papírování — víc času na samotnou práci na POS.</div></div>
+          <div class="rs-why-item"><div class="rs-why-l">Hodnota pro Velín</div><div class="rs-why-t">Živý přehled, GPS ověření, fotodokumentace a alerty místo telefonování a domýšlení.</div></div>
+          <div class="rs-why-item"><div class="rs-why-l">Hodnota pro firmu</div><div class="rs-why-t">Dohledatelná evidence majetku a materiálu, doklad pro SAP, méně ztrát a méně prostojů na POS.</div></div>
+        </div>
+      </div>
+
+      <div class="rs-vsection">
         <div class="rs-vtitle">Realita dnes</div>
         <div class="rs-problem-grid">
           <div class="rs-problem-item">Práce přichází z mnoha různých zdrojů</div>
@@ -145,63 +155,127 @@
       </div>
 
       <div class="rs-vsection">
-        <div class="rs-vtitle">Intelligence moduly — kam se chceme dostat</div>
-        <div class="rs-module-subtitle">1 modul je živý, 5 je vize. „Live“ = reálně funguje s reálnými daty. „Vize“ = plánovaný směr, zatím neimplementováno.</div>
+        <div class="rs-vtitle">Co už dnes funguje</div>
+        <div class="rs-module-subtitle">Reálně používaná data, ne demo. Aktualizováno po každé větší změně projektu.</div>
         <div class="rs-modules">
-
           <div class="rs-module-card">
-            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-route"/></svg><span class="rs-module-badge rs-badge-live">Live</span></div>
-            <div class="rs-module-title">Route Intelligence</div>
-            <div class="rs-module-desc">Optimalizuje denní práci. Rozumí výchozímu bodu technika, GPS POS, otevírací době a délce úkolu.</div>
-            <div class="rs-module-goal">Cíl: méně jízdy, víc času na POS.</div>
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-user"/></svg><span class="rs-module-badge rs-badge-live">Funguje</span></div>
+            <div class="rs-module-title">Mobilní aplikace technika</div>
+            <div class="rs-module-desc">Plánování dne, GPS check-in/check-out, merch, spotřební materiál s podpisem, fotodokumentace, karta POS.</div>
           </div>
-
           <div class="rs-module-card">
-            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-map"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
-            <div class="rs-module-title">Territory Intelligence</div>
-            <div class="rs-module-desc">„Máme regiony nastavené správně?“ Analyzuje, kde technici začínají a jak je vyvážená jejich síť POS.</div>
-            <div class="rs-module-goal">Najde překryvy regionů a zbytečné kilometry — člověk rozhoduje o změně.</div>
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-signal"/></svg><span class="rs-module-badge rs-badge-live">Funguje</span></div>
+            <div class="rs-module-title">Velín (Operations Control Center)</div>
+            <div class="rs-module-desc">Živá mapa 27 techniků, schvalování, GPS anomálie, alerty zpoždění a chybějícího podpisu zásobování.</div>
           </div>
-
           <div class="rs-module-card">
-            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-clock"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
-            <div class="rs-module-title">Capacity Intelligence</div>
-            <div class="rs-module-desc">Pochopí dostupný čas týmu. Např. „Tento týden: volná kapacita 42 hodin.“</div>
-            <div class="rs-module-goal">Navrhne, jaké POS/úkoly se dají přidat.</div>
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-route"/></svg><span class="rs-module-badge rs-badge-live">Funguje</span></div>
+            <div class="rs-module-title">Route Engine</div>
+            <div class="rs-module-desc">Počítá trasu z reálné GPS, výchozího bodu a otevírací doby. Zamyká navštívené POS, doporučuje vynechat nízkou prioritu při nedostatku kapacity, upozorňuje Velín na zpoždění v reálném čase.</div>
           </div>
-
           <div class="rs-module-card">
-            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-box"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
-            <div class="rs-module-title">Material Intelligence</div>
-            <div class="rs-module-desc">Virtuální sklad technika — ví, co je v autě, jaké kampaně se blíží a jaký SAP materiál bude potřeba.</div>
-            <div class="rs-module-goal">„Vyzvedni materiál teď, další návštěva skladu za 12 dní.“</div>
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-box"/></svg><span class="rs-module-badge rs-badge-live">Funguje</span></div>
+            <div class="rs-module-title">Supabase backend</div>
+            <div class="rs-module-desc">Návštěvy, materiály a fotky se reálně ukládají do databáze (ne jen do localStorage v telefonu).</div>
           </div>
-
           <div class="rs-module-card">
-            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-flag"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
-            <div class="rs-module-title">Campaign Intelligence</div>
-            <div class="rs-module-desc">Kampaň + důležitost POS + sales data + termín → AI navrhne, které POS navštívit, kdy a který technik.</div>
-            <div class="rs-module-goal">Velín schvaluje, AI jen doporučuje.</div>
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-calendar"/></svg><span class="rs-module-badge rs-badge-live">Funguje</span></div>
+            <div class="rs-module-title">Tourplan import</div>
+            <div class="rs-module-desc">Reálná POS data pro všech 27 techniků, týdny W23–W28, podle skutečného exportu z Tourplan.</div>
           </div>
-
-          <div class="rs-module-card">
-            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-camera"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
-            <div class="rs-module-title">Photo Intelligence</div>
-            <div class="rs-module-desc">AI kontroluje fotky z POS — přítomnost konkurence, chybějící materiál, kvalitu provedení.</div>
-            <div class="rs-module-goal">Vytváří strukturované reporty pro velín.</div>
-          </div>
-
         </div>
       </div>
 
       <div class="rs-vsection">
-        <div class="rs-evo">
-          <div class="rs-evo-step"><div class="rs-evo-dot rs-evo-dot-live"></div><div class="rs-evo-label">Dnes</div><div class="rs-evo-text">Route Intelligence</div></div>
-          <div class="rs-evo-line"></div>
-          <div class="rs-evo-step"><div class="rs-evo-dot"></div><div class="rs-evo-label">Další</div><div class="rs-evo-text">Connected Operations</div></div>
-          <div class="rs-evo-line"></div>
-          <div class="rs-evo-step"><div class="rs-evo-dot"></div><div class="rs-evo-label">Budoucnost</div><div class="rs-evo-text">AI-assisted Field Planning</div></div>
+        <div class="rs-vtitle">Co právě vzniká</div>
+        <div class="rs-module-subtitle">Část funguje na reálných datech, část ještě čeká na dokončení nebo na externí vstup.</div>
+        <div class="rs-modules">
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-calendar"/></svg><span class="rs-module-badge rs-badge-progress">Ve vývoji</span></div>
+            <div class="rs-module-title">AI Briefing & Report</div>
+            <div class="rs-module-desc">Textové AI shrnutí pro technika i Velína z reálných dat dne. Dnes čte a píše text — neumí rozpoznávat fotky.</div>
+          </div>
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-info"/></svg><span class="rs-module-badge rs-badge-progress">Ve vývoji</span></div>
+            <div class="rs-module-title">Visit History</div>
+            <div class="rs-module-desc">Aktuální stav technika na POS se ukládá. Dotazovatelná historie jednotlivých návštěv ještě chybí.</div>
+          </div>
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-check-badge"/></svg><span class="rs-module-badge rs-badge-progress">Mockup</span></div>
+            <div class="rs-module-title">SAP Integration</div>
+            <div class="rs-module-desc">SAP kódy jsou v appce jako mockup hodnoty. Reálné napojení na SAP dodá objednatel.</div>
+          </div>
         </div>
+      </div>
+
+      <div class="rs-vsection">
+        <div class="rs-vtitle">Co je další krok</div>
+        <div class="rs-module-subtitle">Nejbližší rozhodnutí a práce, ne dlouhodobá vize.</div>
+        <div class="rs-modules">
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-clock"/></svg><span class="rs-module-badge rs-badge-next">Další krok</span></div>
+            <div class="rs-module-title">Workload Learning Engine — rozhodnutí o fázi</div>
+            <div class="rs-module-desc">Knihovna časových norem pro typy práce (předávka, instalace, servis...). Návrh probrán s Pavlem, čeká na schválení první fáze.</div>
+          </div>
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-warning"/></svg><span class="rs-module-badge rs-badge-next">Další krok</span></div>
+            <div class="rs-module-title">Zámek SAP kódů po odeslání</div>
+            <div class="rs-module-desc">Chybí explicitní zámek proti re-editaci SAP kódů po odeslání zásobování technikem.</div>
+          </div>
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-flag"/></svg><span class="rs-module-badge rs-badge-next">Další krok</span></div>
+            <div class="rs-module-title">Sjednocení GPS pásma 300m–1km</div>
+            <div class="rs-module-desc">Pásmo 300m–1km se technikovi zobrazí jako varování, ale dnes nezaloží flag pro Velín — zvážit sjednocení.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rs-vsection">
+        <div class="rs-vtitle">Dlouhodobá vize</div>
+        <div class="rs-module-subtitle">Koncept nebo návrh architektury. Žádný produkční kód, žádná reálná data.</div>
+        <div class="rs-modules">
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-route"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
+            <div class="rs-module-title">Business Selection Engine</div>
+            <div class="rs-module-desc">Která POS si zaslouží slot v týdnu. Dnes vybírá technik sám — vrstva v architektuře navržená, v kódu zatím neexistuje.</div>
+          </div>
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-map"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
+            <div class="rs-module-title">Region Optimization Advisor</div>
+            <div class="rs-module-desc">Kdo by měl POS dlouhodobě obsluhovat. Navrženo v roadmapě, implementace čeká na 6–8 týdnů reálných dat.</div>
+          </div>
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-camera"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
+            <div class="rs-module-title">AI Vision (rozpoznávání materiálů)</div>
+            <div class="rs-module-desc">AI kontroluje fotky z POS — chybějící materiál, konkurence, kvalita osazení. Dnešní AI umí jen text, žádný kód na rozpoznávání fotek neexistuje.</div>
+          </div>
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-flag"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
+            <div class="rs-module-title">Campaign Intelligence</div>
+            <div class="rs-module-desc">AI navrhne, které POS navštívit kvůli kampani a kdy. Velín by schvaloval, AI jen doporučovala.</div>
+          </div>
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-users"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
+            <div class="rs-module-title">Autonomous Field Operations</div>
+            <div class="rs-module-desc">Self-learning plánování a digitální dvojče vozového parku. Dlouhý horizont, nic z toho dnes neexistuje.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rs-vsection">
+        <div class="rs-vtitle">Kde jsme</div>
+        <div class="rs-evo">
+          <div class="rs-evo-step"><div class="rs-evo-dot"></div><div class="rs-evo-label">1</div><div class="rs-evo-text">Foundation</div></div>
+          <div class="rs-evo-line"></div>
+          <div class="rs-evo-step rs-evo-step-current"><div class="rs-evo-dot rs-evo-dot-live"></div><div class="rs-evo-label">2 · Teď</div><div class="rs-evo-text">Pilot</div></div>
+          <div class="rs-evo-line"></div>
+          <div class="rs-evo-step"><div class="rs-evo-dot"></div><div class="rs-evo-label">3</div><div class="rs-evo-text">Operational Intelligence</div></div>
+          <div class="rs-evo-line"></div>
+          <div class="rs-evo-step"><div class="rs-evo-dot"></div><div class="rs-evo-label">4</div><div class="rs-evo-text">Decision Intelligence</div></div>
+          <div class="rs-evo-line"></div>
+          <div class="rs-evo-step"><div class="rs-evo-dot"></div><div class="rs-evo-label">5</div><div class="rs-evo-text">Autonomous Field Operations</div></div>
+        </div>
+        <div class="rs-vlead" style="margin-top:10px">Pilot s 5 techniky, reálný Supabase backend a první funkce Route Intelligence (zpoždění, kapacita) — první kroky směrem k Operational Intelligence už běží.</div>
       </div>
 
     </div>

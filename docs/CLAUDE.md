@@ -123,6 +123,12 @@ Doporučený stack (návrh, ne dogma): frontend buď ponechat vanilla/lehký fra
 
 13. **Čeština ve všem co vidí uživatel.**
 
+14. **Úvodní stránka (`#role-screen` v `index.html`) je živý "Product Vision" dashboard, ne statická prezentace.** Pavel (2026-06-26): "Nechci marketing. Chci pravdivý obraz projektu." Pravidla:
+    - Po každé větší feature/architektonické změně/nové vizi: zreviduj moduly (skutečně implementováno / částečně funkční / pouze navržené / dlouhodobá vize) a aktualizuj sekce na úvodní stránce ("Co už dnes funguje" / "Co právě vzniká" / "Co je další krok" / "Dlouhodobá vize").
+    - Před každou větší změnou projektu nejdřív zkontroluj, jestli úvodní stránka stále odpovídá realitě — pokud ne, sám navrhni aktualizaci.
+    - Žádný modul nesmí být na stránce ✓/"Funguje", pokud v kódu reálně neexistuje nebo neběží na reálných datech — to by bylo fake data o vlastním produktu.
+    - Vizuální evoluční mapa (Foundation → Pilot → Operational Intelligence → Decision Intelligence → Autonomous Field Operations) musí vždy zvýrazňovat aktuální fázi projektu.
+
 ---
 
 ## Doménové konstanty (reference)
