@@ -3696,10 +3696,26 @@ function applyStoredRouteOrder(dayPos, week, day){
   return ordered;
 }
 
+// ── Lock navštívené POS + replan zbytku dne ─────────────────────────────────
+// Navštívené POS (p.v, reálný check-in stav) jsou hotové — trasa/optimalizace
+// se jich už nedotýká, jen zbytku dne. Poslední navštívené POS slouží jako
+// reálný výchozí bod pro přeplánování zbytku (aktuálnější než ranní GPS).
+function splitVisitedRoute(dayPos){
+  const visited = dayPos.filter(p => p.v);
+  const unvisited = dayPos.filter(p => !p.v);
+  return { visited, unvisited };
+}
+function remainingRouteStartPoint(visited, fallback){
+  const last = visited.length ? visited[visited.length - 1] : null;
+  if (last && RouteEngine.hasUsableGps(last)) return { lat: last.lat, lng: last.lng };
+  return fallback;
+}
+
 function buildRouteSummaryCard(dayPos, week, day){
-  if (dayPos.length < 2) return null;
-  const startLoc = getStartLocation();
-  const cmp = RouteEngine.compareRoutes(dayPos, startLoc, getStartTime(), day, today());
+  const { visited, unvisited } = splitVisitedRoute(dayPos);
+  if (unvisited.length < 2) return null;
+  const startLoc = remainingRouteStartPoint(visited, getStartLocation());
+  const cmp = RouteEngine.compareRoutes(unvisited, startLoc, getStartTime(), day, today());
   const hasStoredOrder = !!getStoredRouteOrder(week, day);
   const fewerViolations = cmp.optimizedViolations != null && cmp.optimizedViolations < cmp.currentViolations;
   const showOptimize = cmp.savedKm > 0.5 || fewerViolations;
@@ -3707,7 +3723,7 @@ function buildRouteSummaryCard(dayPos, week, day){
   el.style.cssText = 'margin:8px 12px;padding:14px;background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:12px';
   el.innerHTML = `
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;color:var(--navy);font-weight:700;font-size:13px">
-      <svg class="ic ic-sm" style="color:var(--teal)"><use href="#ic-route"/></svg> Trasa dne · ${dayPos.length} POS
+      <svg class="ic ic-sm" style="color:var(--teal)"><use href="#ic-route"/></svg> Trasa dne · ${unvisited.length} zbývá${visited.length ? ` · ${visited.length} hotovo` : ''}
     </div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
       <div><div style="font-size:11px;color:var(--muted)">Jízda</div><div style="font-size:15px;font-weight:700">${RouteEngine.formatKm(cmp.before.drivingKm)}</div><div style="font-size:11px;color:var(--muted)">${RouteEngine.formatHM(cmp.before.drivingMin)}</div></div>
@@ -3794,19 +3810,22 @@ function recordRouteDecision(week, day, decision){
 function moveRouteStop(week, day, posId, dir){
   const all = posData[week] || [];
   const dayPos = applyStoredRouteOrder(all.filter(p => p.d === day), week, day);
-  const idx = dayPos.findIndex(p => p.id === posId);
+  const { visited, unvisited } = splitVisitedRoute(dayPos);
+  const idx = unvisited.findIndex(p => p.id === posId);
   const swapIdx = idx + dir;
-  if (idx < 0 || swapIdx < 0 || swapIdx >= dayPos.length) return;
-  [dayPos[idx], dayPos[swapIdx]] = [dayPos[swapIdx], dayPos[idx]];
-  setStoredRouteOrder(week, day, dayPos.map(p => p.id));
+  if (idx < 0 || swapIdx < 0 || swapIdx >= unvisited.length) return; // hotové zastávky jsou zamčené, nepřeřazují se
+  [unvisited[idx], unvisited[swapIdx]] = [unvisited[swapIdx], unvisited[idx]];
+  setStoredRouteOrder(week, day, [...visited.map(p => p.id), ...unvisited.map(p => p.id)]);
   showRouteView(week, day);
 }
 
 function useRecommendedRoute(week, day){
   const all = posData[week] || [];
   const dayPos = applyStoredRouteOrder(all.filter(p => p.d === day), week, day);
-  const cmp = RouteEngine.compareRoutes(dayPos, getStartLocation(), getStartTime(), day, today());
-  setStoredRouteOrder(week, day, cmp.optimizedOrderIds);
+  const { visited, unvisited } = splitVisitedRoute(dayPos);
+  const startLoc = remainingRouteStartPoint(visited, getStartLocation());
+  const cmp = RouteEngine.compareRoutes(unvisited, startLoc, getStartTime(), day, today());
+  setStoredRouteOrder(week, day, [...visited.map(p => p.id), ...cmp.optimizedOrderIds]);
   recordRouteDecision(week, day, 'accepted');
   showRouteView(week, day);
 }
@@ -3903,17 +3922,35 @@ function showRouteView(week, day){
     return;
   }
 
+  // Lock navštívené POS — hotové zastávky jsou zamčené (žádné přeřazení),
+  // optimalizace/otevírací doba se počítá jen pro zbytek dne. Poslední
+  // navštívené POS je reálnější výchozí bod než ranní GPS.
+  const { visited, unvisited } = splitVisitedRoute(dayPos);
+  const orderedDisplay = [...visited, ...unvisited];
+  const effectiveStart = remainingRouteStartPoint(visited, startLoc);
+  // Reálně uplynulý čas (jízda + práce na hotových POS) — posune odhad
+  // příjezdu na zbylé zastávky za to, co technik už opravdu odjel/odpracoval.
+  // Zdroj: stejný engine, žádné vymyšlené zpoždění.
+  let elapsedMin = visited.reduce((sum, p) => sum + RouteEngine.getVisitDurationMin(p), 0);
+  if (startLoc && visited.length) {
+    elapsedMin = RouteEngine.calculateRoute(visited, startLoc).totalMin;
+  }
+  const effectiveStartTime = visited.length
+    ? RouteEngine.formatClock(RouteEngine.parseHM(startTime) + elapsedMin)
+    : startTime;
+
   // Mapa
   const mapWrap = document.createElement('div');
   mapWrap.style.cssText = 'margin:0 12px 10px;border-radius:12px;overflow:hidden;border:1.5px solid var(--border)';
   mapWrap.innerHTML = `<div id="route-map" style="height:240px"></div>`;
   wrap.appendChild(mapWrap);
-  setTimeout(() => renderRouteMap(dayPos, startLoc), 50);
+  setTimeout(() => renderRouteMap(orderedDisplay, startLoc), 50);
 
   // Otevírací doba — jen fakta o příjezdu vs. otevírací době, žádné tiché
   // přeřazení. Vyžaduje výchozí pozici (jinak nelze spočítat reálný příjezd).
-  if (startLoc) {
-    const baseCalc = RouteEngine.calculateRoute(dayPos, startLoc);
+  // Počítá se jen pro nenavštívené zastávky — hotové se už neřeší.
+  if (effectiveStart && unvisited.length) {
+    const baseCalc = RouteEngine.calculateRoute(unvisited, effectiveStart);
 
     if (baseCalc.warnings.length) {
       const gpsCard = document.createElement('div');
@@ -3925,7 +3962,7 @@ function showRouteView(week, day){
       wrap.appendChild(gpsCard);
     }
 
-    const ohIssues = RouteEngine.checkOpeningHours(dayPos, baseCalc, startTime, day);
+    const ohIssues = RouteEngine.checkOpeningHours(unvisited, baseCalc, effectiveStartTime, day);
     if (ohIssues.length) {
       const ohCard = document.createElement('div');
       ohCard.style.cssText = 'margin:0 12px 10px;padding:14px;background:#fff7e6;border:1.5px solid #f5c542;border-radius:12px';
@@ -3945,15 +3982,16 @@ function showRouteView(week, day){
     }
   }
 
-  // Porovnání + volba (jen pokud je co porovnávat a je víc než 1 zastávka)
-  if (dayPos.length > 1) {
-    const cmp = RouteEngine.compareRoutes(dayPos, startLoc, startTime, day, today());
+  // Porovnání + volba (jen pokud je co porovnávat — minimálně 2 nenavštívené
+  // zastávky; hotové POS jsou zamčené a optimalizace se jich nedotýká)
+  if (unvisited.length > 1) {
+    const cmp = RouteEngine.compareRoutes(unvisited, effectiveStart, effectiveStartTime, day, today());
     const fewerViolations = cmp.optimizedViolations != null && cmp.optimizedViolations < cmp.currentViolations;
     const showOpportunity = cmp.savedKm > 0.5 || fewerViolations;
-    const slaCount = dayPos.filter(p => RouteEngine.getSlaWeight(p, today()) > 0).length;
+    const slaCount = unvisited.filter(p => RouteEngine.getSlaWeight(p, today()) > 0).length;
     const checklist = `
       <div style="font-size:11px;font-weight:700;color:var(--navy);letter-spacing:.03em;margin-bottom:8px">ROUTE INTELLIGENCE</div>
-      <div style="font-size:12px;color:var(--td);margin-bottom:2px">✓ Zkontrolováno ${dayPos.length} POS${cmp.exact ? ' (porovnána všechna pořadí)' : ' (optimalizace 2-opt)'}</div>
+      <div style="font-size:12px;color:var(--td);margin-bottom:2px">✓ Zkontrolováno ${unvisited.length} zbývajících POS${visited.length ? ` (${visited.length} hotovo, zamčeno)` : ''}${cmp.exact ? ' (porovnána všechna pořadí)' : ' (optimalizace 2-opt)'}</div>
       <div style="font-size:12px;color:var(--td);margin-bottom:2px">✓ Zkontrolována vzdálenost trasy</div>
       <div style="font-size:12px;color:var(--td);margin-bottom:2px">${cmp.currentViolations != null ? '✓ Zkontrolována otevírací doba' : '○ Otevírací dobu nelze ověřit — chybí pozice/čas odjezdu'}</div>
       <div style="font-size:12px;color:var(--td);margin-bottom:10px">${slaCount > 0 ? `✓ Zkontrolována priorita/SLA — ${slaCount} ${slaCount === 1 ? 'POS' : 'POS'} s vyšší prioritou zohledněno v pořadí` : '✓ Zkontrolována priorita/SLA — žádné POS s blížícím se termínem'}</div>
@@ -3975,7 +4013,7 @@ function showRouteView(week, day){
     ` : `
       ${checklist}
       <div style="font-size:12px;font-weight:700;color:var(--navy)">Výsledek: nejlepší varianta nalezena</div>
-      <div style="font-size:11px;color:var(--muted);margin-top:2px">Tvoje pořadí je už nejlepší možné${cmp.exact ? ' — zkontroloval jsem všechna možná pořadí těchto ' + dayPos.length + ' POS' : ''}.</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">Tvoje pořadí je už nejlepší možné${cmp.exact ? ' — zkontroloval jsem všechna možná pořadí těchto ' + unvisited.length + ' POS' : ''}.</div>
     `;
     wrap.appendChild(cmpCard);
   }
@@ -3987,14 +4025,15 @@ function showRouteView(week, day){
     wrap.appendChild(resetRow);
   }
 
-  // Seznam zastávek s ručním přeřazením
+  // Seznam zastávek — hotové (zamčené, bez přeřazení) nahoře, zbytek dne
+  // editovatelný pod tím. Číslování pokračuje napříč oběma blok
   const lbl = document.createElement('div');
   lbl.className = 'sec-lbl';
   lbl.textContent = `Pořadí zastávek (${dayPos.length})`;
   wrap.appendChild(lbl);
 
   const todayStr = today();
-  dayPos.forEach((p, i) => {
+  function renderStopRow(p, num, opts){
     const tasks = p.taskState || [];
     const hasServis = tasks.some(t => !t.done && t.priority === 'servis');
     const hasDeadline = tasks.some(t => !t.done && t.deadline && t.deadline <= todayStr);
@@ -4009,20 +4048,36 @@ function showRouteView(week, day){
     const row = document.createElement('div');
     row.className = 'pos-card';
     row.style.cursor = 'default';
-    row.innerHTML = `
-      <div class="pci">
-        <div style="width:26px;height:26px;border-radius:50%;background:var(--tl);color:var(--navy);font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i + 1}</div>
-        <div class="pinfo">
-          <div class="pname">${p.n} <span style="font-weight:600;color:var(--muted);font-size:11px">#${p.id}</span>${slaBadge}</div>
-          <div class="paddr">${p.a}</div>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0">
-          <button onclick="moveRouteStop('${week}',${day},'${p.id}',-1)" ${i === 0 ? 'disabled' : ''} style="width:30px;height:26px;border:1px solid var(--border);background:#fff;border-radius:6px;cursor:${i === 0 ? 'default' : 'pointer'};opacity:${i === 0 ? .35 : 1};font-size:13px;font-weight:700">↑</button>
-          <button onclick="moveRouteStop('${week}',${day},'${p.id}',1)" ${i === dayPos.length - 1 ? 'disabled' : ''} style="width:30px;height:26px;border:1px solid var(--border);background:#fff;border-radius:6px;cursor:${i === dayPos.length - 1 ? 'default' : 'pointer'};opacity:${i === dayPos.length - 1 ? .35 : 1};font-size:13px;font-weight:700">↓</button>
-        </div>
-      </div>`;
+    if (opts.locked) {
+      row.style.opacity = '.6';
+      row.innerHTML = `
+        <div class="pci">
+          <div style="width:26px;height:26px;border-radius:50%;background:var(--green);color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">✓</div>
+          <div class="pinfo">
+            <div class="pname">${p.n} <span style="font-weight:600;color:var(--muted);font-size:11px">#${p.id}</span>${slaBadge}</div>
+            <div class="paddr">${p.a}</div>
+          </div>
+          <div style="font-size:11px;color:var(--muted);flex-shrink:0">Hotovo</div>
+        </div>`;
+    } else {
+      row.innerHTML = `
+        <div class="pci">
+          <div style="width:26px;height:26px;border-radius:50%;background:var(--tl);color:var(--navy);font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">${num}</div>
+          <div class="pinfo">
+            <div class="pname">${p.n} <span style="font-weight:600;color:var(--muted);font-size:11px">#${p.id}</span>${slaBadge}</div>
+            <div class="paddr">${p.a}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0">
+            <button onclick="moveRouteStop('${week}',${day},'${p.id}',-1)" ${opts.isFirst ? 'disabled' : ''} style="width:30px;height:26px;border:1px solid var(--border);background:#fff;border-radius:6px;cursor:${opts.isFirst ? 'default' : 'pointer'};opacity:${opts.isFirst ? .35 : 1};font-size:13px;font-weight:700">↑</button>
+            <button onclick="moveRouteStop('${week}',${day},'${p.id}',1)" ${opts.isLast ? 'disabled' : ''} style="width:30px;height:26px;border:1px solid var(--border);background:#fff;border-radius:6px;cursor:${opts.isLast ? 'default' : 'pointer'};opacity:${opts.isLast ? .35 : 1};font-size:13px;font-weight:700">↓</button>
+          </div>
+        </div>`;
+    }
     wrap.appendChild(row);
-  });
+  }
+
+  visited.forEach((p, i) => renderStopRow(p, i + 1, { locked: true }));
+  unvisited.forEach((p, i) => renderStopRow(p, visited.length + i + 1, { locked: false, isFirst: i === 0, isLast: i === unvisited.length - 1 }));
 }
 
 // ── Ranní souhrn dne — co technika čeká + tichá nabídka lepší trasy ─────────
@@ -4031,10 +4086,12 @@ function buildMorningBriefCard(todayPos, week, day){
   const s = getSession();
   const firstName = ((s && s.user && s.user.name) || '').trim().split(/\s+/).pop() || '';
   const startLoc = getStartLocation();
-  const cmp = todayPos.length > 1 ? RouteEngine.compareRoutes(todayPos, startLoc, getStartTime(), day, today()) : null;
-  const workMin = todayPos.reduce((sum, p) => sum + RouteEngine.getVisitDurationMin(p), 0);
-  const drivingMin = cmp ? cmp.before.drivingMin : 0;
-  const totalMin = workMin + drivingMin;
+  const { visited, unvisited } = splitVisitedRoute(todayPos);
+  const fullCalc = RouteEngine.calculateRoute(todayPos, startLoc);
+  const totalMin = fullCalc.totalMin;
+  // Návrh lepší trasy se vztahuje jen na zbytek dne — hotové POS jsou zamčené.
+  const effectiveStart = remainingRouteStartPoint(visited, startLoc);
+  const cmp = unvisited.length > 1 ? RouteEngine.compareRoutes(unvisited, effectiveStart, getStartTime(), day, today()) : null;
   const fewerViolations = cmp && cmp.optimizedViolations != null && cmp.optimizedViolations < cmp.currentViolations;
   const hasSuggestion = cmp && (cmp.savedKm > 0.5 || fewerViolations);
 
