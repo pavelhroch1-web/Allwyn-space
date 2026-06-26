@@ -427,23 +427,43 @@
     <!-- SERVIS — technik si může servisní dotazník spustit i sám, bez čekání na Velín -->
     <div style="margin:0 12px 8px;border-radius:10px;background:#fff;border:2px dashed var(--red);padding:11px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;font-size:13px;font-weight:700;color:var(--red)" onclick="openServisOnDemand()"><svg class="ic"><use href="#ic-wrench"/></svg> Spustit servis</div>
 
-    <!-- INFO -->
-    <div class="sec-lbl">Info o provozovně</div>
-    <div style="background:#fff;border-radius:10px;margin:0 12px 8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05)">
-      <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--bg)">
+    <!-- CAMPAIGNS — hned po check-inu, technik to využije přímo na místě -->
+    <div class="sec-lbl">Aktuální kampaně</div>
+    <div class="camp-wrap" id="camp-wrap"></div>
+
+    <!-- TASKS — úkoly pro tuhle návštěvu, hned za kampaněmi (připraveno i pro budoucí "Mission" rozšíření) -->
+    <div class="sec-lbl">Úkoly na místě</div>
+    <div class="tsec" id="tasks-list"></div>
+    <div class="add-wrap">
+      <button class="add-dashed" id="add-btn" onclick="showAddForm()">+ Přidat vlastní úkol</button>
+      <div class="add-form" id="add-form">
+        <input type="text" id="new-task-input" placeholder="Co je potřeba udělat?" />
+        <div class="add-acts">
+          <button class="btn-x" onclick="hideAddForm()">Zrušit</button>
+          <button class="btn-ok" onclick="addTask()">Přidat</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CAMPAIGN CHECKLIST (podmíněný checklist napojený na aktivní kampaň) -->
+    <div id="campaign-checklist-wrap" style="display:none">
+      <div class="sec-lbl" id="campaign-checklist-title">Kontrolní checklist</div>
+      <div class="tsec" id="campaign-checklist-list"></div>
+    </div>
+
+    <!-- VÍCE INFORMACÍ — region/typ partnerství nejsou potřeba při běžné návštěvě, schované pod rozbalení -->
+    <details style="margin:0 12px 8px;border-radius:10px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.05);overflow:hidden">
+      <summary style="padding:11px 14px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px"><svg class="ic ic-sm"><use href="#ic-info"/></svg> Více informací</summary>
+      <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-top:1px solid var(--bg)">
         <div style="width:20px;text-align:center;color:var(--teal)"><svg class="ic"><use href="#ic-pin"/></svg></div>
         <div><div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Oblast / Region</div><div style="font-size:13px;font-weight:600;margin-top:1px" id="info-area">—</div></div>
       </div>
-      <div style="display:flex;align-items:center;gap:12px;padding:11px 14px">
+      <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-top:1px solid var(--bg)">
         <div style="width:20px;text-align:center;color:var(--teal)"><svg class="ic"><use href="#ic-store"/></svg></div>
         <div><div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Typ partnerství</div><div style="font-size:13px;font-weight:600;margin-top:1px" id="info-typ">—</div></div>
       </div>
-    </div>
-    <div style="margin:0 12px 8px;border-radius:10px;background:#fff;border:2px dashed var(--border);padding:11px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted)" onclick="openMap()"><svg class="ic"><use href="#ic-map"/></svg> Navigovat na místo</div>
-
-    <!-- CAMPAIGNS -->
-    <div class="sec-lbl">Aktuální kampaně</div>
-    <div class="camp-wrap" id="camp-wrap"></div>
+      <div style="padding:11px 14px;border-top:1px solid var(--bg);display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--teal)" onclick="openMap()"><svg class="ic"><use href="#ic-map"/></svg> Navigovat na místo</div>
+    </details>
 
     <!-- REFS -->
     <div class="sec-lbl">Reference — jak to má vypadat</div>
@@ -489,26 +509,6 @@
           <div class="sig-done-msg" id="sig-done" style="display:none">✓ Zásobování potvrzeno a uloženo</div>
         </div>
       </div>
-    </div>
-
-    <!-- TASKS -->
-    <div class="sec-lbl">Úkoly na místě</div>
-    <div class="tsec" id="tasks-list"></div>
-    <div class="add-wrap">
-      <button class="add-dashed" id="add-btn" onclick="showAddForm()">+ Přidat vlastní úkol</button>
-      <div class="add-form" id="add-form">
-        <input type="text" id="new-task-input" placeholder="Co je potřeba udělat?" />
-        <div class="add-acts">
-          <button class="btn-x" onclick="hideAddForm()">Zrušit</button>
-          <button class="btn-ok" onclick="addTask()">Přidat</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- CAMPAIGN CHECKLIST (podmíněný checklist napojený na aktivní kampaň) -->
-    <div id="campaign-checklist-wrap" style="display:none">
-      <div class="sec-lbl" id="campaign-checklist-title">Kontrolní checklist</div>
-      <div class="tsec" id="campaign-checklist-list"></div>
     </div>
 
     <!-- PHOTOS -->
