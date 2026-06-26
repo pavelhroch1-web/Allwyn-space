@@ -477,23 +477,6 @@
       <button onclick="addPosCardNote()" style="margin-top:8px;width:100%;padding:12px;background:var(--navy);color:var(--teal);border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">Uložit záznam</button>
     </div>
 
-    <!-- CHECKLIST PREVIEW (sandbox, collapsed by default) -->
-    <div class="ck-preview-wrap">
-      <button class="ck-preview-toggle" id="ck-preview-toggle" onclick="toggleChecklistPreview()">
-        <svg class="ic ic-sm"><use href="#ic-box"/></svg>
-        <span>Náhled: chytrý checklist (test)</span>
-        <span class="ck-preview-arrow" id="ck-preview-arrow">⌄</span>
-      </button>
-      <div class="ck-preview-body" id="ck-preview-body" style="display:none">
-        <div style="margin:10px 12px;padding:10px 14px;background:var(--bg);border-radius:10px;font-size:11px;color:var(--muted);line-height:1.5;display:flex;gap:6px">
-          <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-info"/></svg>
-          <span>Náhled budoucí funkce — testovací data z reálné kampaně, nesouvisí s touto POS. Slouží jen k ověření, že větvení Ano/Ne → navazující otázka/foto funguje na reálných odpovědích.</span>
-        </div>
-        <select class="ck-select" id="ck-record-picker" onchange="loadChecklistRecord(this.value)" style="margin:0 12px 10px;width:calc(100% - 24px)"></select>
-        <div id="ck-test-list" style="padding:0 12px"></div>
-      </div>
-    </div>
-
     <div id="vis-badge-slot2"></div>
     <div class="complete-wrap">
       <button class="btn-complete" id="complete-btn" onclick="markVisited()"></button>
@@ -923,9 +906,7 @@
 <script src="js/geo.js?v=20260625a"></script>
 <script src="js/tourplanRaw.js?v=20260625a"></script>
 <script src="js/excelImport.js?v=20260625a"></script>
-<script src="js/posMasterData.js?v=20260625a"></script>
-<script src="js/visitChecklistRaw.js?v=20260625a"></script>
-<script src="js/checklistTemplates.js?v=20260625a"></script>
+<script src="js/posMasterData.js?v=20260625a"></script><script src="js/checklistTemplates.js?v=20260625a"></script>
 <script src="js/checklistEngine.js?v=20260625a"></script>
 <script src="js/dataProvider.js?v=20260625a"></script>
 <script src="js/routeEngine.js?v=20260625a"></script>

@@ -427,13 +427,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .ck-text-input:focus{border-color:var(--teal)}
 .ck-photo-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;border-radius:9px;border:1.5px dashed var(--border);background:#fff;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer}
 .ck-photo-btn.on{border-style:solid;border-color:var(--teal);color:var(--td);background:var(--tl)}
-.ck-preview-wrap{margin:12px 12px 0}
-.ck-preview-toggle{width:100%;display:flex;align-items:center;gap:8px;padding:12px;border:2px dashed var(--border);border-radius:10px;background:transparent;color:var(--muted);font-size:13px;font-weight:700;cursor:pointer;transition:all .15s}
-.ck-preview-toggle.open{border-style:solid;border-color:var(--teal);color:var(--td);background:var(--tl)}
-.ck-preview-toggle span:first-of-type{flex:1;text-align:left}
-.ck-preview-arrow{font-size:16px;line-height:1;transition:transform .15s}
-.ck-preview-body{margin-top:8px}
-
 /* COMPLETE */
 .complete-wrap{padding:16px 12px 32px}
 .btn-complete{width:100%;padding:16px;border:none;border-radius:14px;font-size:16px;font-weight:800;cursor:pointer;transition:all .2s;letter-spacing:-.2px}

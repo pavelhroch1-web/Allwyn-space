@@ -1016,35 +1016,10 @@ function showDetTab(tab,btn){
 }
 
 // ══════════════════════════════════════════════════════
-// CHECKLIST PREVIEW (sandbox, collapsible) — podmíněný checklist engine
+// CHECKLIST ANSWERS — routuje odpověď na otázku do správného kontextu
+// (Velín editor náhled, nebo reálný checklist na kartě POS u technika)
 // ══════════════════════════════════════════════════════
-let ckSandboxAnswers={};
-let ckPreviewOpen=false;
-let ckActiveContext='sandbox'; // 'sandbox' (demo náhled) | 'editor' (Velín editor náhled) | 'pos' (reálný checklist na kartě POS)
-function toggleChecklistPreview(){
-  ckActiveContext='sandbox';
-  ckPreviewOpen=!ckPreviewOpen;
-  document.getElementById('ck-preview-body').style.display=ckPreviewOpen?'block':'none';
-  document.getElementById('ck-preview-arrow').style.transform=ckPreviewOpen?'rotate(180deg)':'';
-  document.getElementById('ck-preview-toggle').classList.toggle('open',ckPreviewOpen);
-  if(ckPreviewOpen)renderChecklistSandbox();
-}
-function renderChecklistSandbox(){
-  const picker=document.getElementById('ck-record-picker');
-  if(!picker.options.length){
-    VISIT_CHECKLIST_RAW.forEach((rec,i)=>{
-      const o=document.createElement('option');
-      o.value=i;o.textContent=`${rec.posId} — ${rec.storeName.split(',')[0]}`;
-      picker.appendChild(o);
-    });
-  }
-  loadChecklistRecord(picker.value||0);
-}
-function loadChecklistRecord(idx){
-  const rec=VISIT_CHECKLIST_RAW[idx];if(!rec)return;
-  ckSandboxAnswers=Object.assign({},rec.answers);
-  renderChecklistSandboxList();
-}
+let ckActiveContext='pos'; // 'editor' (Velín editor náhled) | 'pos' (reálný checklist na kartě POS)
 function setChecklistAnswer(id,val){
   if(ckActiveContext==='editor'){
     if(val===undefined)delete edChecklistPreviewAnswers[id];
@@ -1052,23 +1027,13 @@ function setChecklistAnswer(id,val){
     renderEdChecklistPreview();
     return;
   }
-  if(ckActiveContext==='pos'){
-    const p=posData[cWeek][cIdx];
-    const active=getActiveCampaignChecklist(p);
-    if(!active)return;
-    if(val===undefined)delete ckPosAnswers[id];
-    else ckPosAnswers[id]=val;
-    lss(campaignChecklistKey(p.id,active.template.id),ckPosAnswers);
-    document.getElementById('campaign-checklist-list').innerHTML=ChecklistEngine.renderChecklistHtml(active.template,ckPosAnswers);
-    return;
-  }
-  if(val===undefined)delete ckSandboxAnswers[id];
-  else ckSandboxAnswers[id]=val;
-  renderChecklistSandboxList();
-}
-function renderChecklistSandboxList(){
-  const tpl=getChecklistTemplates()['rebranding-idt-kam'];
-  document.getElementById('ck-test-list').innerHTML=ChecklistEngine.renderChecklistHtml(tpl,ckSandboxAnswers);
+  const p=posData[cWeek][cIdx];
+  const active=getActiveCampaignChecklist(p);
+  if(!active)return;
+  if(val===undefined)delete ckPosAnswers[id];
+  else ckPosAnswers[id]=val;
+  lss(campaignChecklistKey(p.id,active.template.id),ckPosAnswers);
+  document.getElementById('campaign-checklist-list').innerHTML=ChecklistEngine.renderChecklistHtml(active.template,ckPosAnswers);
 }
 
 // ══════════════════════════════════════════════════════
