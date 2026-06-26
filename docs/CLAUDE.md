@@ -13,6 +13,11 @@ Existuje funkční **HTML prototyp** (`index.html`, ~375 KB, jeden soubor: HTML 
 
 Aktuální audit kódu (co je reálně implementováno) je v `CODE_AUDIT.md` — než cokoliv refaktoruješ, ověř si tam, jak to ve skutečnosti funguje (řádkové odkazy do `index.html`).
 
+Architektura plánovače (tři oddělené vrstvy: Business Selection Engine /
+Route Engine / Region Optimization Advisor) je v `PLANNER_ARCHITECTURE.md`
+— než přidáváš nebo měníš jakoukoliv logiku výběru/řazení/dlouhodobého
+přiřazení POS, ověř, do které vrstvy patří.
+
 ---
 
 ## PRAVIDLA VÝVOJE
