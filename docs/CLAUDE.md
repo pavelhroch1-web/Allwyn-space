@@ -13,6 +13,11 @@ Existuje funkční **HTML prototyp** (`index.html`, ~375 KB, jeden soubor: HTML 
 
 Aktuální audit kódu (co je reálně implementováno) je v `CODE_AUDIT.md` — než cokoliv refaktoruješ, ověř si tam, jak to ve skutečnosti funguje (řádkové odkazy do `index.html`).
 
+Architektura plánovače (tři oddělené vrstvy: Business Selection Engine /
+Route Engine / Region Optimization Advisor) je v `PLANNER_ARCHITECTURE.md`
+— než přidáváš nebo měníš jakoukoliv logiku výběru/řazení/dlouhodobého
+přiřazení POS, ověř, do které vrstvy patří.
+
 ---
 
 ## PRAVIDLA VÝVOJE
@@ -32,7 +37,7 @@ Aktuální audit kódu (co je reálně implementováno) je v `CODE_AUDIT.md` —
 
 ### Práce s daty
 - **localStorage je dočasný** — migrujeme na backend (viz plán). Ale dokud běží, neměň formát klíčů bez migrace, ať uživatel nepřijde o testovací data.
-- Klíče v localStorage (současné, ověřeno v kódu — viz CODE_AUDIT.md): `ci_{posId}` (check-in), `vlog_{date}` (visit log), `daystart_{date}`, `supply_{posId}_{date}`, `merch_{posId}_{date}`, `poscard_{posId}`, `visits_{posId}` (historie), `assign_{posId}` (přiřazení dne), `admin_tasks`, `editor_briefing`, `editor_alert`, `editor_idt`, `editor_ka`, `editor_campaigns`, `inv_catalog`, `gps_flags_{date}`, `approval_{posId}`.
+- Klíče v localStorage (současné, ověřeno v kódu — viz CODE_AUDIT.md): `ci_{posId}` (check-in), `vlog_{date}` (visit log), `daystart_{date}`, `supply_{posId}_{date}`, `merch_{posId}_{date}`, `poscard_{posId}`, `visits_{posId}` (historie), `assign_{posId}` (přiřazení dne), `admin_tasks`, `editor_briefing`, `editor_alert`, `editor_idt`, `editor_ka`, `editor_campaigns`, `inv_catalog`, `gps_flags_{date}`, `approval_{posId}`, `decisions` (Decision Layer, Vrstva 4 — viz `PLANNER_ARCHITECTURE.md`).
 
 ---
 
@@ -106,11 +111,29 @@ Doporučený stack (návrh, ne dogma): frontend buď ponechat vanilla/lehký fra
 
 10. **Admin má plnou kontrolu a transparentnost.** Manažer předpokládá že technici podvádějí — každá funkce, která zvyšuje viditelnost (GPS, časy, fotky, AI flagy, schvalování) je hodnotná. Nikdy ji neoslabuj kvůli pohodlí.
 
+   **Standing princip (Pavel, 2026-06-26): "vždycky se snaží nás ochcat... oni vždycky hledají tu nejjednodušší cestu."** Při návrhu JAKÉKOLIV nové funkce nebo zjednodušení flow pro technika si vždy polož otázku: "jak by se tohle dalo obejít/ošvindlovat nejjednodušší cestou, a jak to Velínu nezůstane skryté?" Konkrétní důsledky:
+   - Když dáváš technikovi rychlejší/odloženou cestu (např. check-in bez focení hned, merch odškrtnutí bez focení), vždy musí existovat tvrdý gate, který to dožene později (Zbývá vyfotit), NIKDY úplné odstranění požadavku.
+   - Velín musí mít vždy možnost dohledat, kde technik "zkrátil cestu" — kdy a co odložil, ne jen výsledný stav.
+   - Default nastavení (co vyžaduje foto, GPS přísnost, atd.) volí Velín, ne technik a ne hardcoded "pohodlné" defaulty — ale i defaulty navrhuj s myšlenkou, kde by šlo nejsnáz podvádět.
+   - Při jakékoliv budoucí featuře s odkladem/zjednodušením pro technika vždy znovu prober s Pavlem, jak to nejde obejít — neproaktivně to nezeslabuj kvůli UX bez téhle úvahy.
+
 11. **Allwyn branding.** Navy `#1A3C47` + teal `#2ECDC0`. Žlutá je legacy Sazka — nepoužívat jako brand barvu.
+
+11a. **Decision Engine nikdy nerozhoduje, jen navrhuje — strategická rozhodnutí patří Operations Managerovi.** (Pavel, 2026-06-26, schváleno jako architektonická zásada pro Decision Layer, viz `PLANNER_ARCHITECTURE.md` Vrstva 4.) Rozliš dvě úrovně:
+   - **Strategická rozhodnutí** (alokace lidí, přesun POS mezi regiony/techniky, zařazení/časování kampaní, změna priorit/vah, jakýkoliv dopad na byznys napříč technikem/regionem/obdobím) → systém připraví návrh (Decision objekt s evidencí a confidence), **rozhoduje výhradně člověk** (Pavel/Operations Manager ve Velínu). Nikdy automatický zápis do dat, akce jen přes existující admin/editor flow.
+   - **Rutinní operace podle už schválených pravidel** (pořadí návštěv v rámci dne, doporučení vynechat nízkou prioritu při přetížení, GPS/zpožďovací alerty, noční kalibrace časové normy) → mohou běžet automaticky, bez schvalování za každou instanci — pravidlo už jednou schválil Velín, systém ho jen vykonává.
+   - **Technik nikdy nevstupuje jako schvalovací role.** Jeho úkolem je realizace schválených rozhodnutí a zpětná vazba z terénu (check-in, fotky, poznámky) — ta zpětná vazba je vstup, ze kterého se systém učí, ne rozhodnutí samo.
+   - Decision objekt má stav `pending|approved|modified|deferred|rejected` — `modified` a `deferred` jsou plnohodnotný výsledek, ne jen ano/ne, a systém se z nich učí stejně jako z approved/rejected (např. `modified` říká, že směr návrhu byl správný, ale rozsah/práh byl špatně odhadnutý).
 
 12. **AI klíč nikdy ve frontendu.** Anthropic API volání jen server-side po migraci na backend. **Pozor:** v prototypu se volá `https://api.anthropic.com/v1/messages` přímo z frontendu — to je dočasné řešení specifické pro prostředí prototypu a MUSÍ se přesunout na server v Fázi 4.
 
 13. **Čeština ve všem co vidí uživatel.**
+
+14. **Úvodní stránka (`#role-screen` v `index.html`) je živý "Product Vision" dashboard, ne statická prezentace.** Pavel (2026-06-26): "Nechci marketing. Chci pravdivý obraz projektu." Pravidla:
+    - Po každé větší feature/architektonické změně/nové vizi: zreviduj moduly (skutečně implementováno / částečně funkční / pouze navržené / dlouhodobá vize) a aktualizuj sekce na úvodní stránce ("Co už dnes funguje" / "Co právě vzniká" / "Co je další krok" / "Dlouhodobá vize").
+    - Před každou větší změnou projektu nejdřív zkontroluj, jestli úvodní stránka stále odpovídá realitě — pokud ne, sám navrhni aktualizaci.
+    - Žádný modul nesmí být na stránce ✓/"Funguje", pokud v kódu reálně neexistuje nebo neběží na reálných datech — to by bylo fake data o vlastním produktu.
+    - Vizuální evoluční mapa (Foundation → Pilot → Operational Intelligence → Decision Intelligence → Autonomous Field Operations) musí vždy zvýrazňovat aktuální fázi projektu.
 
 ---
 

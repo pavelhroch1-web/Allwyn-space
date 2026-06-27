@@ -72,9 +72,14 @@
   // setOverride(rows, fileName) -> uloží reálně nahraná data jako budoucí
   // zdroj appky (vyžaduje reload, protože FULL_POS_DATA/posData v app.js
   // jsou const naplněné jednou při startu).
+  // Přes global.lss() (ne přímo localStorage.setItem) — sync.js zachytí
+  // tenhle zápis stejně jako kterýkoliv jiný lss() a propíše ho do Supabase,
+  // takže nahraný Excel uvidí i technici na svých zařízeních, ne jen Velín.
   function setOverride(rows, fileName){
     if(!global.localStorage) return false;
-    global.localStorage.setItem('tourplanImportOverride', JSON.stringify({ rows, fileName, importedAt: new Date().toISOString() }));
+    const value = { rows, fileName, importedAt: new Date().toISOString() };
+    if(typeof global.lss === 'function') global.lss('tourplanImportOverride', value);
+    else global.localStorage.setItem('tourplanImportOverride', JSON.stringify(value));
     return true;
   }
 
@@ -125,7 +130,9 @@
 
   function setPosMasterOverride(rows, fileName){
     if(!global.localStorage) return false;
-    global.localStorage.setItem('posMasterDataOverride', JSON.stringify({ rows, fileName, importedAt: new Date().toISOString() }));
+    const value = { rows, fileName, importedAt: new Date().toISOString() };
+    if(typeof global.lss === 'function') global.lss('posMasterDataOverride', value);
+    else global.localStorage.setItem('posMasterDataOverride', JSON.stringify(value));
     return true;
   }
 

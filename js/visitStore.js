@@ -109,6 +109,21 @@ const VisitStore = (function(){
       .then(({ error }) => { if (error) console.warn('[visitStore] logEvent failed', error.message); });
   }
 
+  // Skutečné bajty fotky do Supabase Storage (ne do JSON sloupce) — app.js
+  // si dál ukládá dataURL lokálně beze změny (offline-first, žádná regrese),
+  // tohle běží navíc, fire-and-forget, a vrátí veřejnou URL pro photos_meta.
+  async function uploadPhoto(posId, weekKey, slot, dataUrl){
+    const c = getClient(); if (!c) return null;
+    try {
+      const blob = await (await fetch(dataUrl)).blob();
+      const path = `${posId}/${weekKey}/${slot}_${Date.now()}.jpg`;
+      const { error } = await c.storage.from('visit-photos').upload(path, blob, { contentType: 'image/jpeg' });
+      if (error) { console.warn('[visitStore] uploadPhoto failed', error.message); return null; }
+      const { data } = c.storage.from('visit-photos').getPublicUrl(path);
+      return (data && data.publicUrl) || null;
+    } catch(e) { console.warn('[visitStore] uploadPhoto error', e.message); return null; }
+  }
+
   // ── Hydratace: stáhne aktuální stav (návštěva dokončena / checklist) pro
   // dané techniky a vrátí mapu posId -> {completed, taskDone:{taskName:bool}}.
   // Použito při refreshi / přepnutí technika / Velín dashboardu, aby se
@@ -116,7 +131,7 @@ const VisitStore = (function(){
   async function pullVisitState(technicianIds){
     const c = getClient(); if (!c || !technicianIds.length) return {};
     const { data: visits, error: vErr } = await c.from('visits')
-      .select('id,technician_id,pos_id,status').in('technician_id', technicianIds);
+      .select('id,technician_id,pos_id,status,photos_meta').in('technician_id', technicianIds);
     if (vErr) { console.warn('[visitStore] pullVisitState visits failed', vErr.message); return {}; }
     if (!visits || !visits.length) return {};
     const visitIds = visits.map(v => v.id);
@@ -129,7 +144,7 @@ const VisitStore = (function(){
     });
     const result = {};
     visits.forEach(v => {
-      result[v.pos_id] = { completed: v.status === 'completed', taskDone: tasksByVisit[v.id] || {} };
+      result[v.pos_id] = { completed: v.status === 'completed', taskDone: tasksByVisit[v.id] || {}, photosMeta: v.photos_meta || [] };
     });
     return result;
   }
@@ -146,6 +161,18 @@ const VisitStore = (function(){
         const match = p.taskState.find(t => t.text === taskName);
         if (match && match.done !== r.taskDone[taskName]) { match.done = r.taskDone[taskName]; changed = true; }
       });
+      // Foto URL ze Storage doplní jen sloty, kde tohle zařízení ještě nemá
+      // žádnou fotku — čerstvě vyfocená fotka na tomhle zařízení má vždy
+      // přednost před starší verzí z jiného zařízení.
+      (r.photosMeta || []).forEach(m => {
+        if (m && m.url && !p.photos[m.slot]) {
+          while (p.photos.length <= m.slot) p.photos.push(null);
+          p.photos[m.slot] = m.url;
+          p.photoUrls = p.photoUrls || {};
+          p.photoUrls[m.slot] = m.url;
+          changed = true;
+        }
+      });
     });
     return changed;
   }
@@ -161,18 +188,26 @@ const VisitStore = (function(){
       .subscribe();
   }
 
-  return { enabled, ensureVisit, setVisitField, setTaskDone, setMaterial, logEvent, pullVisitState, mergeIntoPos, subscribe };
+  return { enabled, ensureVisit, setVisitField, setTaskDone, setMaterial, logEvent, uploadPhoto, pullVisitState, mergeIntoPos, subscribe };
 })();
 
 // ── Hydratace při loginu/refreshi — zrcadlí vzor js/sync.js (pull + realtime
 // + applyRoute()), jen pro nové relační tabulky. ──────────────────────────
+// Po sloučení vzdáleného stavu (foto URL ze Storage zejména) zapíšeme
+// write-through do localStorage cache (saveVisitState), ať se po dalším
+// refreshi na tomhle zařízení nemusí znovu čekat na síť.
+function _writeThroughVisitState(weekKey, pList){
+  if (typeof saveVisitState !== 'function') return;
+  pList.forEach(p => saveVisitState(p, weekKey));
+}
+
 function hydrateVisitStoreFor(technicianNames){
   if (!VisitStore.enabled() || !technicianNames.length) return;
   VisitStore.pullVisitState(technicianNames).then(remoteState => {
     let changed = false;
     Object.keys(FULL_POS_DATA).forEach(w => {
       const pList = FULL_POS_DATA[w].filter(p => technicianNames.includes(p.assignedTechnician));
-      if (VisitStore.mergeIntoPos(pList, remoteState)) changed = true;
+      if (VisitStore.mergeIntoPos(pList, remoteState)) { changed = true; _writeThroughVisitState(w, pList); }
     });
     if (changed && typeof applyRoute === 'function') applyRoute();
   });
@@ -181,7 +216,7 @@ function hydrateVisitStoreFor(technicianNames){
       let changed = false;
       Object.keys(FULL_POS_DATA).forEach(w => {
         const pList = FULL_POS_DATA[w].filter(p => technicianNames.includes(p.assignedTechnician));
-        if (VisitStore.mergeIntoPos(pList, remoteState)) changed = true;
+        if (VisitStore.mergeIntoPos(pList, remoteState)) { changed = true; _writeThroughVisitState(w, pList); }
       });
       if (changed && typeof applyRoute === 'function') applyRoute();
     });

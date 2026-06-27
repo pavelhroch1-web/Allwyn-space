@@ -18,7 +18,7 @@
   window.ALLWYN_SUPABASE_URL = 'https://lpnorveltzcmgfouufx.supabase.co';
   window.ALLWYN_SUPABASE_ANON_KEY = 'sb_publishable_Yk_JFXeWpSfqAtyMJqzlyw_xbo4i3D3';
 </script>
-<link rel="stylesheet" href="css/styles.css?v=20260625a">
+<link rel="stylesheet" href="css/styles.css?v=20260626k">
 </head>
 <body>
 <!-- ICON SPRITE (unified line-icon set, replaces emoji glyphs across the app) -->
@@ -85,7 +85,7 @@
         <div class="rs-logo"><div class="rs-a">a</div><div class="rs-name">allwyn <span>space</span></div></div>
         <div class="rs-live-pill"><span class="rs-live-dot"></span>LIVE</div>
       </div>
-      <div class="rs-sub">Field Operations Intelligence Platform</div>
+      <div class="rs-sub">Decision Intelligence Platform pro řízení terénu</div>
 
       <div class="rs-stats">
         <div class="rs-stat"><div class="rs-stat-v" id="rs-stat-pos-v">945</div><div class="rs-stat-l">POS monitored</div></div>
@@ -111,7 +111,17 @@
 
     <div class="rs-vision">
 
-      <div class="rs-quote">„Pomáháme každému technikovi věnovat víc času hodnotě v terénu — míň jízdě, hledání a koordinaci.“</div>
+      <div class="rs-quote">„Cílem není appka pro technika. Cílem je platforma, která pomáhá Velínu dělat lepší rozhodnutí — technik je jen jeden ze zdrojů dat a jeden z uživatelů.“</div>
+
+      <div class="rs-vsection">
+        <div class="rs-vtitle">Proč Allwyn Space vzniká</div>
+        <div class="rs-why-grid">
+          <div class="rs-why-item"><div class="rs-why-l">Problém</div><div class="rs-why-t">Manažer neví, co technici v terénu reálně dělají. Plánování je ruční Excel. Majetek na POS mizí bez evidence.</div></div>
+          <div class="rs-why-item"><div class="rs-why-l">Hodnota pro technika</div><div class="rs-why-t">Méně jízdy a hledání, jasné pořadí návštěv, méně papírování — víc času na samotnou práci na POS.</div></div>
+          <div class="rs-why-item"><div class="rs-why-l">Hodnota pro Velín</div><div class="rs-why-t">Živý přehled, GPS ověření, fotodokumentace a alerty místo telefonování a domýšlení.</div></div>
+          <div class="rs-why-item"><div class="rs-why-l">Hodnota pro firmu</div><div class="rs-why-t">Dohledatelná evidence majetku a materiálu, doklad pro SAP, méně ztrát a méně prostojů na POS.</div></div>
+        </div>
+      </div>
 
       <div class="rs-vsection">
         <div class="rs-vtitle">Realita dnes</div>
@@ -145,63 +155,142 @@
       </div>
 
       <div class="rs-vsection">
-        <div class="rs-vtitle">Intelligence moduly — kam se chceme dostat</div>
-        <div class="rs-module-subtitle">1 modul je živý, 5 je vize. „Live“ = reálně funguje s reálnými daty. „Vize“ = plánovaný směr, zatím neimplementováno.</div>
+        <div class="rs-vtitle">Co už dnes funguje</div>
+        <div class="rs-module-subtitle">Reálně používaná data, ne demo. Aktualizováno po každé větší změně projektu.</div>
         <div class="rs-modules">
-
           <div class="rs-module-card">
-            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-route"/></svg><span class="rs-module-badge rs-badge-live">Live</span></div>
-            <div class="rs-module-title">Route Intelligence</div>
-            <div class="rs-module-desc">Optimalizuje denní práci. Rozumí výchozímu bodu technika, GPS POS, otevírací době a délce úkolu.</div>
-            <div class="rs-module-goal">Cíl: méně jízdy, víc času na POS.</div>
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-user"/></svg><span class="rs-module-badge rs-badge-live">Funguje</span></div>
+            <div class="rs-module-title">Mobilní aplikace technika</div>
+            <div class="rs-module-desc">Plánování dne, GPS check-in/check-out, merch, spotřební materiál s podpisem, fotodokumentace, karta POS.</div>
           </div>
-
           <div class="rs-module-card">
-            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-map"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
-            <div class="rs-module-title">Territory Intelligence</div>
-            <div class="rs-module-desc">„Máme regiony nastavené správně?“ Analyzuje, kde technici začínají a jak je vyvážená jejich síť POS.</div>
-            <div class="rs-module-goal">Najde překryvy regionů a zbytečné kilometry — člověk rozhoduje o změně.</div>
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-signal"/></svg><span class="rs-module-badge rs-badge-live">Funguje</span></div>
+            <div class="rs-module-title">Velín (Operations Control Center)</div>
+            <div class="rs-module-desc">Živá mapa 27 techniků, schvalování, GPS anomálie, alerty zpoždění a chybějícího podpisu zásobování.</div>
           </div>
-
           <div class="rs-module-card">
-            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-clock"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
-            <div class="rs-module-title">Capacity Intelligence</div>
-            <div class="rs-module-desc">Pochopí dostupný čas týmu. Např. „Tento týden: volná kapacita 42 hodin.“</div>
-            <div class="rs-module-goal">Navrhne, jaké POS/úkoly se dají přidat.</div>
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-route"/></svg><span class="rs-module-badge rs-badge-live">Funguje</span></div>
+            <div class="rs-module-title">Route Engine</div>
+            <div class="rs-module-desc">Počítá trasu z reálné GPS, výchozího bodu a otevírací doby. Zamyká navštívené POS, doporučuje vynechat nízkou prioritu při nedostatku kapacity, upozorňuje Velín na zpoždění v reálném čase.</div>
           </div>
-
           <div class="rs-module-card">
-            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-box"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
-            <div class="rs-module-title">Material Intelligence</div>
-            <div class="rs-module-desc">Virtuální sklad technika — ví, co je v autě, jaké kampaně se blíží a jaký SAP materiál bude potřeba.</div>
-            <div class="rs-module-goal">„Vyzvedni materiál teď, další návštěva skladu za 12 dní.“</div>
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-box"/></svg><span class="rs-module-badge rs-badge-live">Funguje</span></div>
+            <div class="rs-module-title">Supabase backend</div>
+            <div class="rs-module-desc">Návštěvy, materiály a fotky se reálně ukládají do databáze (ne jen do localStorage v telefonu).</div>
           </div>
-
           <div class="rs-module-card">
-            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-flag"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
-            <div class="rs-module-title">Campaign Intelligence</div>
-            <div class="rs-module-desc">Kampaň + důležitost POS + sales data + termín → AI navrhne, které POS navštívit, kdy a který technik.</div>
-            <div class="rs-module-goal">Velín schvaluje, AI jen doporučuje.</div>
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-calendar"/></svg><span class="rs-module-badge rs-badge-live">Funguje</span></div>
+            <div class="rs-module-title">Tourplan import</div>
+            <div class="rs-module-desc">Reálná POS data pro všech 27 techniků, týdny W23–W28, podle skutečného exportu z Tourplan.</div>
           </div>
-
           <div class="rs-module-card">
-            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-camera"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
-            <div class="rs-module-title">Photo Intelligence</div>
-            <div class="rs-module-desc">AI kontroluje fotky z POS — přítomnost konkurence, chybějící materiál, kvalitu provedení.</div>
-            <div class="rs-module-goal">Vytváří strukturované reporty pro velín.</div>
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-check-badge"/></svg><span class="rs-module-badge rs-badge-live">Funguje</span></div>
+            <div class="rs-module-title">Decision Engine (MVP)</div>
+            <div class="rs-module-desc">Jeden typ doporučení dnes v provozu: přetížení technika nad jeho vlastní historický průměr. Návrh z reálných Tourplan dat, vidí ho Velín jako Action Feed se 4 tlačítky (Schválit/Upravit/Odložit/Zamítnout) — nikdy automatický zápis, rozhoduje vždy člověk.</div>
           </div>
-
         </div>
       </div>
 
       <div class="rs-vsection">
-        <div class="rs-evo">
-          <div class="rs-evo-step"><div class="rs-evo-dot rs-evo-dot-live"></div><div class="rs-evo-label">Dnes</div><div class="rs-evo-text">Route Intelligence</div></div>
-          <div class="rs-evo-line"></div>
-          <div class="rs-evo-step"><div class="rs-evo-dot"></div><div class="rs-evo-label">Další</div><div class="rs-evo-text">Connected Operations</div></div>
-          <div class="rs-evo-line"></div>
-          <div class="rs-evo-step"><div class="rs-evo-dot"></div><div class="rs-evo-label">Budoucnost</div><div class="rs-evo-text">AI-assisted Field Planning</div></div>
+        <div class="rs-vtitle">Co právě vzniká</div>
+        <div class="rs-module-subtitle">Část funguje na reálných datech, část ještě čeká na dokončení nebo na externí vstup.</div>
+        <div class="rs-modules">
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-calendar"/></svg><span class="rs-module-badge rs-badge-progress">Ve vývoji</span></div>
+            <div class="rs-module-title">AI Briefing & Report</div>
+            <div class="rs-module-desc">Textové AI shrnutí pro technika i Velína z reálných dat dne. Bez nastaveného API klíče appka spolehlivě spadne na statický, jasně označený "Operativní tip" — nikdy nepředstírá AI text, který nevznikl.</div>
+          </div>
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-info"/></svg><span class="rs-module-badge rs-badge-progress">Ve vývoji</span></div>
+            <div class="rs-module-title">Visit History</div>
+            <div class="rs-module-desc">Aktuální stav technika na POS se ukládá. Dotazovatelná historie jednotlivých návštěv ještě chybí.</div>
+          </div>
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-check-badge"/></svg><span class="rs-module-badge rs-badge-progress">Mockup</span></div>
+            <div class="rs-module-title">SAP Integration</div>
+            <div class="rs-module-desc">SAP kódy jsou v appce jako mockup hodnoty. Reálné napojení na SAP dodá objednatel.</div>
+          </div>
         </div>
+      </div>
+
+      <div class="rs-vsection">
+        <div class="rs-vtitle">Co je další krok</div>
+        <div class="rs-module-subtitle">Nejbližší rozhodnutí a práce, ne dlouhodobá vize.</div>
+        <div class="rs-modules">
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-clock"/></svg><span class="rs-module-badge rs-badge-next">Další krok</span></div>
+            <div class="rs-module-title">Workload Learning — měření normy proti realitě</div>
+            <div class="rs-module-desc">Časové normy návštěv jsou dnes statická tabulka. Další krok: porovnávat ji každý večer s reálnými check-in/check-out časy — bez AI, jen statistika s dohledatelným zdrojem.</div>
+          </div>
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-route"/></svg><span class="rs-module-badge rs-badge-next">Další krok</span></div>
+            <div class="rs-module-title">Business Value v Velínu</div>
+            <div class="rs-module-desc">Route Engine už dnes počítá ušetřené km a hodiny pro celou flotilu — jen se nikde nezobrazuje. Další krok je tahle reálná čísla dostat do Velínu.</div>
+          </div>
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-warning"/></svg><span class="rs-module-badge rs-badge-next">Další krok</span></div>
+            <div class="rs-module-title">Zámek SAP kódů po odeslání</div>
+            <div class="rs-module-desc">Chybí explicitní zámek proti re-editaci SAP kódů po odeslání zásobování technikem.</div>
+          </div>
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-flag"/></svg><span class="rs-module-badge rs-badge-next">Další krok</span></div>
+            <div class="rs-module-title">Sjednocení GPS pásma 300m–1km</div>
+            <div class="rs-module-desc">Pásmo 300m–1km se technikovi zobrazí jako varování, ale dnes nezaloží flag pro Velín — zvážit sjednocení.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rs-vsection">
+        <div class="rs-vtitle">Dlouhodobá vize</div>
+        <div class="rs-module-subtitle">Koncept nebo návrh architektury. Žádný produkční kód, žádná reálná data.</div>
+        <div class="rs-modules">
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-route"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
+            <div class="rs-module-title">Business Selection Engine</div>
+            <div class="rs-module-desc">Která POS si zaslouží slot v týdnu. Dnes vybírá technik sám — vrstva v architektuře navržená, v kódu zatím neexistuje.</div>
+          </div>
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-map"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
+            <div class="rs-module-title">Region Optimization Advisor</div>
+            <div class="rs-module-desc">Kdo by měl POS dlouhodobě obsluhovat. Navrženo v roadmapě, implementace čeká na 6–8 týdnů reálných dat.</div>
+          </div>
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-check-badge"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
+            <div class="rs-module-title">Decision Engine — další typy doporučení</div>
+            <div class="rs-module-desc">MVP (přetížení technika) už běží — viz "Co už dnes funguje". Vize je rozšířit o další typy (přesun POS mezi regiony, časování kampaní, úprava priorit) — čeká na datové vstupy (Vrstva 3, salesValue), žádné nové AI funkce teď v plánu.</div>
+          </div>
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-camera"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
+            <div class="rs-module-title">AI Vision (rozpoznávání materiálů)</div>
+            <div class="rs-module-desc">AI kontroluje fotky z POS — chybějící materiál, konkurence, kvalita osazení. Dnešní AI umí jen text, žádný kód na rozpoznávání fotek neexistuje.</div>
+          </div>
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-flag"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
+            <div class="rs-module-title">Campaign Intelligence</div>
+            <div class="rs-module-desc">AI navrhne, které POS navštívit kvůli kampani a kdy. Velín by schvaloval, AI jen doporučovala.</div>
+          </div>
+          <div class="rs-module-card">
+            <div class="rs-module-top"><svg class="rs-module-icon ic-lg"><use href="#ic-users"/></svg><span class="rs-module-badge rs-badge-vision">Vize</span></div>
+            <div class="rs-module-title">Autonomous Field Operations</div>
+            <div class="rs-module-desc">Self-learning plánování a kompletní obraz servisní sítě v čase (POS karta + historie + Decision log + Health Score). Dlouhý horizont, nic z toho dnes neexistuje.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rs-vsection">
+        <div class="rs-vtitle">Kde jsme</div>
+        <div class="rs-evo">
+          <div class="rs-evo-step"><div class="rs-evo-dot"></div><div class="rs-evo-label">1</div><div class="rs-evo-text">Foundation</div></div>
+          <div class="rs-evo-line"></div>
+          <div class="rs-evo-step rs-evo-step-current"><div class="rs-evo-dot rs-evo-dot-live"></div><div class="rs-evo-label">2 · Teď</div><div class="rs-evo-text">Pilot</div></div>
+          <div class="rs-evo-line"></div>
+          <div class="rs-evo-step"><div class="rs-evo-dot"></div><div class="rs-evo-label">3</div><div class="rs-evo-text">Operational Intelligence</div></div>
+          <div class="rs-evo-line"></div>
+          <div class="rs-evo-step"><div class="rs-evo-dot"></div><div class="rs-evo-label">4</div><div class="rs-evo-text">Decision Intelligence</div></div>
+          <div class="rs-evo-line"></div>
+          <div class="rs-evo-step"><div class="rs-evo-dot"></div><div class="rs-evo-label">5</div><div class="rs-evo-text">Autonomous Field Operations</div></div>
+        </div>
+        <div class="rs-vlead" style="margin-top:10px">Pilot s 5 techniky, reálný Supabase backend a první funkce Route Intelligence (zpoždění, kapacita, ušetřené km) — první kroky směrem k Decision Intelligence už běží, jen ještě nejsou viditelné ve Velínu.</div>
       </div>
 
     </div>
@@ -240,8 +329,6 @@
     </div>
   </div>
 </div>
-
-<button class="switch-btn" id="switch-btn" style="display:none" onclick="logout()">⇄ Odhlásit</button>
 
 <!-- ══ TECHNIK ══ -->
 <div class="screen" id="technik-screen">
@@ -289,12 +376,21 @@
             <div class="user-dd-sep"></div>
             <button class="user-dd-item" onclick="toggleProfileDetail('tech')">Profil</button>
             <div class="user-dd-detail" id="user-dd-tech-detail" style="display:none"></div>
-            <button class="user-dd-item disabled" disabled>Nastavení <span class="user-dd-soon">brzy</span></button>
+            <button class="user-dd-item" onclick="toggleHomeLocationDetail('tech')">Domácí výchozí bod</button>
+            <div class="user-dd-detail" id="user-dd-tech-home" style="display:none"></div>
             <button class="user-dd-item" onclick="logout()">Odhlásit</button>
           </div>
         </div>
       </div>
       <div class="hdr-sub" id="hdr-week-label">Načítám…</div>
+      <div style="position:relative;margin-top:8px">
+        <input type="text" id="tech-pos-search" placeholder="Najít moje POS — číslo, název, adresa…"
+          aria-label="Vyhledat POS v mém plánu"
+          oninput="onTechPosSearch(this.value)"
+          onkeydown="if(event.key==='Enter') submitTechPosSearch()"
+          style="width:100%;padding:9px 12px;border-radius:8px;border:1.5px solid rgba(255,255,255,.15);background:rgba(255,255,255,.08);color:#fff;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box"/>
+        <div id="tech-pos-search-results" style="display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.25);overflow:hidden;z-index:300"></div>
+      </div>
     </div>
     <div class="wscroll" id="week-chips"></div>
     <div class="wsum">
@@ -338,29 +434,19 @@
       </div>
       <button class="ci-btn" id="ci-btn" onclick="doCheckin()">Check-in</button>
     </div>
+    <div id="ci-photo-pending"></div>
 
     <div id="admin-alert-banner"></div>
     <div id="vis-badge-slot"></div>
 
-    <!-- INFO -->
-    <div class="sec-lbl">Info o provozovně</div>
-    <div style="background:#fff;border-radius:10px;margin:0 12px 8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05)">
-      <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--bg)">
-        <div style="width:20px;text-align:center;color:var(--teal)"><svg class="ic"><use href="#ic-pin"/></svg></div>
-        <div><div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Oblast / Region</div><div style="font-size:13px;font-weight:600;margin-top:1px" id="info-area">—</div></div>
-      </div>
-      <div style="display:flex;align-items:center;gap:12px;padding:11px 14px">
-        <div style="width:20px;text-align:center;color:var(--teal)"><svg class="ic"><use href="#ic-store"/></svg></div>
-        <div><div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Typ partnerství</div><div style="font-size:13px;font-weight:600;margin-top:1px" id="info-typ">—</div></div>
-      </div>
-    </div>
-    <div style="margin:0 12px 8px;border-radius:10px;background:#fff;border:2px dashed var(--border);padding:11px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted)" onclick="openMap()"><svg class="ic"><use href="#ic-map"/></svg> Navigovat na místo</div>
+    <!-- SERVIS — technik si může servisní dotazník spustit i sám, bez čekání na Velín -->
+    <div style="margin:0 12px 8px;border-radius:10px;background:#fff;border:2px dashed var(--red);padding:11px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;font-size:13px;font-weight:700;color:var(--red)" onclick="openServisOnDemand()"><svg class="ic"><use href="#ic-wrench"/></svg> Spustit servis</div>
 
-    <!-- CAMPAIGNS -->
+    <!-- CAMPAIGNS — hned po check-inu, technik to využije přímo na místě -->
     <div class="sec-lbl">Aktuální kampaně</div>
     <div class="camp-wrap" id="camp-wrap"></div>
 
-    <!-- REFS -->
+    <!-- REFS — ukázka jak to má vypadat, technik se na to dívá ještě před osazením -->
     <div class="sec-lbl">Reference — jak to má vypadat</div>
     <div id="refs-wrap"></div>
 
@@ -373,15 +459,19 @@
           <div class="supply-badge" style="background:rgba(255,255,255,.2);color:#fff">Bez podpisu</div>
         </div>
         <div id="merch-items"></div>
+        <input type="file" id="merch-photo-input" accept="image/*" capture="environment" onchange="handleMerchPhoto(event)" style="display:none"/>
         <div style="padding:10px 14px;border-top:1px solid var(--bg);font-size:11px;color:var(--muted)">
-          Odklikni co bylo osazeno. Vyfotit před a po.
+          Označit ✓ vyžaduje fotku dané položky — bez fotky se osazení nezapíše.
         </div>
       </div>
     </div>
 
-    <!-- SPOTŘEBNÍ MATERIÁL -->
-    <div id="supply-section">
-      <div class="sec-lbl">Spotřební materiál — předání</div>
+    <!-- SPOTŘEBNÍ MATERIÁL — sbalené, technik s ním ve většině návštěv nepracuje -->
+    <details id="supply-section">
+      <summary class="sec-lbl sec-lbl-collapsible">
+        <span>Spotřební materiál — předání</span>
+        <span class="sec-lbl-summary" id="supply-summary">Beze změn</span>
+      </summary>
       <div class="supply-card" style="margin:0 12px 8px">
         <div class="supply-hdr">
           <div class="supply-hdr-t"><svg class="ic ic-sm"><use href="#ic-box"/></svg> Spotřební materiál</div>
@@ -403,9 +493,9 @@
           <div class="sig-done-msg" id="sig-done" style="display:none">✓ Zásobování potvrzeno a uloženo</div>
         </div>
       </div>
-    </div>
+    </details>
 
-    <!-- TASKS -->
+    <!-- TASKS — detailní úkoly, technik je otevře až ve chvíli kdy reálně začíná pracovat -->
     <div class="sec-lbl">Úkoly na místě</div>
     <div class="tsec" id="tasks-list"></div>
     <div class="add-wrap">
@@ -419,10 +509,34 @@
       </div>
     </div>
 
+    <!-- CAMPAIGN CHECKLIST (podmíněný checklist napojený na aktivní kampaň) -->
+    <div id="campaign-checklist-wrap" style="display:none">
+      <div class="sec-lbl" id="campaign-checklist-title">Kontrolní checklist</div>
+      <div class="tsec" id="campaign-checklist-list"></div>
+    </div>
+
     <!-- PHOTOS -->
     <div class="sec-lbl">Fotodokumentace</div>
     <div class="pgrid" id="photos-grid"></div>
     <input type="file" id="photo-input" accept="image/*" capture="environment" onchange="handlePhoto(event)" style="display:none"/>
+    <div style="padding:10px 12px;background:var(--tl);border-radius:10px;font-size:11px;color:var(--tm);line-height:1.5;margin:8px 0 4px;display:flex;gap:6px">
+      <svg class="ic ic-sm" style="flex-shrink:0;margin-top:1px"><use href="#ic-bulb"/></svg>
+      <span>Foto <b>Příchod</b>, <b>Odchod</b>, <b>Pokladní zóna</b> a <b>Plánogram / finální výstava</b> jsou povinné pro dokončení návštěvy. Do fotky se automaticky vloží tvoje jméno, číslo POS, čas a GPS poloha.</span>
+    </div>
+
+    <!-- VÍCE INFORMACÍ — region/typ partnerství nejsou potřeba při běžné návštěvě, schované pod rozbalení -->
+    <details style="margin:0 12px 8px;border-radius:10px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.05);overflow:hidden">
+      <summary style="padding:11px 14px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px"><svg class="ic ic-sm"><use href="#ic-info"/></svg> Více informací</summary>
+      <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-top:1px solid var(--bg)">
+        <div style="width:20px;text-align:center;color:var(--teal)"><svg class="ic"><use href="#ic-pin"/></svg></div>
+        <div><div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Oblast / Region</div><div style="font-size:13px;font-weight:600;margin-top:1px" id="info-area">—</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-top:1px solid var(--bg)">
+        <div style="width:20px;text-align:center;color:var(--teal)"><svg class="ic"><use href="#ic-store"/></svg></div>
+        <div><div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Typ partnerství</div><div style="font-size:13px;font-weight:600;margin-top:1px" id="info-typ">—</div></div>
+      </div>
+      <div style="padding:11px 14px;border-top:1px solid var(--bg);display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--teal)" onclick="openMap()"><svg class="ic"><use href="#ic-map"/></svg> Navigovat na místo</div>
+    </details>
 
     <!-- DETAIL TABS -->
     <div class="det-tabs">
@@ -432,7 +546,11 @@
     </div>
 
     <div id="dtc-notes" class="det-tc" style="display:none;padding:8px 12px">
-      <textarea class="notes-ta" id="notes-ta" placeholder="Poznámky z návštěvy — stav, problémy, požadavky…" oninput="saveNote()" style="margin-top:6px"></textarea>
+      <div style="margin-bottom:8px;padding:10px 14px;background:var(--bg);border-radius:10px;font-size:11px;color:var(--muted);line-height:1.5;display:flex;gap:6px">
+        <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-info"/></svg>
+        <span>Poznámka k téhle návštěvě. Pro trvalý záznam o provozovně (platný i pro příští návštěvy) použij Kartu POS.</span>
+      </div>
+      <textarea class="notes-ta" id="notes-ta" placeholder="Poznámky z této návštěvy — stav, problémy, požadavky…" oninput="saveNote()" style="margin-top:6px"></textarea>
     </div>
     <div id="dtc-inv" class="det-tc" style="padding-top:4px">
       <!-- Inventory sub-tabs -->
@@ -465,27 +583,14 @@
       </div>
     </div>
     <div id="dtc-karta" class="det-tc" style="display:none;padding:8px 12px">
+      <div style="margin-bottom:8px;padding:10px 14px;background:var(--bg);border-radius:10px;font-size:11px;color:var(--muted);line-height:1.5;display:flex;gap:6px">
+        <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-info"/></svg>
+        <span>Trvalá historie téhle provozovny — zůstává napříč všemi návštěvami, vidí ji i Velín.</span>
+      </div>
       <div style="background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);margin-bottom:10px" id="pos-card-log"></div>
       <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Přidat záznam</div>
       <textarea class="notes-ta" id="pos-card-ta" placeholder="Např: Chystají zavřít, bude rekonstrukce, špatné osazení, nový vedoucí…" style="min-height:70px"></textarea>
       <button onclick="addPosCardNote()" style="margin-top:8px;width:100%;padding:12px;background:var(--navy);color:var(--teal);border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">Uložit záznam</button>
-    </div>
-
-    <!-- CHECKLIST PREVIEW (sandbox, collapsed by default) -->
-    <div class="ck-preview-wrap">
-      <button class="ck-preview-toggle" id="ck-preview-toggle" onclick="toggleChecklistPreview()">
-        <svg class="ic ic-sm"><use href="#ic-box"/></svg>
-        <span>Náhled: chytrý checklist (test)</span>
-        <span class="ck-preview-arrow" id="ck-preview-arrow">⌄</span>
-      </button>
-      <div class="ck-preview-body" id="ck-preview-body" style="display:none">
-        <div style="margin:10px 12px;padding:10px 14px;background:var(--bg);border-radius:10px;font-size:11px;color:var(--muted);line-height:1.5;display:flex;gap:6px">
-          <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-info"/></svg>
-          <span>Náhled budoucí funkce — testovací data z reálné kampaně, nesouvisí s touto POS. Slouží jen k ověření, že větvení Ano/Ne → navazující otázka/foto funguje na reálných odpovědích.</span>
-        </div>
-        <select class="ck-select" id="ck-record-picker" onchange="loadChecklistRecord(this.value)" style="margin:0 12px 10px;width:calc(100% - 24px)"></select>
-        <div id="ck-test-list" style="padding:0 12px"></div>
-      </div>
     </div>
 
     <div id="vis-badge-slot2"></div>
@@ -518,6 +623,17 @@
     <div class="m-sub" id="assign-sub"></div>
     <div id="assign-opts"></div>
     <button class="m-cancel" onclick="closeModal()">Zrušit</button>
+  </div>
+</div>
+
+<!-- DECISION DETAIL MODAL -->
+<div class="edit-modal-ov" id="decision-detail-modal">
+  <div class="edit-modal" style="max-width:580px">
+    <div class="edit-modal-hdr">
+      <div class="edit-modal-title" id="dd-title">Detail rozhodnutí</div>
+      <button class="edit-modal-close" onclick="closeDecisionDetail()">✕</button>
+    </div>
+    <div class="edit-modal-body" id="dd-body"></div>
   </div>
 </div>
 
@@ -591,6 +707,11 @@
 
       <!-- RANNÍ POHLED — kde dnes zasáhnout -->
       <div class="dash-view" data-view="morning" id="dash-view-morning">
+
+        <div class="dash-block">
+          <div class="dash-block-t"><svg class="ic"><use href="#ic-intel"/></svg> Action Feed — rozhodnutí, která čekají na vás</div>
+          <div class="cw" id="dash-decisions"></div>
+        </div>
 
         <div class="dash-block">
           <div class="dash-block-t"><svg class="ic"><use href="#ic-warning"/></svg> Vyžaduje pozornost</div>
@@ -794,6 +915,8 @@
         <button class="ed-subnav" onclick="showEditorSection('inventory',this)"><svg class="ic ic-sm"><use href="#ic-box"/></svg> Inventory katalog</button>
         <button class="ed-subnav" onclick="showEditorSection('ukoly',this)"><svg class="ic ic-sm"><use href="#ic-check-circle"/></svg> Úkoly na místě</button>
         <button class="ed-subnav" onclick="showEditorSection('checklist',this)"><svg class="ic ic-sm"><use href="#ic-box"/></svg> Checklist šablony</button>
+        <button class="ed-subnav" onclick="showEditorSection('merch',this)"><svg class="ic ic-sm"><use href="#ic-check-circle"/></svg> Merch položky</button>
+        <button class="ed-subnav" onclick="showEditorSection('refs',this)"><svg class="ic ic-sm"><use href="#ic-image"/></svg> Reference</button>
       </div>
 
       <!-- TEXTY -->
@@ -875,12 +998,33 @@
         </div>
       </div>
 
+      <!-- MERCH POLOŽKY — výběr, které položky vyžadují foto-důkaz při osazení -->
+      <div id="ed-sec-merch" style="display:none">
+        <div class="adm-sh" style="margin-bottom:10px"><div class="adm-st">IDT</div></div>
+        <div class="editor-card" id="ed-merch-IDT"></div>
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">PETROL</div></div>
+        <div class="editor-card" id="ed-merch-PETROL"></div>
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">KA</div></div>
+        <div class="editor-card" id="ed-merch-KA"></div>
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">CORN</div></div>
+        <div class="editor-card" id="ed-merch-CORN"></div>
+        <div style="padding:12px;background:var(--tl);border-radius:10px;font-size:12px;color:var(--tm);line-height:1.5;margin-top:8px;display:flex;gap:6px">
+          <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-bulb"/></svg>
+          <span>Foto-důkaz se u technika vyžaduje jen u položek se zaškrtnutým "Vyžaduje foto". Většina položek foto nepotřebuje — zapni jen tam, kde to dává smysl.</span>
+        </div>
+      </div>
+
       <!-- CHECKLIST ŠABLONY -->
       <div id="ed-sec-checklist" style="display:none">
         <div class="adm-sh" style="margin-bottom:10px">
           <div class="adm-st">Šablona</div>
+          <button onclick="addChecklistTemplate()" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Šablona</button>
         </div>
-        <select class="ck-select" id="ck-tpl-picker" onchange="renderEditorChecklistTemplates()" style="margin-bottom:14px;width:100%"></select>
+        <select class="ck-select" id="ck-tpl-picker" onchange="renderEditorChecklistTemplates()" style="margin-bottom:10px;width:100%"></select>
+        <div style="display:flex;gap:8px;margin-bottom:14px">
+          <input id="ck-tpl-name" placeholder="Název šablony" oninput="renameChecklistTemplate(this.value)" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:13px;outline:none"/>
+          <button onclick="deleteChecklistTemplate()" style="background:var(--rl);color:var(--red);border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">Smazat šablonu</button>
+        </div>
 
         <div class="adm-sh" style="margin-bottom:10px">
           <div class="adm-st">Otázky</div>
@@ -898,6 +1042,35 @@
           <span>"Závisí na" + "rovná se" určuje, kdy se otázka zobrazí (např. otázka se ukáže jen když předchozí Ano/Ne otázka byla "Ne"). Změny se ihned promítnou do náhledu v detailu POS u technika.</span>
         </div>
       </div>
+
+      <!-- REFERENCE — admin-editovatelné referenční materiály per kanál / KA partner -->
+      <div id="ed-sec-refs" style="display:none">
+        <div class="adm-sh" style="margin-bottom:10px"><div class="adm-st">IDT</div>
+          <button onclick="addRefCard('IDT')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Reference</button>
+        </div>
+        <div class="editor-card" id="ed-refs-IDT"></div>
+
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">PETROL</div>
+          <button onclick="addRefCard('PETROL')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Reference</button>
+        </div>
+        <div class="editor-card" id="ed-refs-PETROL"></div>
+
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">CORN</div>
+          <button onclick="addRefCard('CORN')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Reference</button>
+        </div>
+        <div class="editor-card" id="ed-refs-CORN"></div>
+
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">KA partner</div>
+          <button onclick="addRefCardKa()" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Reference</button>
+        </div>
+        <select id="ed-refs-ka-key" onchange="renderEditorRefsKa()" style="width:100%;margin-bottom:10px;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:13px;outline:none"></select>
+        <div class="editor-card" id="ed-refs-KA"></div>
+
+        <div style="padding:12px;background:var(--tl);border-radius:10px;font-size:12px;color:var(--tm);line-height:1.5;margin-top:8px;display:flex;gap:6px">
+          <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-bulb"/></svg>
+          <span>Reference se zobrazí technikovi v detailu POS ("Reference — jak to má vypadat"). Klikni na obrázek a nahraj reálnou fotku. KA partner bez vlastní reference použije výchozí sadu.</span>
+        </div>
+      </div>
     </div>
     <!-- FOTO -->
     <div class="adm-page" id="adm-foto">
@@ -913,20 +1086,19 @@
   </div>
 </div>
 
-<script src="js/data.js?v=20260625a"></script>
-<script src="js/geo.js?v=20260625a"></script>
-<script src="js/tourplanRaw.js?v=20260625a"></script>
-<script src="js/excelImport.js?v=20260625a"></script>
-<script src="js/posMasterData.js?v=20260625a"></script>
-<script src="js/visitChecklistRaw.js?v=20260625a"></script>
-<script src="js/checklistTemplates.js?v=20260625a"></script>
-<script src="js/checklistEngine.js?v=20260625a"></script>
-<script src="js/dataProvider.js?v=20260625a"></script>
-<script src="js/routeEngine.js?v=20260625a"></script>
-<script src="js/posModel.js?v=20260625a"></script>
-<script src="js/technicianModel.js?v=20260625a"></script>
-<script src="js/app.js?v=20260625c"></script>
-<script src="js/visitStore.js?v=20260625a"></script>
-<script src="js/sync.js?v=20260625a"></script>
+<script src="js/data.js?v=20260626k"></script>
+<script src="js/geo.js?v=20260626k"></script>
+<script src="js/tourplanRaw.js?v=20260626k"></script>
+<script src="js/excelImport.js?v=20260626k"></script>
+<script src="js/posMasterData.js?v=20260626k"></script><script src="js/checklistTemplates.js?v=20260626k"></script>
+<script src="js/checklistEngine.js?v=20260626k"></script>
+<script src="js/dataProvider.js?v=20260626k"></script>
+<script src="js/routeEngine.js?v=20260626k"></script>
+<script src="js/posModel.js?v=20260626k"></script>
+<script src="js/technicianModel.js?v=20260626k"></script>
+<script src="js/decisionEngine.js?v=20260626k"></script>
+<script src="js/app.js?v=20260626k"></script>
+<script src="js/visitStore.js?v=20260626k"></script>
+<script src="js/sync.js?v=20260626k"></script>
 </body>
 </html>

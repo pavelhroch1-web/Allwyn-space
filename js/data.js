@@ -110,33 +110,116 @@ const INV_DEFAULT = {
 // Merch items per channel - co se osazuje (bez podpisu)
 const MERCH_ITEMS = {
   IDT:[
-    {n:'Plakát A4 — aktuální kampaň',done:null},
-    {n:'Samolepka na stojan (20 Mega)',done:null},
-    {n:'Odstranění starých materiálů Sazka',done:null},
+    {n:'Plakát A4 — aktuální kampaň',done:null,reqPhoto:false},
+    {n:'Samolepka na stojan (20 Mega)',done:null,reqPhoto:false},
+    {n:'Odstranění starých materiálů Sazka',done:null,reqPhoto:false},
   ],
   PETROL:[
-    {n:'Plakát A4 — aktuální kampaň',done:null},
-    {n:'Samolepka na stojan (20 Mega)',done:null},
-    {n:'Osadit totem — plakáty přední + zadní',done:null},
-    {n:'Korunka 15" — Zlatá rybka',done:null},
-    {n:'Odstranění starých materiálů Sazka',done:null},
+    {n:'Plakát A4 — aktuální kampaň',done:null,reqPhoto:false},
+    {n:'Samolepka na stojan (20 Mega)',done:null,reqPhoto:false},
+    {n:'Osadit totem — plakáty přední + zadní',done:null,reqPhoto:false},
+    {n:'Korunka 15" — Zlatá rybka',done:null,reqPhoto:false},
+    {n:'Odstranění starých materiálů Sazka',done:null,reqPhoto:false},
   ],
   KA:[
-    {n:'Plakát A4 losy — dle plánogramu partnera',done:null},
-    {n:'Samolepka na stojan (20 Mega)',done:null},
-    {n:'Osadit totem — 2 plakáty (losy + loterie)',done:null},
-    {n:'Korunka 15" — Zlatá rybka',done:null},
-    {n:'Kontrola planogramu — správná pozice',done:null},
-    {n:'Odstranění starých materiálů Sazka',done:null},
+    {n:'Plakát A4 losy — dle plánogramu partnera',done:null,reqPhoto:false},
+    {n:'Samolepka na stojan (20 Mega)',done:null,reqPhoto:false},
+    {n:'Osadit totem — 2 plakáty (losy + loterie)',done:null,reqPhoto:false},
+    {n:'Korunka 15" — Zlatá rybka',done:null,reqPhoto:false},
+    {n:'Kontrola planogramu — správná pozice',done:null,reqPhoto:false},
+    {n:'Odstranění starých materiálů Sazka',done:null,reqPhoto:false},
   ],
   CORN:[
-    {n:'Primární pult — osadit aktuální emisi dle plánogramu',done:null},
-    {n:'Sekundární pult — osadit všechny losy dle plánogramu',done:null},
-    {n:'Totem přední strana — plakát Losy (Zlatá rybka)',done:null},
-    {n:'Totem zadní strana — plakát Loterie (EuroJackpot)',done:null},
-    {n:'Barketa Rybky + stojánek 20 Mega',done:null},
-    {n:'Kontrola: žádná bílá plocha na totemu',done:null},
-    {n:'Odstranění starých materiálů — veškerá Sazka visibilita',done:null},
+    {n:'Primární pult — osadit aktuální emisi dle plánogramu',done:null,reqPhoto:false},
+    {n:'Sekundární pult — osadit všechny losy dle plánogramu',done:null,reqPhoto:false},
+    {n:'Totem přední strana — plakát Losy (Zlatá rybka)',done:null,reqPhoto:false},
+    {n:'Totem zadní strana — plakát Loterie (EuroJackpot)',done:null,reqPhoto:false},
+    {n:'Barketa Rybky + stojánek 20 Mega',done:null,reqPhoto:false},
+    {n:'Kontrola: žádná bílá plocha na totemu',done:null,reqPhoto:false},
+    {n:'Odstranění starých materiálů — veškerá Sazka visibilita',done:null,reqPhoto:false},
+  ],
+};
+// Servisní dotazník — datově řízený strom polí (žádná logika tu není,
+// jen popis formuláře; renderer chodí podle type/children v app.js).
+// Typy uzlů:
+//   select  — výběr jedné položky z options (každá option může mít children)
+//   radio   — malá skupina přepínačů (Oprava/Výměna apod.), options s children
+//   toggle  — ano/ne přepínač, při zapnutí zobrazí children
+//   text    — volný text
+//   barcode — dvojice čísel (původní/nové) — ruční zadání, bez skenování
+function igtDeviceNode(id, label) {
+  return {
+    id, label, type:'toggle',
+    children: [
+      {
+        id:id+'_akce', label:'Co se provedlo', type:'radio',
+        options: [
+          {value:'oprava', label:'Oprava na místě'},
+          {
+            value:'vymena', label:'Výměna kusu',
+            children: [
+              {id:id+'_serial', label:'Sériové číslo', type:'barcode',
+                fields:[{key:'puvodni', label:'Původní číslo'},{key:'nove', label:'Nové číslo'}]},
+            ],
+          },
+        ],
+      },
+      {id:id+'_pozn', label:'Poznámka k zásahu', type:'text'},
+    ],
+  };
+}
+const SERVIS_FORM_SCHEMA = {
+  id:'kategorie', label:'Typ servisu', type:'select',
+  options: [
+    {
+      value:'igt', label:'IGT zařízení',
+      children: [
+        igtDeviceNode('igt_terminal', 'Terminál'),
+        igtDeviceNode('igt_tiskarna', 'Tiskárna'),
+        igtDeviceNode('igt_modem', 'Modem'),
+        igtDeviceNode('igt_kabel', 'Kabel'),
+        igtDeviceNode('igt_cdu', 'CDU'),
+        igtDeviceNode('igt_vcu', 'VCU'),
+        igtDeviceNode('igt_ds', 'DS'),
+        igtDeviceNode('igt_tv', 'TV'),
+        igtDeviceNode('igt_iso', 'ISO'),
+        igtDeviceNode('igt_eso', 'ESO'),
+        igtDeviceNode('igt_ctecka', 'Čtečka losů'),
+      ],
+    },
+    {
+      // MVP stub — Pavlovy screenshoty popisovaly hlavně IGT větev do
+      // hloubky; tyto 3 kategorie mají zatím jen základní pole, dokud
+      // nebude jasné jejich přesné kroky. Rozšíření = přidat data zde,
+      // ne měnit renderer.
+      value:'maly_terminal', label:'Malý terminál',
+      children: [
+        {id:'mt_akce', label:'Co se provedlo', type:'radio',
+          options:[{value:'oprava',label:'Oprava na místě'},{value:'vymena',label:'Výměna kusu',
+            children:[{id:'mt_serial', label:'Sériové číslo', type:'barcode',
+              fields:[{key:'puvodni', label:'Původní číslo'},{key:'nove', label:'Nové číslo'}]}]}]},
+        {id:'mt_pozn', label:'Poznámka k zásahu', type:'text'},
+      ],
+    },
+    {
+      value:'balikovna', label:'Balíkovna tiskárna — oprava',
+      children: [
+        {id:'bt_akce', label:'Co se provedlo', type:'radio',
+          options:[{value:'oprava',label:'Oprava na místě'},{value:'vymena',label:'Výměna kusu',
+            children:[{id:'bt_serial', label:'Sériové číslo', type:'barcode',
+              fields:[{key:'puvodni', label:'Původní číslo'},{key:'nove', label:'Nové číslo'}]}]}]},
+        {id:'bt_pozn', label:'Poznámka k zásahu', type:'text'},
+      ],
+    },
+    {
+      value:'demontaz', label:'Demontáž zařízení',
+      children: [
+        {id:'dm_zarizeni', label:'Jaké zařízení se demontovalo', type:'text'},
+        {id:'dm_serial', label:'Sériové číslo demontovaného kusu', type:'barcode',
+          fields:[{key:'puvodni', label:'Původní číslo'}]},
+        {id:'dm_pozn', label:'Poznámka k zásahu', type:'text'},
+      ],
+    },
   ],
 };
 const SUPPLY_DEFAULT = [

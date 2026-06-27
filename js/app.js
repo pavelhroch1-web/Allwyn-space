@@ -1,7 +1,11 @@
+// "Aktuální" operační týden Velínu i technika — jediné místo, odkud se čte.
+// Bump tady při přechodu na nový týden, ať se to neprojeví jen na části obrazovek.
+const CURRENT_OPS_WEEK = '25';
+
 // ══════════════════════════════════════════════════════
 // STATE
 // ══════════════════════════════════════════════════════
-let cWeek='25', cDay=0, cIdx=null, pendingSlot=null, assigningId=null;
+let cWeek=CURRENT_OPS_WEEK, cDay=0, cIdx=null, pendingSlot=null, assigningId=null;
 let cView='list'; // 'list' | 'planning' | 'overdue' — perzistováno přes refresh (PART 6)
 let adminMap=null, adminMarkers=[], adminTechnicians=[];
 let activeRegion='all';
@@ -55,7 +59,6 @@ function augmentRawPos(p, assignedTechnician){
     region: withCoords.area || PosModel.DEFAULT_REGION,
     photos:[],notes:'',
     taskState,
-    refs:(REFS[typ]||REFS[rawTyp]||REFS.IDT),
     inventory,
   };
 }
@@ -67,7 +70,7 @@ const POS_MASTER_MAP = DataProvider.getPosMasterMap();
 
 const POS_WEEK_KEYS = ['23','24','25','26','27','28'];
 const importedWeeks = DataProvider.getPosWeeks(POS_WEEK_KEYS, {
-  currentWeek: '25',
+  currentWeek: CURRENT_OPS_WEEK,
   todayIdx: getTodayDayIdx(),
 });
 // FULL_POS_DATA = POS všech 27 techniků (Velín: dashboard/POS síť/mapa/route
@@ -79,7 +82,26 @@ const posData={};
 for(const w of POS_WEEK_KEYS){
   FULL_POS_DATA[w] = (importedWeeks[w]||[]).map(p => augmentRawPos(p, p.assignedTechnician));
   FULL_POS_DATA[w].forEach(p => applyVisitState(p, w));
-  posData[w] = FULL_POS_DATA[w].filter(p => p.assignedTechnician === PosModel.SOLE_REAL_TECHNICIAN);
+}
+// Schválené přesuny POS z Decision Layer (Velín → Technik uzavřená smyčka) —
+// perzistované přes lss(), aby přežily reload. Tourplan import zůstává
+// reálným zdrojem; tohle je vrstva schválených změn NAD ním, ne náhrada.
+function getPosReassignments(){ return lsg('pos_reassignments', []); }
+function savePosReassignments(list){ lss('pos_reassignments', list); }
+function applyPosReassignments(){
+  getPosReassignments().forEach(r => {
+    const arr = FULL_POS_DATA[r.week];
+    const p = arr && arr.find(x => x.id === r.posId);
+    if (p) { p.assignedTechnician = r.to; p.reassignedBy = { decisionId: r.decisionId, at: r.reassignedAt, from: r.from }; }
+  });
+}
+applyPosReassignments();
+// currentViewTechnician (let, deklarováno níže) ještě není inicializované —
+// initial fill proto natvrdo na SOLE_REAL_TECHNICIAN, stejně jako dřív.
+for (const w of POS_WEEK_KEYS) posData[w] = FULL_POS_DATA[w].filter(p => p.assignedTechnician === PosModel.SOLE_REAL_TECHNICIAN);
+function refreshPosDataView(){
+  const activeName = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
+  for (const w of POS_WEEK_KEYS) posData[w] = FULL_POS_DATA[w].filter(p => p.assignedTechnician === activeName);
 }
 // Servisní úkoly (src:'servis') vznikají jen z reálného zdroje — Jira import
 // (budoucí fáze, viz docs/PROJECT_CONTEXT.md §7) nebo inventory "Chybí" →
@@ -87,7 +109,7 @@ for(const w of POS_WEEK_KEYS){
 
 // Reálná jména techniků odvozená z Excel importu (FULL_POS_DATA), ne z
 // odpojeného demo souboru data.js — žádné paralelní fake datasety.
-const TECHNICIAN_NAMES = Array.from(new Set((FULL_POS_DATA['25']||[]).map(p=>p.assignedTechnician))).sort();
+const TECHNICIAN_NAMES = Array.from(new Set((FULL_POS_DATA[CURRENT_OPS_WEEK]||[]).map(p=>p.assignedTechnician))).sort();
 
 // Import summary log (PART 6 — "Show import summary" requirement).
 (function logImportSummary(){
@@ -101,10 +123,8 @@ const TECHNICIAN_NAMES = Array.from(new Set((FULL_POS_DATA['25']||[]).map(p=>p.a
 // ══════════════════════════════════════════════════════
 // TECHNICIANS — jediný zdroj pravdy pro Velín (RULE 1)
 // ══════════════════════════════════════════════════════
-// "Aktuální" operační týden Velínu — stejný týden, který Dashboard/Live/Map
-// odjakživa čte (posData['25']). Statistiky technika se VŽDY počítají z POS
-// tohoto týdne přes TechnicianModel — nic se neukládá na technika samotného.
-const CURRENT_OPS_WEEK = '25';
+// Statistiky technika se VŽDY počítají z POS aktuálního operačního týdne
+// (CURRENT_OPS_WEEK) přes TechnicianModel — nic se neukládá na technika samotného.
 function deriveAllTechnicians(){
   return TechnicianModel.deriveTechnicians(FULL_POS_DATA[CURRENT_OPS_WEEK] || [], { todayIdx: getTodayDayIdx() });
 }
@@ -238,10 +258,46 @@ function toggleProfileDetail(which){
     el.style.display = 'none';
   }
 }
+// Domácí výchozí bod — technik si ho jednou uloží z profilu, použije se
+// jako fallback výchozího bodu trasy, když dnes ještě nemáme GPS.
+function toggleHomeLocationDetail(which){
+  const el = document.getElementById('user-dd-'+which+'-home');
+  if (!el) return;
+  if (el.style.display === 'none'){
+    renderHomeLocationDetail(el);
+    el.style.display = 'block';
+  } else {
+    el.style.display = 'none';
+  }
+}
+function renderHomeLocationDetail(el){
+  const home = getTechnicianHome();
+  el.innerHTML = `
+    <div style="margin-bottom:6px">${home ? `Uloženo: ${home.lat.toFixed(3)}, ${home.lng.toFixed(3)}` : 'Zatím nenastaveno — použije se jen reálná GPS pozice.'}</div>
+    <button class="user-dd-item" style="background:var(--navy);color:var(--teal);border-radius:8px" onclick="captureTechnicianHome()">Uložit aktuální pozici jako domácí bod</button>
+  `;
+}
+function captureTechnicianHome(){
+  const el = document.getElementById('user-dd-tech-home');
+  if (!navigator.geolocation){
+    if (el) el.innerHTML = '<div>GPS nedostupná v tomto prohlížeči.</div>';
+    return;
+  }
+  if (el) el.innerHTML = '<div>Zjišťuji polohu…</div>';
+  navigator.geolocation.getCurrentPosition(
+    pos => { setTechnicianHome(pos.coords.latitude, pos.coords.longitude); if (el) renderHomeLocationDetail(el); },
+    () => { if (el) el.innerHTML = '<div>Poloha zamítnuta nebo nedostupná.</div>'; },
+    { enableHighAccuracy: true, timeout: 8000 }
+  );
+}
 document.addEventListener('click', (e)=>{
   if (!e.target.closest('.user-chip')) closeAllUserMenus();
   if (!e.target.closest('#global-pos-search') && !e.target.closest('#global-pos-search-results')) {
     const box = document.getElementById('global-pos-search-results');
+    if (box) box.style.display = 'none';
+  }
+  if (!e.target.closest('#tech-pos-search') && !e.target.closest('#tech-pos-search-results')) {
+    const box = document.getElementById('tech-pos-search-results');
     if (box) box.style.display = 'none';
   }
 });
@@ -273,11 +329,11 @@ function renderUserMenus(){
 function enterRole(role,opts){
   opts=opts||{};
   document.getElementById('role-screen').style.display='none';
-  document.getElementById('switch-btn').style.display='block';
   if(role==='technik'){
     document.getElementById('technik-screen').classList.add('active');
     document.getElementById('admin-screen').classList.remove('active');
     updateHdrLabel();renderChips();renderDayTabs();renderList();
+    silentCaptureStartLocationOnce();
     if(!opts.skipBriefing) setTimeout(showBriefing,500);
   } else {
     document.getElementById('technik-screen').classList.remove('active');
@@ -289,7 +345,6 @@ function enterRole(role,opts){
 }
 function goHome(){
   document.getElementById('role-screen').style.display='flex';
-  document.getElementById('switch-btn').style.display='none';
   document.getElementById('technik-screen').classList.remove('active');
   document.getElementById('admin-screen').classList.remove('active');
   pushRoute();
@@ -520,7 +575,7 @@ function showUnplanned(){
 // technik výslovně neklikne "Vzít návrh" — vždy je vidět i tlačítko pro
 // vlastní plánování (CLAUDE.md pravidlo 6: technik si plán dělá sám).
 function buildDayProposalCard(unpl){
-  const startLoc=getStartLocation();
+  const startLoc=getEffectiveStartLocation();
   const proposal=RouteEngine.proposeDayPlan(unpl, startLoc, {budgetMin:480, dayIdx:cDay, todayStr:today()});
   const el=document.createElement('div');
   el.style.cssText='margin:12px;padding:14px;background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:12px';
@@ -529,7 +584,7 @@ function buildDayProposalCard(unpl){
     return el;
   }
   const srcLabel = startLoc
-    ? `podle ${isStartLocationFresh()?'tvé dnešní':'tvé poslední uložené'} pozice`
+    ? `podle ${startLocationSourceLabel() === 'Domácí výchozí bod' ? 'tvého domácího bodu' : startLocationSource()==='gps-fresh' ? 'tvé dnešní pozice' : 'tvé poslední uložené pozice'}`
     : 'bez znalosti tvé pozice — jen podle priority, ne vzdálenosti';
   el.innerHTML=`
     <div style="font-size:11px;font-weight:700;color:var(--navy);letter-spacing:.03em;margin-bottom:6px">NÁVRH DNE</div>
@@ -575,8 +630,10 @@ function makePosCard(p,ri,showAssign){
   const dotCls=p.v?'pd-done':hasSvc?'pd-svc':'pd-pend';
   let tags=p.v?`<span class="tag t-done">✓ Hotovo</span>`:`<span class="tag t-task">${done}/${p.taskState.length}</span>`;
   tags+=priChip(p)+typTag(p);
+  if(p.reassignedBy) tags+=`<span class="tag" style="background:var(--gl);color:var(--green)">⇄ Přidáno Velínem</span>`;
   const card=document.createElement('div');card.className='pos-card';
-  const right=showAssign?`<button class="asgn-btn" onclick="event.stopPropagation();openAssign('${p.id}')">+ Den</button>`:'';
+  // navigace je nejčastější akce technika — patří hned do seznamu, ne schovaná v detailu
+  const right=showAssign?`<button class="asgn-btn" onclick="event.stopPropagation();openAssign('${p.id}')">+ Den</button>`:`<button class="nav-btn" onclick="event.stopPropagation();navigateToPOS('${p.id}')" aria-label="Navigovat"><svg class="ic"><use href="#ic-map"/></svg></button>`;
   const cta=showAssign?'':`<div class="pos-cta ${p.v?'done':''}">${p.v?'✓ Hotovo':'Zahájit návštěvu →'}</div>`;
   card.innerHTML=`${p.v?'<div class="vs"></div>':''}<div class="pci"><div class="pdot ${dotCls}"></div><div class="pinfo"><div class="pname">${p.n} <span style="font-weight:600;color:var(--muted);font-size:11px">#${p.id}</span></div><div class="paddr">${p.a}</div><div class="pmeta">${tags}</div></div>${right}</div>${cta}`;
   card.onclick=()=>openDetail(ri);
@@ -618,6 +675,14 @@ function closeModal(){document.getElementById('assign-modal').classList.remove('
 // ══════════════════════════════════════════════════════
 // DETAIL
 // ══════════════════════════════════════════════════════
+function renderDetailChips(p,m){
+  const chips=[];
+  chips.push(`<span class="chip ch-area"><svg class="ic ic-sm"><use href="#ic-pin"/></svg> ${p.area||'—'}</span>`);
+  if(p.d!==null&&p.d!==undefined) chips.push(`<span class="chip ch-day"><svg class="ic ic-sm"><use href="#ic-calendar"/></svg> ${DAYS[p.d]} ${m.dd[p.d]}</span>`);
+  if(p.taskState.some(t=>t.src==='servis'&&!t.done)) chips.push(`<span class="chip ch-pri1"><svg class="ic ic-sm"><use href="#ic-wrench"/></svg> Servis</span>`);
+  if((p.terminals||[]).length) chips.push(`<span class="chip ch-typ"><svg class="ic ic-sm"><use href="#ic-monitor"/></svg> ${p.terminals.length>1?`${p.terminals.length} terminály`:`Terminál ${p.terminals[0].id}`}</span>`);
+  document.getElementById('d-chips').innerHTML=chips.join('');
+}
 function openDetail(ri){
   cIdx=ri;
   const p=posData[cWeek][ri];
@@ -626,13 +691,7 @@ function openDetail(ri){
   document.getElementById('d-id').textContent=p.id;
   document.getElementById('d-fullname').textContent=p.n;
   document.getElementById('d-addr').textContent=p.a;
-  // chips
-  const chips=[];
-  chips.push(`<span class="chip ch-area"><svg class="ic ic-sm"><use href="#ic-pin"/></svg> ${p.area||'—'}</span>`);
-  if(p.d!==null&&p.d!==undefined) chips.push(`<span class="chip ch-day"><svg class="ic ic-sm"><use href="#ic-calendar"/></svg> ${DAYS[p.d]} ${m.dd[p.d]}</span>`);
-  if(p.taskState.some(t=>t.src==='servis'&&!t.done)) chips.push(`<span class="chip ch-pri1"><svg class="ic ic-sm"><use href="#ic-wrench"/></svg> Servis</span>`);
-  if((p.terminals||[]).length) chips.push(`<span class="chip ch-typ"><svg class="ic ic-sm"><use href="#ic-monitor"/></svg> ${p.terminals.length>1?`${p.terminals.length} terminály`:`Terminál ${p.terminals[0].id}`}</span>`);
-  document.getElementById('d-chips').innerHTML=chips.join('');
+  renderDetailChips(p,m);
   // otevírací doba — fakt o tom, co je teď, žádný odhad
   const dHoursEl=document.getElementById('d-hours');
   const statusInfo=getOpeningStatusInfo(p);
@@ -641,8 +700,8 @@ function openDetail(ri){
   // info
   document.getElementById('info-area').textContent=(p.area||'—')+' · '+p.k;
   document.getElementById('info-typ').textContent=p.typ==='CORN'?'Corn — zvláštní kanál':p.typ==='KA'?`Klíčový partner · ${p.partner}`:p.typ==='PETROL'?`Petrol · ${p.partner}`:'IDT — Independent Dealer';
-  // notes
-  document.getElementById('notes-ta').value=p.notes||'';
+  // notes — per-visit poznámka, perzistovaná lokálně per POS+týden
+  document.getElementById('notes-ta').value=lsg('visitnote_'+p.id+'_'+cWeek, p.notes||'');
   // reset tabs
   showDetTab('inv',document.querySelector('.det-tab'));
   // render sections
@@ -651,7 +710,10 @@ function openDetail(ri){
   renderRefs();
   renderMerch(p);
   renderSupply(p);
+  document.getElementById('merch-section').style.display=p.servisOnly?'none':'';
+  document.getElementById('supply-section').style.display=p.servisOnly?'none':'';
   renderTasks();
+  renderCampaignChecklist();
   renderPhotos();
   renderCompleteBtn();
   document.getElementById('t-list').style.display='none';
@@ -663,6 +725,10 @@ function openDetail(ri){
 // ══════════════════════════════════════════════════════
 // CHECK-IN
 // ══════════════════════════════════════════════════════
+// Check-in/check-out se odemyká okamžitě, foto příchodu/odchodu se nevynucuje
+// hned — stejný odložený model jako u merch (setMerch): technik klikne a jede
+// dál, chybějící fotky doplní kdykoliv, blokují až dokončení návštěvy
+// (viz getMissingPhotos/showMissingPhotosPrompt).
 function renderCheckin(){
   const p=posData[cWeek][cIdx];
   const ci=lsg('ci_'+p.id);
@@ -681,10 +747,28 @@ function renderCheckin(){
     btn.textContent='Check-out';btn.className='ci-btn out';btn.onclick=doCheckout;
     startCiTimer(ci.inTs,s);
   } else {
-    bar.className='ci-bar';
+    bar.className='ci-bar pending';
     t.textContent='Check-in na POS';s.textContent='Potvrď příjezd na provozovnu';
-    btn.textContent='Check-in';btn.className='ci-btn';btn.onclick=doCheckin;
+    btn.textContent='Check-in';btn.className='ci-btn pending';btn.onclick=doCheckin;
   }
+  renderCiPhotoPending(p);
+}
+function renderCiPhotoPending(p){
+  const el=document.getElementById('ci-photo-pending');
+  if(!el) return;
+  const ci=lsg('ci_'+p.id);
+  const btns=[];
+  if(ci&&!p.photos[0]) btns.push(`<button class="merch-photo-pending" onclick="startArrivalCheckin()">📷 Foto příchodu chybí — vyfotit</button>`);
+  if(ci&&ci.out&&!p.photos[1]) btns.push(`<button class="merch-photo-pending" onclick="startDepartureCheckout()">📷 Foto odchodu chybí — vyfotit</button>`);
+  el.innerHTML=btns.join(' ');
+}
+function startArrivalCheckin(){
+  pendingSlot=0;
+  document.getElementById('photo-input').click();
+}
+function startDepartureCheckout(){
+  pendingSlot=1;
+  document.getElementById('photo-input').click();
 }
 function doCheckin(){
   const p=posData[cWeek][cIdx];
@@ -699,10 +783,19 @@ function doCheckin(){
   }
   renderCheckin();
 }
+// Anti-fraud: check-out dřív než MIN_VISIT_MIN minut po check-inu se
+// neprovede — bránilo by to okamžitému "odfajfkování" bez reálné práce.
+const MIN_VISIT_MIN = 2;
 function doCheckout(){
   const p=posData[cWeek][cIdx];
   const ci=lsg('ci_'+p.id);if(!ci)return;
   const now=new Date();
+  const elapsedMin=(now.getTime()-ci.inTs)/60000;
+  if(elapsedMin<MIN_VISIT_MIN){
+    const el=document.getElementById('ci-s');
+    if(el) el.textContent=`Check-out zablokován — na místě musíš být alespoň ${MIN_VISIT_MIN} minuty (zatím ${Math.max(0,Math.round(elapsedMin*10)/10)} min)`;
+    return;
+  }
   const timeStr=now.toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'});
   const dur=Math.round((now.getTime()-ci.inTs)/60000);
   lss('ci_'+p.id,{...ci,out:true,outTime:timeStr,outTs:now.getTime(),dur});
@@ -770,11 +863,38 @@ function campCard(c,cls,lbl){
 }
 
 // ══════════════════════════════════════════════════════
-// REFS
+// REFS — referenční materiály (admin-editovatelné z Velína, ne hardcoded)
 // ══════════════════════════════════════════════════════
+function getEditorRefs(){
+  const saved = lsg('editor_refs');
+  if (saved) return saved;
+  // Seed z výchozích REFS (js/data.js) — KA se zabalí do {default:[...]} ,
+  // aby šlo doplnit referenci per konkrétní partner bez ztráty výchozí sady.
+  return {
+    IDT: JSON.parse(JSON.stringify(REFS.IDT||[])),
+    PETROL: JSON.parse(JSON.stringify(REFS.PETROL||[])),
+    CORN: JSON.parse(JSON.stringify(REFS.CORN||[])),
+    KA: { default: JSON.parse(JSON.stringify(REFS.KA||[])) },
+  };
+}
+function saveEditorRefs(store){ lss('editor_refs', store); }
+
+// Vrací reference platné pro konkrétní POS — u KA hledá nejdřív referenci
+// pro konkrétního partnera (p.partner = kategorie kód z Tourplan importu),
+// jinak padá na výchozí KA sadu.
+function getRefsForPos(p){
+  const store = getEditorRefs();
+  if (p.typ === 'KA') {
+    const partner = p.partner;
+    if (partner && store.KA[partner] && store.KA[partner].length) return store.KA[partner];
+    return store.KA.default || [];
+  }
+  return store[p.typ] || store.IDT || [];
+}
+
 function renderRefs(){
   const p=posData[cWeek][cIdx];
-  const refs=p.refs||[];
+  const refs=getRefsForPos(p);
 
   // Channel color per type
   const chColor={
@@ -803,8 +923,8 @@ function renderRefs(){
 
   const cards=refs.map(r=>`
     <div style="flex-shrink:0;width:210px;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.08)">
-      <div style="width:100%;height:120px;background:${bg};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px">
-        <div style="font-size:36px">${r.i}</div>
+      <div style="width:100%;height:120px;background:${bg};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;overflow:hidden${r.img?';cursor:zoom-in':''}" ${r.img?`onclick="openImageLightbox('${r.img.replace(/'/g,"\\'")}','${(r.l||'').replace(/'/g,"\\'").replace(/"/g,'&quot;')}')"`:''}>
+        ${r.img ? `<img src="${r.img}" alt="${r.l||''}" style="width:100%;height:100%;object-fit:cover"/>` : `<div style="font-size:36px">${r.i||'🖼️'}</div>`}
       </div>
       <div style="padding:8px 12px 4px;font-size:12px;font-weight:800;color:var(--navy)">${r.l}</div>
       <div style="padding:0 12px 10px;font-size:11px;color:var(--muted);line-height:1.5">${r.d}</div>
@@ -812,6 +932,18 @@ function renderRefs(){
 
   document.getElementById('refs-wrap').innerHTML = channelBadge +
     (refs.length ? `<div style="display:flex;gap:10px;overflow-x:auto;padding:0 12px 6px;-webkit-overflow-scrolling:touch">${cards}</div>` : '');
+}
+function openImageLightbox(url, caption){
+  const old=document.getElementById('img-lightbox');if(old)old.remove();
+  const ov=document.createElement('div');
+  ov.id='img-lightbox';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(10,20,25,.92);z-index:900;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
+  ov.onclick=()=>ov.remove();
+  ov.innerHTML=`
+    <img src="${url}" style="max-width:100%;max-height:80vh;border-radius:10px;object-fit:contain"/>
+    ${caption?`<div style="color:#fff;font-size:13px;font-weight:700;margin-top:12px;text-align:center">${caption}</div>`:''}
+    <button aria-label="Zavřít" style="position:absolute;top:16px;right:16px;background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:50%;width:36px;height:36px;font-size:18px;cursor:pointer">✕</button>`;
+  document.body.appendChild(ov);
 }
 
 // ══════════════════════════════════════════════════════
@@ -832,6 +964,27 @@ function renderSupply(p){
   document.getElementById('sig-done').style.display=saved&&saved.confirmed?'block':'none';
   document.querySelector('.sig-conf').style.display=saved&&saved.confirmed?'none':'block';
   initSig();
+  renderSupplySummary();
+}
+// Shrnutí pro sbalenou hlavičku — technik vidí na první pohled, jestli je potřeba materiál otevírat,
+// aniž by sekci musel rozbalovat.
+function renderSupplySummary(){
+  const el=document.getElementById('supply-summary');if(!el)return;
+  const p=posData[cWeek][cIdx];
+  const isCorn=p.typ==='CORN'||p.kat==='9'||p.k==='9';
+  const defaults=isCorn?SUPPLY_CORN:SUPPLY_DEFAULT;
+  const saved=lsg('supply_'+p.id+'_'+today());
+  const changedCount=supplyItems.filter((x,i)=>x.qty!==(defaults[i]?defaults[i].qty:0)).length;
+  if(saved&&saved.confirmed){
+    el.textContent='✓ Předáno';
+    el.classList.add('has-changes');
+  } else if(changedCount>0){
+    el.textContent=`${changedCount} ${changedCount===1?'položka':'položky'}`;
+    el.classList.add('has-changes');
+  } else {
+    el.textContent='Beze změn';
+    el.classList.remove('has-changes');
+  }
 }
 function renderSupplyItems(){
   document.getElementById('supply-items').innerHTML=supplyItems.map((x,i)=>`
@@ -839,9 +992,9 @@ function renderSupplyItems(){
       <div style="display:flex;align-items:center;gap:12px;padding:10px 14px">
         <div class="supply-item-n" style="flex:1">${x.n}${x.unit?' <span style="font-size:10px;color:var(--muted)">('+x.unit+')</span>':''}</div>
         <div class="supply-qty">
-          <button class="sq-btn" onclick="adjQty(${i},-1)" ${supplyLocked?'disabled':''}>−</button>
+          <button class="sq-btn" aria-label="Snížit množství — ${x.n}" onclick="adjQty(${i},-1)" ${supplyLocked?'disabled':''}>−</button>
           <div class="sq-val">${x.qty}</div>
-          <button class="sq-btn" onclick="adjQty(${i},1)" ${supplyLocked?'disabled':''}>+</button>
+          <button class="sq-btn" aria-label="Zvýšit množství — ${x.n}" onclick="adjQty(${i},1)" ${supplyLocked?'disabled':''}>+</button>
         </div>
       </div>
       ${x.qty>0?`<div style="display:flex;align-items:center;gap:8px;padding:0 14px 10px;border-top:1px solid var(--bg)">
@@ -851,7 +1004,7 @@ function renderSupplyItems(){
       </div>`:''}
     </div>`).join('');
 }
-function adjQty(i,d){if(supplyLocked)return;supplyItems[i].qty=Math.max(0,supplyItems[i].qty+d);renderSupplyItems();}
+function adjQty(i,d){if(supplyLocked)return;supplyItems[i].qty=Math.max(0,supplyItems[i].qty+d);renderSupplyItems();renderSupplySummary();}
 function initSig(){
   const c=document.getElementById('sig-canvas');if(!c)return;
   sigCanvas=c;sigCtx=c.getContext('2d');
@@ -881,6 +1034,7 @@ function confirmSupply(){
   renderSupplyItems();
   document.getElementById('sig-done').style.display='block';
   document.querySelector('.sig-conf').style.display='none';
+  renderSupplySummary();
 }
 
 // ══════════════════════════════════════════════════════
@@ -902,7 +1056,8 @@ function renderTasks(){
     tasks.forEach(task=>{
       const ti=p.taskState.indexOf(task);
       const item=document.createElement('div');item.className='titem';
-      item.innerHTML=`<div class="trow" onclick="toggleTask(${ti})"><div class="tchk ${task.done?'on':''}"></div><div class="ttxt ${task.done?'done':''}">${task.text}</div></div>${task.note?`<div class="tnote">${task.note}</div>`:''}`;
+      const onclick=src==='servis'?`openServisModal(${ti})`:`toggleTask(${ti})`;
+      item.innerHTML=`<div class="trow" onclick="${onclick}"><div class="tchk ${task.done?'on':''}"></div><div class="ttxt ${task.done?'done':''}">${task.text}</div></div>${task.note?`<div class="tnote">${task.note}</div>`:''}`;
       list.appendChild(item);
     });
   });
@@ -919,48 +1074,372 @@ function toggleTask(ti){
 }
 
 // ══════════════════════════════════════════════════════
+// CAMPAIGN CHECKLIST (technik) — podmíněný checklist z chytrého enginu,
+// napojený na aktuálně aktivní kampaň (Velín → Editor → Kampaně, pole
+// "Checklist na POS"). Kampaň platí pro POS, pokud kanál sedí (nebo je
+// "Všechny kanály") a deadline ještě nevypršel.
+// ══════════════════════════════════════════════════════
+function getPosChannel(p){
+  const rawTyp=p.typ||'IDT';
+  return (rawTyp==='CORN'||(p.k&&p.k.startsWith('9')))?'CORN':rawTyp;
+}
+function getActiveCampaignChecklist(p){
+  const camps=getEditorCampaigns();
+  const channel=getPosChannel(p);
+  const today=new Date();today.setHours(0,0,0,0);
+  const tpls=getChecklistTemplates();
+  const match=camps.find(c=>{
+    if(!c.checklistTemplateId||!tpls[c.checklistTemplateId])return false;
+    const ch=c.channel||'ALL';
+    if(ch!=='ALL'&&ch!==channel)return false;
+    if(c.deadline){const dl=new Date(c.deadline);if(dl<today)return false;}
+    return true;
+  });
+  return match?{campaign:match,template:tpls[match.checklistTemplateId]}:null;
+}
+function campaignChecklistKey(posId,templateId){return 'checklist_'+posId+'_'+templateId;}
+let ckPosAnswers={};
+function renderCampaignChecklist(){
+  const p=posData[cWeek][cIdx];
+  const wrap=document.getElementById('campaign-checklist-wrap');
+  if(!wrap)return;
+  const active=getActiveCampaignChecklist(p);
+  if(!active){wrap.style.display='none';return;}
+  wrap.style.display='block';
+  ckActiveContext='pos';
+  document.getElementById('campaign-checklist-title').textContent='Kontrolní checklist — '+active.campaign.name;
+  ckPosAnswers=lsg(campaignChecklistKey(p.id,active.template.id))||{};
+  document.getElementById('campaign-checklist-list').innerHTML=ChecklistEngine.renderChecklistHtml(active.template,ckPosAnswers);
+}
+
+// ══════════════════════════════════════════════════════
 // PHOTOS
 // ══════════════════════════════════════════════════════
+// Foto 0/1 (Příchod/Odchod) se řeší přímo přes check-in lištu (renderCheckin) —
+// tady se nezobrazují znovu, aby nevznikala duplicitní/matoucí UI se stejnými
+// fotkami. Tahle sekce ukazuje další povinné fotky (pokladní zóna, merch
+// materiály) plus neomezený počet volných extra fotek.
+const PHOTO_LABELS=['Příchod','Odchod','Pokladní zóna','Plánogram / finální výstava'];
+const PHOTO_REQUIRED_COUNT=PHOTO_LABELS.length;
+const PHOTO_GRID_START=2;
 function renderPhotos(){
   const p=posData[cWeek][cIdx];
   const grid=document.getElementById('photos-grid');grid.innerHTML='';
-  const lbls=['Před','Po','Detail'];
-  const slots=Math.max(3,p.photos.length+1);
-  for(let i=0;i<slots;i++){
+  const slots=Math.max(PHOTO_REQUIRED_COUNT,p.photos.length);
+  for(let i=PHOTO_GRID_START;i<slots;i++){
     const slot=document.createElement('div');
+    const lbl=PHOTO_LABELS[i]||'Foto '+(i+1);
+    const required=i<requiredPhotoCount(p);
     if(p.photos[i]){
       slot.className='pslot filled';
-      slot.innerHTML=`<img src="${p.photos[i]}" alt="foto"/><button class="p-rm" onclick="rmPhoto(event,${i})">✕</button>`;
+      slot.innerHTML=`<img src="${p.photos[i]}" alt="Foto ${lbl}"/><button class="p-rm" aria-label="Smazat foto ${lbl}" onclick="rmPhoto(event,${i})">✕</button>`;
     } else {
-      slot.className='pslot';
-      slot.innerHTML=`<div class="p-ico"><svg class="ic ic-lg"><use href="#ic-camera"/></svg></div><div class="p-lbl">${lbls[i]||'Foto '+(i+1)}</div>`;
+      slot.className='pslot'+(required?' pslot-req':'');
+      slot.setAttribute('role','button');
+      slot.setAttribute('aria-label','Vyfotit '+lbl);
+      slot.innerHTML=`<div class="p-ico"><svg class="ic ic-lg"><use href="#ic-camera"/></svg></div><div class="p-lbl">${lbl}${required?' *':''}</div>`;
       slot.onclick=()=>{pendingSlot=i;document.getElementById('photo-input').click();};
     }
     grid.appendChild(slot);
   }
+  const addBtn=document.createElement('div');
+  addBtn.className='pslot pslot-add';
+  addBtn.setAttribute('role','button');
+  addBtn.setAttribute('aria-label','Přidat další fotku');
+  addBtn.innerHTML=`<div class="p-ico" style="font-size:22px;font-weight:700">+</div><div class="p-lbl">Přidat fotku</div>`;
+  addBtn.onclick=()=>{pendingSlot=null;document.getElementById('photo-input').click();};
+  grid.appendChild(addBtn);
+}
+// Servisní návštěva bez merch kola nepotřebuje fotky pokladní zóny/plánogramu —
+// jen důkaz příchodu/odchodu (slot 0/1), zbytek se týká merch osazení.
+function requiredPhotoCount(p){ return p.servisOnly ? 2 : PHOTO_REQUIRED_COUNT; }
+function requiredPhotosOk(p){
+  for(let i=0;i<requiredPhotoCount(p);i++){ if(!p.photos[i]) return false; }
+  return true;
+}
+// Položky merch checklistu odklikané jako osazené (✓) musí mít foto-důkaz,
+// než lze návštěvu dokončit — ale ne hned při kliknutí (viz setMerch).
+function merchPhotosOk(){
+  return merchItems.every(x=>x.done!==true || !x.reqPhoto || !!x.photo);
+}
+function allPhotosOk(p){ return requiredPhotosOk(p) && merchPhotosOk(); }
+// Sesbírá všechno, co technik tvrdí že udělal, ale ještě to nedoložil fotkou —
+// použito jak pro disabled stav tlačítka Dokončit, tak pro showMissingPhotosPrompt.
+function getMissingPhotos(p){
+  const missing=[];
+  for(let i=0;i<requiredPhotoCount(p);i++){
+    if(!p.photos[i]) missing.push({label:PHOTO_LABELS[i],capture:()=>{pendingSlot=i;document.getElementById('photo-input').click();}});
+  }
+  if(!p.servisOnly) merchItems.forEach((x,i)=>{
+    if(x.done===true&&x.reqPhoto&&!x.photo) missing.push({label:x.n,capture:()=>startMerchPhoto(i)});
+  });
+  return missing;
+}
+function showMissingPhotosPrompt(){
+  const p=posData[cWeek][cIdx];
+  const missing=getMissingPhotos(p);
+  const existing=document.getElementById('missing-photos-modal');
+  if(!missing.length){ if(existing) existing.remove(); return; }
+  const ov=existing||document.createElement('div');
+  if(!existing){
+    ov.id='missing-photos-modal';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(10,20,25,.55);z-index:910;display:flex;flex-direction:column;justify-content:flex-end';
+    document.body.appendChild(ov);
+  }
+  ov.innerHTML=`
+    <div style="background:#fff;border-radius:16px 16px 0 0;padding:18px;max-height:80vh;overflow:auto">
+      <div style="font-weight:800;font-size:15px;margin-bottom:4px">📷 Než ukončíš návštěvu</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Tyhle fotky ještě chybí — bez nich nejde návštěvu dokončit.</div>
+      <div id="missing-photos-list"></div>
+      <button class="btn-x" style="width:100%;margin-top:8px" onclick="document.getElementById('missing-photos-modal').remove()">Zavřít</button>
+    </div>`;
+  const list=ov.querySelector('#missing-photos-list');
+  missing.forEach(m=>{
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--bg)';
+    row.innerHTML=`<span style="font-size:13px;font-weight:600">${m.label}</span>`;
+    const btn=document.createElement('button');
+    btn.className='btn-ok';
+    btn.textContent='Vyfotit';
+    btn.onclick=m.capture;
+    row.appendChild(btn);
+    list.appendChild(row);
+  });
+}
+function refreshMissingPhotosPromptIfOpen(){
+  if(!document.getElementById('missing-photos-modal')) return;
+  const p=posData[cWeek][cIdx];
+  if(getMissingPhotos(p).length===0){
+    document.getElementById('missing-photos-modal').remove();
+    markVisited();
+  } else {
+    showMissingPhotosPrompt();
+  }
+}
+// ══════════════════════════════════════════════════════
+// SERVISNÍ DOTAZNÍK — datově řízený formulář (SERVIS_FORM_SCHEMA v data.js).
+// Klik na servisní úkol otevře tenhle modal místo prostého odškrtnutí —
+// technik popíše, co se na zařízení dělalo, než se úkol uzavře.
+// ══════════════════════════════════════════════════════
+let servisModal={ti:null,answers:{}};
+function servisAnswersKey(posId){return 'servis_'+posId;}
+function getServisAnswers(posId){return lsg(servisAnswersKey(posId),{});}
+function saveServisAnswers(posId,answers){lss(servisAnswersKey(posId),answers);}
+// Technik si servis spustí i sám, bez čekání na zadání od Velína —
+// vytvoří se reálný src:'servis' úkol na téhle návštěvě a otevře se dotazník.
+function openServisOnDemand(){
+  const p=posData[cWeek][cIdx];
+  if(p.v) return;
+  let ti=p.taskState.findIndex(t=>t.src==='servis'&&!t.done);
+  if(ti===-1){
+    p.taskState.push({text:'Servisní zásah',src:'servis',done:false});
+    ti=p.taskState.length-1;
+    saveVisitState(p,cWeek);
+    renderTasks();
+    renderDetailChips(p,WEEKS_META[cWeek]);
+  }
+  openServisModal(ti);
+}
+function openServisModal(ti){
+  const p=posData[cWeek][cIdx];
+  if(p.v) return;
+  servisModal={ti,answers:getServisAnswers(p.id)};
+  let ov=document.getElementById('servis-modal');
+  if(!ov){
+    ov=document.createElement('div');
+    ov.id='servis-modal';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(10,20,25,.55);z-index:920;display:flex;flex-direction:column;justify-content:flex-end';
+    document.body.appendChild(ov);
+  }
+  renderServisModal();
+}
+function closeServisModal(){
+  const ov=document.getElementById('servis-modal');
+  if(ov) ov.remove();
+}
+function renderServisModal(){
+  const ov=document.getElementById('servis-modal');
+  if(!ov) return;
+  ov.innerHTML=`
+    <div style="background:#fff;border-radius:16px 16px 0 0;padding:18px;max-height:88vh;overflow:auto">
+      <div style="font-weight:800;font-size:15px;margin-bottom:4px"><svg class="ic ic-sm"><use href="#ic-wrench"/></svg> Servisní dotazník</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Vyber, co se na místě řešilo. Uloží se k téhle návštěvě.</div>
+      <div id="servis-modal-body"></div>
+      <div class="add-acts" style="margin-top:14px">
+        <button class="btn-x" onclick="closeServisModal()">Zrušit</button>
+        <button class="btn-ok" onclick="confirmServisModal()">Potvrdit</button>
+      </div>
+    </div>`;
+  ov.querySelector('#servis-modal-body').innerHTML=renderServisNode(SERVIS_FORM_SCHEMA);
+}
+function setServisAnswer(id,value){
+  servisModal.answers[id]=value;
+  renderServisModal();
+}
+function setServisTextSilent(id,value){ servisModal.answers[id]=value; }
+function setServisBarcodeFieldSilent(id,key,value){
+  const cur=servisModal.answers[id]||{};
+  cur[key]=value;
+  servisModal.answers[id]=cur;
+}
+function renderServisNode(node){
+  if(!node) return '';
+  let html='';
+  if(node.type==='select'){
+    html+=`<div class="ef-label">${node.label}</div><select class="ef-select" onchange="setServisAnswer('${node.id}',this.value)"><option value="">— vyber —</option>`;
+    node.options.forEach(o=>{
+      html+=`<option value="${o.value}" ${servisModal.answers[node.id]===o.value?'selected':''}>${o.label}</option>`;
+    });
+    html+=`</select>`;
+    const chosen=node.options.find(o=>o.value===servisModal.answers[node.id]);
+    if(chosen&&chosen.children){
+      html+=`<div style="margin-left:10px;border-left:2px solid var(--bg);padding-left:10px;margin-top:8px">${chosen.children.map(renderServisNode).join('')}</div>`;
+    }
+  } else if(node.type==='radio'){
+    html+=`<div class="ef-label">${node.label}</div><div class="ef-chips">`;
+    node.options.forEach(o=>{
+      html+=`<div class="ef-chip ${servisModal.answers[node.id]===o.value?'on':''}" onclick="setServisAnswer('${node.id}','${o.value}')">${o.label}</div>`;
+    });
+    html+=`</div>`;
+    const chosen=node.options.find(o=>o.value===servisModal.answers[node.id]);
+    if(chosen&&chosen.children){
+      html+=`<div style="margin-left:10px;border-left:2px solid var(--bg);padding-left:10px;margin-top:8px">${chosen.children.map(renderServisNode).join('')}</div>`;
+    }
+  } else if(node.type==='toggle'){
+    const on=!!servisModal.answers[node.id];
+    html+=`<div class="trow" onclick="setServisAnswer('${node.id}',${!on})" style="cursor:pointer"><div class="tchk ${on?'on':''}"></div><div class="ttxt">${node.label}</div></div>`;
+    if(on&&node.children){
+      html+=`<div style="margin-left:24px;border-left:2px solid var(--bg);padding-left:10px;margin:6px 0 10px">${node.children.map(renderServisNode).join('')}</div>`;
+    }
+  } else if(node.type==='text'){
+    const val=servisModal.answers[node.id]||'';
+    html+=`<div class="ef-label">${node.label}</div><textarea class="ef-textarea" oninput="setServisTextSilent('${node.id}',this.value)">${val}</textarea>`;
+  } else if(node.type==='barcode'){
+    html+=`<div class="ef-label">${node.label}</div>`;
+    (node.fields||[]).forEach(f=>{
+      const val=(servisModal.answers[node.id]||{})[f.key]||'';
+      html+=`<input class="ef-input" type="text" placeholder="${f.label}" value="${val}" oninput="setServisBarcodeFieldSilent('${node.id}','${f.key}',this.value)" style="margin-bottom:6px"/>`;
+    });
+  }
+  return `<div class="servis-node" style="margin-bottom:12px">${html}</div>`;
+}
+function confirmServisModal(){
+  const p=posData[cWeek][cIdx];
+  saveServisAnswers(p.id,servisModal.answers);
+  if(servisModal.ti!=null&&p.taskState[servisModal.ti]){
+    p.taskState[servisModal.ti].done=true;
+    saveVisitState(p,cWeek);
+  }
+  closeServisModal();
+  renderTasks();
+  renderCompleteBtn();
+  renderDetailChips(p,WEEKS_META[cWeek]);
+}
+// Zeměpisná poloha v okamžiku focení — pokud zařízení/uživatel polohu
+// neposkytne, cb(null). Nikdy se nedomýšlí náhradní souřadnice (no fake data).
+function getGeoTag(cb){
+  if(!navigator.geolocation){ cb(null); return; }
+  navigator.geolocation.getCurrentPosition(
+    pos => cb({ lat: pos.coords.latitude, lng: pos.coords.longitude, acc: Math.round(pos.coords.accuracy||0) }),
+    () => cb(null),
+    { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+  );
+}
+function buildStampLines(p, geo){
+  const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
+  const now = new Date();
+  const ts = now.toLocaleDateString('cs-CZ') + ' ' + now.toLocaleTimeString('cs-CZ', {hour:'2-digit', minute:'2-digit'});
+  const gpsLine = geo ? `GPS: ${geo.lat.toFixed(5)}, ${geo.lng.toFixed(5)} (±${geo.acc} m)` : 'GPS: nedostupné';
+  return [tech, `POS ${p.id}`, ts, gpsLine];
+}
+// Vypálí jméno technika / POS ID / čas / GPS přímo do pixelů fotky (ne jen do
+// metadat) — jinak důkaz jde oddělit od obrázku kopií/přesunem. Zmenšení na
+// max šířku 1280px navíc řeší růst localStorage při desítkách fotek/den.
+function stampPhoto(dataUrl, lines, cb){
+  const img = new Image();
+  img.onload = () => {
+    const maxW = 1280;
+    const scale = Math.min(1, maxW / img.width);
+    const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, w, h);
+    const lineH = Math.round(h*0.032)+8, pad = Math.round(h*0.018)+6;
+    const barH = lines.length * lineH + pad * 2;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(0, h - barH, w, barH);
+    ctx.font = Math.round(lineH*0.72)+'px -apple-system, Arial, sans-serif';
+    ctx.fillStyle = '#fff';
+    ctx.textBaseline = 'top';
+    lines.forEach((line, i) => ctx.fillText(line, pad, h - barH + pad + i * lineH));
+    cb(canvas.toDataURL('image/jpeg', 0.82));
+  };
+  img.onerror = () => cb(dataUrl);
+  img.src = dataUrl;
 }
 function pushPhotosMeta(p){
   if (typeof VisitStore === 'undefined') return;
   const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
-  const meta = p.photos.map((dataUrl, i) => ({ slot: i, sizeBytes: Math.round(dataUrl.length * 0.75), takenAt: new Date().toISOString() }));
+  const urls = p.photoUrls || {};
+  const meta = p.photos.map((dataUrl, i) => dataUrl ? { slot: i, sizeBytes: Math.round(dataUrl.length * 0.75), takenAt: new Date().toISOString(), url: urls[i] || null } : null).filter(Boolean);
   VisitStore.setVisitField(tech, p.id, p.n, p.a, null, { photos_meta: meta });
 }
 function handlePhoto(e){
   const file=e.target.files[0];if(!file)return;
-  const r=new FileReader();
-  r.onload=ev=>{
-    const p=posData[cWeek][cIdx];
-    if(pendingSlot!==null&&pendingSlot<p.photos.length)p.photos[pendingSlot]=ev.target.result;
-    else p.photos.push(ev.target.result);
-    pendingSlot=null;saveVisitState(p,cWeek);renderPhotos();e.target.value='';
-    pushPhotosMeta(p);
-  };r.readAsDataURL(file);
+  const p=posData[cWeek][cIdx];
+  const slot=pendingSlot;
+  getGeoTag(geo=>{
+    const r=new FileReader();
+    r.onload=ev=>{
+      stampPhoto(ev.target.result, buildStampLines(p, geo), stamped=>{
+        let targetSlot;
+        if(slot!==null){
+          while(p.photos.length<=slot)p.photos.push(null);
+          p.photos[slot]=stamped;
+          targetSlot=slot;
+        } else {
+          while(p.photos.length<PHOTO_REQUIRED_COUNT)p.photos.push(null);
+          p.photos.push(stamped);
+          targetSlot=p.photos.length-1;
+        }
+        pendingSlot=null;saveVisitState(p,cWeek);renderPhotos();e.target.value='';
+        pushPhotosMeta(p);renderCompleteBtn();
+        if(slot===0&&!lsg('ci_'+p.id)) doCheckin();
+        else if(slot===1){const ci=lsg('ci_'+p.id);if(ci&&!ci.out) doCheckout();}
+        renderCheckin();
+        refreshMissingPhotosPromptIfOpen();
+        // Skutečné bajty fotky navíc do Supabase Storage (fire-and-forget) —
+        // lokální dataURL výše zůstává beze změny, tohle jen dodá URL, kterou
+        // uvidí i jiné zařízení (viz pullVisitState/mergeIntoPos v visitStore.js).
+        if (typeof VisitStore !== 'undefined' && VisitStore.enabled()) {
+          VisitStore.uploadPhoto(p.id, cWeek, targetSlot, stamped).then(url => {
+            if (!url) return;
+            p.photoUrls = p.photoUrls || {};
+            p.photoUrls[targetSlot] = url;
+            pushPhotosMeta(p);
+          });
+        }
+      });
+    };
+    r.readAsDataURL(file);
+  });
 }
 function rmPhoto(e,i){
   e.stopPropagation();
   const p=posData[cWeek][cIdx];
-  p.photos.splice(i,1);saveVisitState(p,cWeek);renderPhotos();
-  pushPhotosMeta(p);
+  p.photos.splice(i,1);
+  if (p.photoUrls) {
+    const shifted = {};
+    Object.keys(p.photoUrls).forEach(k => {
+      const ki = +k;
+      if (ki < i) shifted[ki] = p.photoUrls[ki];
+      else if (ki > i) shifted[ki-1] = p.photoUrls[ki];
+    });
+    p.photoUrls = shifted;
+  }
+  saveVisitState(p,cWeek);renderPhotos();
+  pushPhotosMeta(p);renderCompleteBtn();
 }
 
 // ══════════════════════════════════════════════════════
@@ -976,35 +1455,10 @@ function showDetTab(tab,btn){
 }
 
 // ══════════════════════════════════════════════════════
-// CHECKLIST PREVIEW (sandbox, collapsible) — podmíněný checklist engine
+// CHECKLIST ANSWERS — routuje odpověď na otázku do správného kontextu
+// (Velín editor náhled, nebo reálný checklist na kartě POS u technika)
 // ══════════════════════════════════════════════════════
-let ckSandboxAnswers={};
-let ckPreviewOpen=false;
-let ckActiveContext='sandbox'; // 'sandbox' (technik) | 'editor' (Velín editor náhled)
-function toggleChecklistPreview(){
-  ckActiveContext='sandbox';
-  ckPreviewOpen=!ckPreviewOpen;
-  document.getElementById('ck-preview-body').style.display=ckPreviewOpen?'block':'none';
-  document.getElementById('ck-preview-arrow').style.transform=ckPreviewOpen?'rotate(180deg)':'';
-  document.getElementById('ck-preview-toggle').classList.toggle('open',ckPreviewOpen);
-  if(ckPreviewOpen)renderChecklistSandbox();
-}
-function renderChecklistSandbox(){
-  const picker=document.getElementById('ck-record-picker');
-  if(!picker.options.length){
-    VISIT_CHECKLIST_RAW.forEach((rec,i)=>{
-      const o=document.createElement('option');
-      o.value=i;o.textContent=`${rec.posId} — ${rec.storeName.split(',')[0]}`;
-      picker.appendChild(o);
-    });
-  }
-  loadChecklistRecord(picker.value||0);
-}
-function loadChecklistRecord(idx){
-  const rec=VISIT_CHECKLIST_RAW[idx];if(!rec)return;
-  ckSandboxAnswers=Object.assign({},rec.answers);
-  renderChecklistSandboxList();
-}
+let ckActiveContext='pos'; // 'editor' (Velín editor náhled) | 'pos' (reálný checklist na kartě POS)
 function setChecklistAnswer(id,val){
   if(ckActiveContext==='editor'){
     if(val===undefined)delete edChecklistPreviewAnswers[id];
@@ -1012,13 +1466,13 @@ function setChecklistAnswer(id,val){
     renderEdChecklistPreview();
     return;
   }
-  if(val===undefined)delete ckSandboxAnswers[id];
-  else ckSandboxAnswers[id]=val;
-  renderChecklistSandboxList();
-}
-function renderChecklistSandboxList(){
-  const tpl=getChecklistTemplates()['rebranding-idt-kam'];
-  document.getElementById('ck-test-list').innerHTML=ChecklistEngine.renderChecklistHtml(tpl,ckSandboxAnswers);
+  const p=posData[cWeek][cIdx];
+  const active=getActiveCampaignChecklist(p);
+  if(!active)return;
+  if(val===undefined)delete ckPosAnswers[id];
+  else ckPosAnswers[id]=val;
+  lss(campaignChecklistKey(p.id,active.template.id),ckPosAnswers);
+  document.getElementById('campaign-checklist-list').innerHTML=ChecklistEngine.renderChecklistHtml(active.template,ckPosAnswers);
 }
 
 // ══════════════════════════════════════════════════════
@@ -1028,8 +1482,11 @@ function renderChecklistSandboxList(){
 // ── MERCH ─────────────────────────────────────────────────────────────────
 let merchItems = [];
 
+let pendingMerchIndex = null;
+
 function renderMerch(p) {
-  const defaults = (MERCH_ITEMS[p.typ] || MERCH_ITEMS.IDT).map(x => ({...x}));
+  const tpl = getMerchTemplates();
+  const defaults = (tpl[p.typ] || tpl.IDT).map(x => ({...x}));
   const saved = lsg('merch_' + p.id + '_' + today());
   merchItems = saved || defaults;
   const el = document.getElementById('merch-items');
@@ -1038,23 +1495,73 @@ function renderMerch(p) {
     <div class="inv-item">
       <div class="inv-info">
         <div class="inv-n" style="${x.done?'text-decoration:line-through;color:var(--muted)':''}">${x.n}</div>
+        ${x.photo
+          ? `<img src="${x.photo}" class="merch-thumb" alt="Foto — ${x.n}" onclick="openMerchPhotoLightbox(${i})"/>`
+          : x.done===true && x.reqPhoto ? `<button class="merch-photo-pending" onclick="startMerchPhoto(${i})">📷 Foto chybí — vyfotit</button>` : ''}
       </div>
       <div class="inv-btns">
-        <button class="ibtn ibtn-ok ${x.done?'on':''}" onclick="setMerch(${i},true)">✓</button>
-        <button class="ibtn ibtn-miss ${x.done===false?'on':''}" onclick="setMerch(${i},false)">✕</button>
+        <button class="ibtn ibtn-ok ${x.done===true?'on':''}" aria-label="Osazeno — ${x.n}" onclick="setMerch(${i},true)">✓</button>
+        <button class="ibtn ibtn-miss ${x.done===false?'on':''}" aria-label="Neosazeno — ${x.n}" onclick="setMerch(${i},false)">✕</button>
       </div>
     </div>`).join('') || '<div style="padding:16px;text-align:center;font-size:12px;color:var(--muted)">Žádné merch položky</div>';
 }
 
+// Odklikávání (✓/✕) je rychlé a nic nevynucuje hned — technik osadí celý
+// regál bez přerušování. Foto k položce ale musí existovat, než půjde
+// dokončit návštěvu (viz allPhotosOk/showMissingPhotosPrompt).
 function setMerch(i, done) {
   const p = posData[cWeek][cIdx];
   if (!merchItems[i]) return;
-  merchItems[i].done = merchItems[i].done === done ? null : done;
+  if (done === true) {
+    merchItems[i].done = merchItems[i].done === true ? null : true;
+    if (merchItems[i].done !== true) merchItems[i].photo = null;
+  } else {
+    merchItems[i].done = merchItems[i].done === false ? null : false;
+    merchItems[i].photo = null;
+  }
   lss('merch_' + p.id + '_' + today(), merchItems);
   if (typeof VisitStore !== 'undefined' && merchItems[i].done !== null) {
     VisitStore.setMaterial(p.id, p.n, p.a, null, merchItems[i].n, merchItems[i].done ? 1 : 0);
   }
   renderMerch(p);
+  renderCompleteBtn();
+}
+
+function startMerchPhoto(i) {
+  pendingMerchIndex = i;
+  document.getElementById('merch-photo-input').click();
+}
+
+function openMerchPhotoLightbox(i) {
+  const x = merchItems[i];
+  if (!x || !x.photo) return;
+  openImageLightbox(x.photo, x.n);
+}
+
+function handleMerchPhoto(e) {
+  const file = e.target.files[0];
+  const i = pendingMerchIndex;
+  if (!file || i === null || !merchItems[i]) { pendingMerchIndex = null; e.target.value = ''; return; }
+  const p = posData[cWeek][cIdx];
+  getGeoTag(geo => {
+    const r = new FileReader();
+    r.onload = ev => {
+      stampPhoto(ev.target.result, buildStampLines(p, geo).concat([merchItems[i].n]), stamped => {
+        merchItems[i].done = true;
+        merchItems[i].photo = stamped;
+        lss('merch_' + p.id + '_' + today(), merchItems);
+        if (typeof VisitStore !== 'undefined') {
+          VisitStore.setMaterial(p.id, p.n, p.a, null, merchItems[i].n, 1);
+        }
+        pendingMerchIndex = null;
+        e.target.value = '';
+        renderMerch(p);
+        renderCompleteBtn();
+        refreshMissingPhotosPromptIfOpen();
+      });
+    };
+    r.readAsDataURL(file);
+  });
 }
 
 // ── INVENTORY TABS ─────────────────────────────────────────────────────────
@@ -1225,25 +1732,72 @@ function addPosCardNote(){
 // ══════════════════════════════════════════════════════
 // NOTES / MAP / COMPLETE
 // ══════════════════════════════════════════════════════
-function saveNote(){posData[cWeek][cIdx].notes=document.getElementById('notes-ta').value;}
-function openMap(){const p=posData[cWeek][cIdx];window.open(`https://maps.google.com/?q=${encodeURIComponent(p.a)}`,'_blank');}
+function saveNote(){
+  const p=posData[cWeek][cIdx];
+  const val=document.getElementById('notes-ta').value;
+  p.notes=val;
+  lss('visitnote_'+p.id+'_'+cWeek, val);
+}
+function openMap(){const p=posData[cWeek][cIdx];navigateToPOS(p.id);}
+// Navigace na POS — Waze primárně (technici ho v terénu reálně používají), Google Maps jako fallback.
+// GPS souřadnice mají přednost před adresou, pokud existují.
+function navigateToPOS(posId){
+  const all=posData[cWeek]||[];
+  const p=all.find(x=>String(x.id)===String(posId));
+  if(!p)return;
+  const hasGps=typeof p.lat==='number'&&typeof p.lng==='number';
+  // waze:// (vlastní URL schéma) — pokud appka chybí, prohlížeč na rozdíl od https://waze.com/... nikam nepřejde,
+  // takže nám zůstane čas na fallback. Univerzální https odkaz by vždy reálně otevřel Waze web.
+  const wazeUrl=hasGps
+    ?`waze://?ll=${p.lat},${p.lng}&navigate=yes`
+    :`waze://?q=${encodeURIComponent(p.a)}&navigate=yes`;
+  const gmapsUrl=hasGps
+    ?`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`
+    :`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(p.a)}`;
+  // Pokud telefon přepne do appky Waze, stránka ztratí focus a fallback se zruší.
+  // Pokud Waze nenainstalovaná, stránka zůstane aktivní → po krátké pauze otevřeme Google Maps.
+  const cancelFallback=()=>{clearTimeout(timer);};
+  const timer=setTimeout(()=>{
+    if(document.hasFocus())window.open(gmapsUrl,'_blank');
+  },1200);
+  window.addEventListener('blur',cancelFallback,{once:true});
+  window.location.href=wazeUrl;
+}
 function renderCompleteBtn(){
   const p=posData[cWeek][cIdx];
   const btn=document.getElementById('complete-btn');
   const badge=document.getElementById('vis-badge-slot2');
   const allDone=p.taskState.length>0&&p.taskState.every(t=>t.done);
+  const photosOk=allPhotosOk(p);
   if(p.v){
     badge.innerHTML='<div class="vis-badge">✓ Návštěva dokončena</div>';
     btn.textContent='Znovu otevřít';btn.className='btn-complete visited';
   } else {
     badge.innerHTML='';
-    if(allDone){btn.textContent='Označit jako navštíveno ✓';btn.className='btn-complete active';}
+    if(allDone&&photosOk){btn.textContent='Označit jako navštíveno ✓';btn.className='btn-complete active';}
+    else if(!photosOk){btn.textContent='Chybí povinné foto — doplnit';btn.className='btn-complete disabled';}
     else{const r=p.taskState.filter(t=>!t.done).length;btn.textContent=`Zbývá ${r} ${r===1?'úkol':r<5?'úkoly':'úkolů'}`;btn.className='btn-complete disabled';}
   }
 }
 function markVisited(){
   const p=posData[cWeek][cIdx];
-  if(p.v||!p.taskState.every(t=>t.done))return;
+  if(p.v){
+    p.v=false;
+    // Reopen znamená novou práci na místě — staré foto odchodu už není
+    // důkazem aktuálního stavu, technik musí vyfotit nový odchod.
+    if(p.photos[1]){p.photos[1]=null;pushPhotosMeta(p);}
+    const ci=lsg('ci_'+p.id);
+    if(ci&&ci.out) lss('ci_'+p.id,{...ci,out:false,outTime:null,outTs:null,dur:null});
+    saveVisitState(p,cWeek);renderCompleteBtn();updateSummary();renderChips();renderDayTabs();renderPhotos();renderCheckin();
+    if (typeof VisitStore !== 'undefined') {
+      const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
+      VisitStore.setVisitField(tech, p.id, p.n, p.a, null, { status: 'in_progress', completed_at: null });
+      VisitStore.logEvent(tech, 'visit_reopened:' + p.id);
+    }
+    return;
+  }
+  if(!p.taskState.every(t=>t.done))return;
+  if(!allPhotosOk(p)){showMissingPhotosPrompt();return;}
   p.v=true;saveVisitState(p,cWeek);renderCompleteBtn();updateSummary();renderChips();renderDayTabs();
   if (typeof VisitStore !== 'undefined') {
     const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
@@ -1334,42 +1888,42 @@ function getLiveState() {
   return {
     technik: liveName,
     initials: TechnicianModel.initialsFromName(liveName),
-    week: '25',
+    week: CURRENT_OPS_WEEK,
     dayStart: lsg('daystart_' + today()),
     visitLog: lsg('vlog_' + today(), []),
     checkins: (() => {
-      const all = posData['25'] || [];
+      const all = posData[CURRENT_OPS_WEEK] || [];
       return all.map(p => ({ posId: p.id, posName: p.n, typ: p.typ, partner: p.partner, ci: lsg('ci_' + p.id) })).filter(x => x.ci);
     })(),
-    completedPos: (posData['25'] || []).filter(p => p.v),
-    totalPos: (posData['25'] || []).length,
+    completedPos: (posData[CURRENT_OPS_WEEK] || []).filter(p => p.v),
+    totalPos: (posData[CURRENT_OPS_WEEK] || []).length,
     photos: (() => {
-      const all = posData['25'] || [];
+      const all = posData[CURRENT_OPS_WEEK] || [];
       const photos = [];
-      all.forEach(p => { p.photos.forEach((ph, i) => photos.push({ posName: p.n, posId: p.id, url: ph, slot: ['Před','Po','Detail'][i] || ('Foto '+(i+1)) })); });
+      all.forEach(p => { p.photos.forEach((ph, i) => { if(ph) photos.push({ posName: p.n, posId: p.id, url: ph, slot: ['Příchod','Odchod','Detail'][i] || ('Foto '+(i+1)) }); }); });
       return photos;
     })(),
     supplies: (() => {
-      const all = posData['25'] || [];
+      const all = posData[CURRENT_OPS_WEEK] || [];
       return all.map(p => {
         const s = lsg('supply_' + p.id + '_' + today());
         return s && s.confirmed ? { posName: p.n, receiver: s.receiver, at: s.at, items: s.items } : null;
       }).filter(Boolean);
     })(),
     posCardNotes: (() => {
-      const all = posData['25'] || [];
+      const all = posData[CURRENT_OPS_WEEK] || [];
       const notes = [];
       all.forEach(p => { const n = lsg('poscard_' + p.id, []); if (n.length) notes.push({ posName: p.n, notes: n }); });
       return notes;
     })(),
-    servisOpen: (posData['25'] || []).filter(p => p.taskState.some(t => t.src === 'servis' && !t.done)),
+    servisOpen: (posData[CURRENT_OPS_WEEK] || []).filter(p => p.taskState.some(t => t.src === 'servis' && !t.done)),
     shortVisits: lsg('vlog_' + today(), []).filter(v => v.flag === 'short'),
   };
 }
 
 function getActiveTechPos() {
   // Which POS is technik currently on?
-  const all = posData['25'] || [];
+  const all = posData[CURRENT_OPS_WEEK] || [];
   return all.find(p => { const ci = lsg('ci_' + p.id); return ci && !ci.out; });
 }
 
@@ -1411,7 +1965,7 @@ function renderAdminDashboard() {
     if (m) m.dataset.inited = '1';
   }
   const live = getLiveState();
-  const pos = FULL_POS_DATA['25'] || [];
+  const pos = FULL_POS_DATA[CURRENT_OPS_WEEK] || [];
   const gpsFlags = lsg('gps_flags_' + today(), []);
   const gpsCritical = gpsFlags.filter(f => f.severity === 'critical' || f.severity === undefined);
   const gpsWarnings = gpsFlags.filter(f => f.severity === 'warning');
@@ -1480,12 +2034,17 @@ function renderAdminDashboard() {
   // Jeden souhrnný verdikt — odpověď na "je dnešní provoz pod kontrolou?"
   // do 10 sekund, beze čtení jednotlivých karet.
   const issueCount = behind.length + flagsToday + live.servisOpen.length;
+  const pendingDecisions = getDecisions().filter(d => d.status === 'pending');
   const verdictEl = document.getElementById('dash-verdict');
   if (verdictEl) {
     verdictEl.className = 'dash-verdict ' + (issueCount === 0 ? 'ok' : 'warn');
-    verdictEl.innerHTML = issueCount === 0
+    const headline = issueCount === 0
       ? `<svg class="ic"><use href="#ic-check-circle"/></svg> Provoz pod kontrolou`
       : `<svg class="ic"><use href="#ic-warning"/></svg> Vyžaduje zásah — ${issueCount} ${issueCount === 1 ? 'položka' : 'položky'} k řešení`;
+    const sub = pendingDecisions.length
+      ? `<div class="dash-verdict-sub">${pendingDecisions.length} ${pendingDecisions.length === 1 ? 'rozhodnutí' : 'rozhodnutí'} čeká na vás v Action Feedu níže</div>`
+      : '';
+    verdictEl.innerHTML = `<div class="dash-verdict-head">${headline}</div>${sub}`;
   }
 
   // Regiony — kde je tým přetížený a kde je volná kapacita, ze stejných dat
@@ -1534,7 +2093,7 @@ function renderAdminDashboard() {
   // Attention feed — servisy, GPS flagy, krátké návštěvy, technici pozadu
   const attnItems = [];
   live.servisOpen.forEach(p => attnItems.push({ icon: 'ic-wrench', sev: 'red', text: `Servis čeká: <strong>${p.n}</strong>` }));
-  gpsCritical.forEach(f => attnItems.push({ icon: 'ic-pin', sev: 'red', text: `GPS anomálie: <strong>${f.posName}</strong> · ${f.dist != null ? f.dist.toFixed(1) + 'km' : ''} od POS` }));
+  gpsCritical.forEach(f => attnItems.push({ icon: 'ic-pin', sev: 'red', text: f.blocked ? `Check-in zablokován (GPS): <strong>${f.posName}</strong> · ${f.dist != null ? f.dist.toFixed(1) + 'km' : ''} od POS — pokus o check-in mimo lokaci` : `GPS anomálie: <strong>${f.posName}</strong> · ${f.dist != null ? f.dist.toFixed(1) + 'km' : ''} od POS` }));
   gpsWarnings.forEach(f => attnItems.push({ icon: 'ic-pin', sev: 'orange', text: `GPS odchylka (varování): <strong>${f.posName}</strong> · ${f.dist != null ? Math.round(f.dist * 1000) + 'm' : ''} od POS` }));
   shortVisits.forEach(v => attnItems.push({ icon: 'ic-clock', sev: 'orange', text: `Krátká návštěva: <strong>${v.posName}</strong> · ${v.dur} min` }));
   behind.forEach(t => attnItems.push({ icon: 'ic-warning', sev: 'orange', text: `<strong>${t.name}</strong> je pozadu — ${t.done}/${t.total} POS` }));
@@ -1592,6 +2151,197 @@ function renderAdminDashboard() {
   }
 
   renderFleetRouteAnalytics();
+  renderDecisionFeed();
+}
+
+// ══════════════════════════════════════════════════════
+// DECISION LAYER — MVP Action Feed (viz docs/PLANNER_ARCHITECTURE.md Vrstva 4)
+// ══════════════════════════════════════════════════════
+// 'decisions' je globální klíč (jako admin_tasks/editor_*) — Velín ho edituje,
+// musí být vidět na všech zařízeních, proto je v SYNC_GLOBAL_KEYS (js/sync.js)
+// a jede přes existující sync_kv mirroring, žádná nová Supabase tabulka.
+// AI/engine pouze navrhuje (DecisionEngine, čistá funkce nad reálnými Tourplan
+// počty) — o reálném dopadu rozhoduje výhradně Velín (#11a v docs/CLAUDE.md).
+function getDecisions() { return lsg('decisions', []); }
+function saveDecisions(list) { lss('decisions', list); }
+
+// Vygeneruje nové capacity_overload kandidáty a přidá jen ty, pro které ještě
+// neexistuje žádný záznam (type+technician+week) — jednou rozhodnuté se znovu
+// nenabízí. Přepočet je nutný jen po načtení dat (Tourplan import se neměnní
+// po 5 vteřinách) — bez téhle pojistky by ho auto-refresh (startAdminRefresh,
+// interval 5s) spustil znovu při každém tiku, zbytečně skenoval celý
+// FULL_POS_DATA pro každého technika a týden.
+let _decisionsGeneratedThisSession = false;
+function generateAndPersistCapacityDecisions() {
+  if (_decisionsGeneratedThisSession) return getDecisions();
+  _decisionsGeneratedThisSession = true;
+  const weeklyPosByTech = {};
+  PosModel.PILOT_TECHNICIANS.forEach(name => {
+    weeklyPosByTech[name] = {};
+    POS_WEEK_KEYS.forEach(w => {
+      weeklyPosByTech[name][w] = (FULL_POS_DATA[w] || []).filter(p => p.assignedTechnician === name);
+    });
+  });
+  const candidates = DecisionEngine.generateCapacityDecisions(weeklyPosByTech, CURRENT_OPS_WEEK);
+  const existing = getDecisions();
+  const alreadyExists = (c) => existing.some(d => d.type === c.type && d.technicianId === c.technicianId && d.week === c.week);
+  const fresh = candidates.filter(c => !alreadyExists(c));
+  if (fresh.length) {
+    const now = new Date().toISOString();
+    fresh.forEach(c => existing.push({
+      id: 'dec_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8),
+      ...c,
+      status: 'pending',
+      decidedBy: null,
+      decidedAt: null,
+      modifiedNote: null,
+      actualOutcome: null,
+      createdAt: now,
+    }));
+    saveDecisions(existing);
+  }
+  return existing;
+}
+
+// Schválení capacity_overload doporučení => reálný zápis přesunu POS na
+// cílového technika (evidence.suggestedPos/targetTechnician z DecisionEngine,
+// žádná smyšlená data). Drženo striktně uvnitř téhle approval cesty —
+// CLAUDE.md #11a: systém navrhuje, exekuce nastává jen po explicitním
+// schválení Velínem, nikdy automaticky.
+function executeApprovedReassignment(d) {
+  if (d.type !== 'capacity_overload') return;
+  const suggested = d.evidence && d.evidence.suggestedPos;
+  const targetTechnician = d.evidence && d.evidence.targetTechnician;
+  if (!suggested || !suggested.length || !targetTechnician) return;
+  const decidedBy = (getSession() && getSession().user && getSession().user.name) || 'Velín';
+  const reassignedAt = new Date().toISOString();
+  const records = getPosReassignments();
+  const arr = FULL_POS_DATA[d.week] || [];
+  suggested.forEach(sp => {
+    const p = arr.find(x => x.id === sp.id);
+    if (!p) return;
+    const from = p.assignedTechnician;
+    p.assignedTechnician = targetTechnician;
+    p.reassignedBy = { decisionId: d.id, at: reassignedAt, from };
+    records.push({ posId: sp.id, week: d.week, to: targetTechnician, from, decisionId: d.id, reassignedAt, decidedBy });
+  });
+  savePosReassignments(records);
+  refreshPosDataView();
+}
+
+function decideOnDecision(id, status) {
+  const list = getDecisions();
+  const d = list.find(x => x.id === id);
+  if (!d) return;
+  let note = null;
+  if (status === 'modified') note = prompt('Krátká poznámka, co se na návrhu upravuje:') || '';
+  else if (status === 'deferred') note = prompt('Na kdy se odkládá / proč:') || '';
+  else if (status === 'rejected') note = prompt('Důvod zamítnutí:') || '';
+  d.status = status;
+  d.decidedBy = (getSession() && getSession().user && getSession().user.name) || 'Velín';
+  d.decidedAt = new Date().toISOString();
+  if (note) d.modifiedNote = note;
+  if (status === 'approved') executeApprovedReassignment(d);
+  saveDecisions(list);
+  renderDecisionFeed();
+  if (typeof renderAdminDashboard === 'function' && status === 'approved') renderAdminDashboard();
+}
+
+// Action Feed = inbox manažera, ne seznam upozornění. Každá karta odpovídá
+// na "jaké rozhodnutí musím udělat teď" — klik na kartu (mimo tlačítka)
+// otevře Decision Detail s důkazy (priorita 1+2 ze zadání).
+function decisionQuestion(d) {
+  if (d.type === 'capacity_overload' && d.evidence.targetTechnician) {
+    return `Přesunout ${d.evidence.suggestedPos.length} POS z ${d.technicianId} na ${d.evidence.targetTechnician}?`;
+  }
+  return `${d.technicianId} je v týdnu ${d.week} přetížený — zasáhnout?`;
+}
+
+function renderDecisionFeed() {
+  const el = document.getElementById('dash-decisions');
+  if (!el) return;
+  const pending = generateAndPersistCapacityDecisions().filter(d => d.status === 'pending');
+  if (!pending.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-i"><svg class="ic ic-xl"><use href="#ic-check-circle"/></svg></div><div class="empty-t">Žádné návrhy k rozhodnutí</div><div class="empty-s">Decision Engine nenašel přetížení nad rámec běžné zátěže.</div></div>';
+    return;
+  }
+  el.innerHTML = pending.map(d => `
+    <div style="padding:14px;border-bottom:1px solid var(--bg);cursor:pointer" onclick="openDecisionDetail('${d.id}')">
+      <div style="font-size:13px;font-weight:800">${decisionQuestion(d)}</div>
+      <div style="font-size:12px;color:var(--ink);margin-top:5px;line-height:1.4">${d.recommendation}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">Přínos: ${d.estimatedBenefit} · Jistota: ${d.confidence} · <span style="color:var(--teal);font-weight:700">Zobrazit důkazy →</span></div>
+      <div style="display:flex;gap:6px;margin-top:10px" onclick="event.stopPropagation()">
+        <button onclick="decideOnDecision('${d.id}','approved')" style="flex:1;padding:8px;background:var(--gl);color:var(--green);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✓ Schválit</button>
+        <button onclick="decideOnDecision('${d.id}','modified')" style="flex:1;padding:8px;background:var(--bg);color:var(--ink);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Upravit</button>
+        <button onclick="decideOnDecision('${d.id}','deferred')" style="flex:1;padding:8px;background:var(--bg);color:var(--ink);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Odložit</button>
+        <button onclick="decideOnDecision('${d.id}','rejected')" style="flex:1;padding:8px;background:var(--rl);color:var(--red);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✕ Zamítnout</button>
+      </div>
+    </div>`).join('');
+}
+
+// ── DECISION DETAIL — důkazy za doporučením (priorita 1). Manažer musí
+// rozhodovat na základě faktů, ne jen textu. Vše z evidence reálných dat
+// (DecisionEngine), nic vymyšleného.
+function trendBarsHtml(weeklyTrend, targetWeek) {
+  if (!weeklyTrend || !weeklyTrend.length) return '';
+  const max = Math.max(...weeklyTrend.map(t => t.count), 1);
+  return `<div style="display:flex;align-items:flex-end;gap:8px;height:90px;margin-top:8px">
+    ${weeklyTrend.map(t => {
+      const h = Math.round((t.count / max) * 70) + 14;
+      const isTarget = t.week === targetWeek;
+      return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+        <div style="font-size:11px;font-weight:800;color:${isTarget ? 'var(--red)' : 'var(--ink)'}">${t.count}</div>
+        <div style="width:100%;height:${h}px;border-radius:5px 5px 0 0;background:${isTarget ? 'var(--red)' : 'var(--border)'}"></div>
+        <div style="font-size:10px;color:var(--muted)">T${t.week}</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function decisionDetailBodyHtml(d) {
+  const ev = d.evidence || {};
+  const posRows = (ev.suggestedPos || []).map(p => `
+    <tr style="border-bottom:1px solid var(--bg)">
+      <td style="padding:6px 4px;font-size:12px;font-weight:700">${p.id}</td>
+      <td style="padding:6px 4px;font-size:12px">${p.name || ''}</td>
+      <td style="padding:6px 4px;font-size:11px;color:var(--muted)">${p.address || ''}</td>
+      <td style="padding:6px 4px;font-size:12px;text-align:right">${p.distanceKm} km</td>
+    </tr>`).join('');
+  return `
+    <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px">Důkazy</div>
+    <div style="font-size:13px;margin-top:6px">${d.recommendation}</div>
+    ${trendBarsHtml(ev.weeklyTrend, d.week)}
+    <div style="font-size:11px;color:var(--muted);margin-top:6px">Vývoj počtu POS po týdnech — týden ${d.week} (červeně) vs. historický průměr ${ev.historicalAvg}.</div>
+    ${posRows ? `
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:18px">Konkrétní POS k přesunu (nejblíž k ${ev.targetTechnician})</div>
+      <table style="width:100%;margin-top:6px;border-collapse:collapse">
+        <thead><tr style="border-bottom:1.5px solid var(--border)"><th style="text-align:left;font-size:10px;color:var(--muted);padding:4px">POS</th><th style="text-align:left;font-size:10px;color:var(--muted);padding:4px">Název</th><th style="text-align:left;font-size:10px;color:var(--muted);padding:4px">Adresa</th><th style="text-align:right;font-size:10px;color:var(--muted);padding:4px">Vzdál.</th></tr></thead>
+        <tbody>${posRows}</tbody>
+      </table>` : `<div style="font-size:12px;color:var(--muted);margin-top:12px">Bez GPS u dostupných POS nelze vybrat konkrétní přesun — chybí důkaz, doporučení čeká na master GPS data.</div>`}
+    <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:18px">Co se stane po schválení</div>
+    <div style="font-size:12px;margin-top:6px;line-height:1.5">
+      ${ev.suggestedPos && ev.suggestedPos.length
+        ? `${ev.suggestedPos.length} POS výše zmizí z plánu technika <b>${d.technicianId}</b> a okamžitě se objeví v plánu technika <b>${ev.targetTechnician}</b> pro týden ${d.week}. Změna je viditelná v jeho zobrazení hned po schválení, beze zpoždění.`
+        : `Rozhodnutí se uloží jako schválené, ale bez přiřazeného GPS u POS nelze vykonat automatický přesun — vyžaduje manuální zásah Velína.`}
+    </div>
+    <div style="display:flex;gap:6px;margin-top:18px">
+      <button onclick="decideOnDecision('${d.id}','approved');closeDecisionDetail()" style="flex:1;padding:10px;background:var(--gl);color:var(--green);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✓ Schválit</button>
+      <button onclick="decideOnDecision('${d.id}','modified');closeDecisionDetail()" style="flex:1;padding:10px;background:var(--bg);color:var(--ink);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Upravit</button>
+      <button onclick="decideOnDecision('${d.id}','deferred');closeDecisionDetail()" style="flex:1;padding:10px;background:var(--bg);color:var(--ink);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Odložit</button>
+      <button onclick="decideOnDecision('${d.id}','rejected');closeDecisionDetail()" style="flex:1;padding:10px;background:var(--rl);color:var(--red);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✕ Zamítnout</button>
+    </div>`;
+}
+
+function openDecisionDetail(id) {
+  const d = getDecisions().find(x => x.id === id);
+  if (!d) return;
+  document.getElementById('dd-title').textContent = decisionQuestion(d);
+  document.getElementById('dd-body').innerHTML = decisionDetailBodyHtml(d);
+  document.getElementById('decision-detail-modal').classList.add('open');
+}
+
+function closeDecisionDetail() {
+  document.getElementById('decision-detail-modal').classList.remove('open');
 }
 
 // ══════════════════════════════════════════════════════
@@ -1773,6 +2523,57 @@ function submitGlobalPosSearch() {
     String(p.id).toLowerCase().includes(val.toLowerCase()) || (p.n||'').toLowerCase().includes(val.toLowerCase())
   );
   if (matches.length === 1) selectGlobalPosResult(matches[0].p.id);
+}
+
+// ── TECHNICIAN POS SEARCH — hledá jen v POS přiřazených přihlášenému
+// technikovi (přes všechny jeho týdny), ne v celé síti. Otevírá kartu POS
+// rovnou v jejím správném týdnu.
+function getTechPosFlat() {
+  const out = [];
+  for (const w of POS_WEEK_KEYS) {
+    (posData[w] || []).forEach(p => out.push({ p, week: w }));
+  }
+  return out;
+}
+function onTechPosSearch(val) {
+  const q = (val || '').trim().toLowerCase();
+  const box = document.getElementById('tech-pos-search-results');
+  if (!box) return;
+  if (!q) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  const matches = getTechPosFlat().filter(({ p }) =>
+    String(p.id).toLowerCase().includes(q) || (p.n||'').toLowerCase().includes(q) || (p.a||'').toLowerCase().includes(q)
+  ).slice(0, 6);
+  if (!matches.length) {
+    box.style.display = 'block';
+    box.innerHTML = `<div style="padding:12px 14px;font-size:12px;color:var(--muted)">Žádná POS z tvého plánu neodpovídá "${val}"</div>`;
+    return;
+  }
+  box.style.display = 'block';
+  box.innerHTML = matches.map(({ p, week }) => `
+    <div onclick="selectTechPosResult('${p.id}','${week}')" style="padding:10px 14px;border-bottom:1px solid var(--bg);cursor:pointer">
+      <div style="font-size:13px;font-weight:700;color:var(--navy)">#${p.id} · ${p.n||'—'}</div>
+      <div style="font-size:11px;color:var(--muted)">${p.a||'—'} · W${week}</div>
+    </div>`).join('');
+}
+function selectTechPosResult(posId, week) {
+  document.getElementById('tech-pos-search').value = '';
+  document.getElementById('tech-pos-search-results').style.display = 'none';
+  if (!posData[week]) return;
+  const ri = posData[week].findIndex(p => p.id === posId);
+  if (ri < 0) return;
+  cWeek = week; updateHdrLabel(); renderChips(); renderDayTabs();
+  openDetail(ri);
+}
+function submitTechPosSearch() {
+  const val = (document.getElementById('tech-pos-search').value || '').trim();
+  if (!val) return;
+  const flat = getTechPosFlat();
+  const exact = flat.find(({ p }) => String(p.id) === val);
+  if (exact) { selectTechPosResult(exact.p.id, exact.week); return; }
+  const matches = flat.filter(({ p }) =>
+    String(p.id).toLowerCase().includes(val.toLowerCase()) || (p.n||'').toLowerCase().includes(val.toLowerCase())
+  );
+  if (matches.length === 1) selectTechPosResult(matches[0].p.id, matches[0].week);
 }
 
 function buildPosNetRows() {
@@ -2078,6 +2879,24 @@ function renderAdminAlerts() {
     alerts.push({ t: 'orange', i: 'ic-box', title: 'Zásobování bez podpisu', sub: 'Lán Tomáš · Žádné zásobování nebylo potvrzeno podpisem', tm: 'Dnes' });
   }
 
+  // Zpoždění — reálný check-in čas vs. plánovaný příjezd (RouteEngine).
+  // Stejné pořadí/start, jaké vidí technik v Trase (applyStoredRouteOrder +
+  // getEffectiveStartLocation + getStartTime), jen porovnané s tím, co se
+  // reálně stalo (ci_<posId>.inTime) — žádný vymyšlený "plán".
+  const todayDayIdx = getTodayDayIdx();
+  if (todayDayIdx !== null) {
+    const dayPos = (posData[CURRENT_OPS_WEEK] || []).filter(p => p.d === todayDayIdx);
+    if (dayPos.length) {
+      const ordered = applyStoredRouteOrder(dayPos, CURRENT_OPS_WEEK, todayDayIdx);
+      const startLoc = getEffectiveStartLocation();
+      const calc = RouteEngine.calculateRoute(ordered, startLoc);
+      const delays = RouteEngine.checkDelays(ordered, calc, getStartTime(), live.checkins);
+      delays.forEach(d => {
+        alerts.push({ t: 'orange', i: 'ic-clock', title: `Zpoždění — ${d.posName}`, sub: `Lán Tomáš · plán ${d.plannedArrival} · reálně ${d.actualArrival} · o ${d.deltaMin} min později`, tm: 'Live' });
+      });
+    }
+  }
+
   // Týmové alerty — odvozeno z reálných POS přiřazení (FULL_POS_DATA), žádná
   // vymyšlená čísla. Pozadu = isOverdue (technicianModel), výborný výkon = pct.
   const teamTechs = deriveAllTechnicians();
@@ -2207,13 +3026,14 @@ markVisited = function() {
 function visitStateKey(posId, weekKey) { return 'visitstate_' + posId + '_' + weekKey; }
 function getVisitState(posId, weekKey) { return lsg(visitStateKey(posId, weekKey)); }
 function saveVisitState(p, weekKey) {
-  lss(visitStateKey(p.id, weekKey), { v: p.v, taskState: p.taskState, photos: p.photos });
+  lss(visitStateKey(p.id, weekKey), { v: p.v, taskState: p.taskState, photos: p.photos, photoUrls: p.photoUrls });
 }
 function applyVisitState(p, weekKey) {
   const saved = getVisitState(p.id, weekKey);
   if (!saved) return;
   p.v = saved.v;
   if (saved.photos) p.photos = saved.photos;
+  if (saved.photoUrls) p.photoUrls = saved.photoUrls;
   if (saved.taskState) {
     saved.taskState.forEach(st => {
       const match = p.taskState.find(t => t.text === st.text && t.src === st.src);
@@ -2271,13 +3091,14 @@ function injectAdminTasksIntoPosData() {
         if (exists) return;
         p.taskState.push({
           text: task.text,
-          src: 'on_top',
+          src: task.priority === 'servis' ? 'servis' : 'on_top',
           done: false,
           adminTaskId: task.id,
           note: task.deadline ? `Deadline: ${task.deadline}` : undefined,
           priority: task.priority,
           deadline: task.deadline || undefined,
         });
+        if (task.priority === 'servis' && task.servisOnly) p.servisOnly = true;
       });
     });
   });
@@ -2352,7 +3173,7 @@ function renderEditModalBody(mode) {
   }
 
   if (mode === 'pos') {
-    const allPos = FULL_POS_DATA['25'] || [];
+    const allPos = FULL_POS_DATA[CURRENT_OPS_WEEK] || [];
     html += `<label class="ef-label">Vyhledat POS</label>
     <input class="ef-input" id="ef-pos-search" type="text" placeholder="Název nebo ID provozovny…" oninput="filterPosList(this.value)" />
     <div id="ef-pos-list" style="margin-top:8px;max-height:150px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px">
@@ -2372,6 +3193,13 @@ function renderEditModalBody(mode) {
     <div class="ef-chip" onclick="setPriority('servis',this)" style="background:var(--rl);color:var(--red);border-color:var(--red)"><span class="pdot dot-red" style="display:inline-block;margin-right:3px"></span>Servis / Urgentní</div>
     <div class="ef-chip on orange" onclick="setPriority('high',this)"><span class="pdot dot-orange" style="display:inline-block;margin-right:3px"></span>Vysoká</div>
     <div class="ef-chip" onclick="setPriority('normal',this)"><span class="pdot dot-yellow" style="display:inline-block;margin-right:3px"></span>Standardní</div>
+  </div>
+
+  <div id="ef-servisonly-wrap" style="display:none;margin-top:10px">
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer">
+      <input type="checkbox" id="ef-servisonly" />
+      Jen servis — bez merch a povinných fotek osazení
+    </label>
   </div>
 
   <div class="ef-row" style="margin-top:14px">
@@ -2431,6 +3259,11 @@ function setPriority(p, btn) {
   editPriority = p;
   document.querySelectorAll('#ef-priority .ef-chip').forEach(c => c.classList.remove('on'));
   btn.classList.add('on');
+  const wrap = document.getElementById('ef-servisonly-wrap');
+  if (wrap) {
+    wrap.style.display = p === 'servis' ? 'block' : 'none';
+    if (p !== 'servis') { const cb = document.getElementById('ef-servisonly'); if (cb) cb.checked = false; }
+  }
 }
 function updatePosCount() {
   const el = document.getElementById('ef-pos-count'); if (!el) return;
@@ -2450,7 +3283,7 @@ function updatePosCount() {
   el.textContent = count + ' POS';
 }
 function filterPosList(q) {
-  const all = FULL_POS_DATA['25'] || [];
+  const all = FULL_POS_DATA[CURRENT_OPS_WEEK] || [];
   // POS ID je hlavní identifikátor — shody podle ID se zobrazí dřív než shody podle názvu.
   let filtered;
   if (q) {
@@ -2484,6 +3317,7 @@ function saveEditTask() {
     region: editRegionFilter,
     technikName: editModalMode === 'technik' ? document.getElementById('ef-technik')?.value : null,
     posId: editModalMode === 'pos' ? editPosSel : null,
+    servisOnly: editPriority === 'servis' && !!document.getElementById('ef-servisonly')?.checked,
   };
   if (editModalMode === 'pos' && !editPosSel) { alert('Vyber konkrétní POS.'); return; }
   saveAdminTask(task);
@@ -2661,7 +3495,17 @@ doCheckin = function() {
   verifyGPS(posLat, posLng, (lat, lng, dist) => {
     const now = new Date();
     const timeStr = now.toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'});
-    const gpsFlag = dist !== null && dist > 1;
+    // Anti-fraud tvrdý blok: >1km od POS = check-in se nezapíše. Pokus se ale
+    // zaloguje a uvidí ho Velín jako blokovaný pokus — ne jen tichá flag.
+    if (dist !== null && dist > 1) {
+      const flags = lsg('gps_flags_' + today(), []);
+      flags.push({posId: p.id, posName: p.n, time: timeStr, dist: dist, lat, lng, severity: 'critical', blocked: true, action: 'checkin'});
+      lss('gps_flags_' + today(), flags);
+      const el = document.getElementById('gps-status');
+      if (el) el.innerHTML = `<span class="gps-badge gps-err"><svg class="ic ic-sm"><use href="#ic-flag"/></svg> ${dist.toFixed(1)}km od POS — check-in zablokován, musíš být na místě</span>`;
+      return;
+    }
+    const gpsFlag = dist !== null && dist >= 0.3;
     lss('ci_' + p.id, {
       inTs: now.getTime(), inTime: timeStr, out: false,
       gpsLat: lat, gpsLng: lng, gpsDist: dist,
@@ -2670,13 +3514,19 @@ doCheckin = function() {
     if (!lsg('daystart_' + today())) {
       lss('daystart_' + today(), {ts: now.getTime(), time: timeStr, posId: p.id, posName: p.n});
     }
-    // Log GPS flag for admin — >1km je kritická anomálie, 300m-1km jen
-    // varování (vidí ho i technik v UI), ale i to musí být vidět ve velínu,
-    // ať admin nemá falešný pocit krytí v celém pásmu pod 1km.
-    if (dist !== null && dist >= 0.3) {
+    // Log GPS flag for admin — 300m-1km je varování (vidí ho i technik v UI),
+    // ale i to musí být vidět ve velínu, ať admin nemá falešný pocit krytí.
+    if (gpsFlag) {
       const flags = lsg('gps_flags_' + today(), []);
-      flags.push({posId: p.id, posName: p.n, time: timeStr, dist: dist, lat, lng, severity: dist > 1 ? 'critical' : 'warning'});
+      flags.push({posId: p.id, posName: p.n, time: timeStr, dist: dist, lat, lng, severity: 'warning'});
       lss('gps_flags_' + today(), flags);
+    }
+    // GPS patch nahradila celou doCheckin — bez tohohle se ztratí audit log
+    // (VisitStore) z původní funkce, technik by check-in udělal "potichu".
+    if (typeof VisitStore !== 'undefined') {
+      const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
+      VisitStore.setVisitField(tech, p.id, p.n, p.a, null, { status: 'in_progress', started_at: now.toISOString() });
+      VisitStore.logEvent(tech, 'checkin:' + p.id + (gpsFlag ? ':gps_warn:' + dist.toFixed(2) + 'km' : ''));
     }
     renderCheckin();
   });
@@ -2703,7 +3553,7 @@ renderCheckin = function() {
 // AI BRIEFING (Claude API)
 // ══════════════════════════════════════════════════════════════════════════
 async function generateAIBriefing() {
-  const pos = posData['25'] || [];
+  const pos = posData[CURRENT_OPS_WEEK] || [];
   const done = pos.filter(p => p.v).length;
   const svc = pos.filter(p => p.taskState.some(t => t.src==='servis'&&!t.done));
   const adminMsg = lsg('editor_briefing') || '';
@@ -3162,24 +4012,46 @@ function applyStoredRouteOrder(dayPos, week, day){
   return ordered;
 }
 
+// ── Lock navštívené POS + replan zbytku dne ─────────────────────────────────
+// Navštívené POS (p.v, reálný check-in stav) jsou hotové — trasa/optimalizace
+// se jich už nedotýká, jen zbytku dne. Poslední navštívené POS slouží jako
+// reálný výchozí bod pro přeplánování zbytku (aktuálnější než ranní GPS).
+function splitVisitedRoute(dayPos){
+  const visited = dayPos.filter(p => p.v);
+  const unvisited = dayPos.filter(p => !p.v);
+  return { visited, unvisited };
+}
+function remainingRouteStartPoint(visited, fallback){
+  const last = visited.length ? visited[visited.length - 1] : null;
+  if (last && RouteEngine.hasUsableGps(last)) return { lat: last.lat, lng: last.lng };
+  return fallback;
+}
+
 function buildRouteSummaryCard(dayPos, week, day){
-  if (dayPos.length < 2) return null;
-  const startLoc = getStartLocation();
-  const cmp = RouteEngine.compareRoutes(dayPos, startLoc, getStartTime(), day, today());
+  const { visited, unvisited } = splitVisitedRoute(dayPos);
+  if (unvisited.length < 2) return null;
+  const startLoc = remainingRouteStartPoint(visited, getEffectiveStartLocation());
+  let elapsedMin = visited.reduce((sum, p) => sum + RouteEngine.getVisitDurationMin(p), 0);
+  if (getEffectiveStartLocation() && visited.length) {
+    elapsedMin = RouteEngine.calculateRoute(visited, getEffectiveStartLocation()).totalMin;
+  }
+  const cmp = RouteEngine.compareRoutes(unvisited, startLoc, getStartTime(), day, today(), { elapsedMin });
   const hasStoredOrder = !!getStoredRouteOrder(week, day);
   const fewerViolations = cmp.optimizedViolations != null && cmp.optimizedViolations < cmp.currentViolations;
   const showOptimize = cmp.savedKm > 0.5 || fewerViolations;
+  const overBudget = cmp.currentCapacity && cmp.currentCapacity.overBudget;
   const el = document.createElement('div');
   el.style.cssText = 'margin:8px 12px;padding:14px;background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:12px';
   el.innerHTML = `
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;color:var(--navy);font-weight:700;font-size:13px">
-      <svg class="ic ic-sm" style="color:var(--teal)"><use href="#ic-route"/></svg> Trasa dne · ${dayPos.length} POS
+      <svg class="ic ic-sm" style="color:var(--teal)"><use href="#ic-route"/></svg> Trasa dne · ${unvisited.length} zbývá${visited.length ? ` · ${visited.length} hotovo` : ''}
     </div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
       <div><div style="font-size:11px;color:var(--muted)">Jízda</div><div style="font-size:15px;font-weight:700">${RouteEngine.formatKm(cmp.before.drivingKm)}</div><div style="font-size:11px;color:var(--muted)">${RouteEngine.formatHM(cmp.before.drivingMin)}</div></div>
       <div><div style="font-size:11px;color:var(--muted)">Práce na POS</div><div style="font-size:15px;font-weight:700">${RouteEngine.formatHM(cmp.before.workMin)}</div></div>
-      <div><div style="font-size:11px;color:var(--muted)">Celkem</div><div style="font-size:15px;font-weight:700">${RouteEngine.formatHM(cmp.before.totalMin)}</div></div>
+      <div><div style="font-size:11px;color:var(--muted)">Celkem</div><div style="font-size:15px;font-weight:700${overBudget ? ';color:#b8860b' : ''}">${RouteEngine.formatHM(cmp.before.totalMin)}</div></div>
     </div>
+    ${overBudget ? `<div style="font-size:11px;color:#b8860b;font-weight:700;margin-top:6px"><svg class="ic ic-sm"><use href="#ic-warning"/></svg> Přetížený den — o ${RouteEngine.formatHM(cmp.currentCapacity.overMin)} nad pracovní dobou</div>` : ''}
     ${showOptimize ? `
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
       <div style="font-size:12px;color:var(--teal);font-weight:700;display:flex;align-items:center;gap:5px">
@@ -3227,6 +4099,58 @@ function isStartLocationFresh(){
   return !!(loc && loc.date === today());
 }
 
+// Domácí výchozí bod — manuálně uložená pozice (technik si ji sám jednou
+// nastaví v profilu), použije se jako fallback, když dnes ještě nemáme GPS
+// (zamítnuto/timeout/offline). Na rozdíl od start_location se nepřepisuje
+// při každém check-inu, jen když to technik výslovně uloží znovu.
+function technicianHomeKey(){
+  const s = getSession();
+  return 'technician_home_' + ((s && s.user && s.user.id) || 'default');
+}
+function getTechnicianHome(){ return lsg(technicianHomeKey()); }
+function setTechnicianHome(lat, lng){
+  const loc = { lat, lng, ts: Date.now() };
+  lss(technicianHomeKey(), loc);
+  return loc;
+}
+
+// Reálný výchozí bod pro výpočty trasy: GPS (dnešní nebo poslední uložená)
+// má vždy přednost před domácím bodem, protože je aktuálnější. Domácí bod
+// je jen záloha, ne náhrada GPS.
+function getEffectiveStartLocation(){
+  return getStartLocation() || getTechnicianHome();
+}
+// Popisek zdroje pro UI — ať technik i Velín vidí, odkud číslo pochází
+// (žádné tiché nahrazení bez vysvětlení).
+function startLocationSource(){
+  if (getStartLocation()) return isStartLocationFresh() ? 'gps-fresh' : 'gps-stale';
+  if (getTechnicianHome()) return 'home';
+  return 'none';
+}
+function startLocationSourceLabel(){
+  switch (startLocationSource()){
+    case 'gps-fresh': return 'Dnešní pozice (GPS)';
+    case 'gps-stale': return 'Uložená pozice';
+    case 'home': return 'Domácí výchozí bod';
+    default: return null;
+  }
+}
+// Tichý pokus o GPS jednou denně při vstupu do appky — bez tlačítka, bez
+// loading badge. Pokud technik zamítl oprávnění, prohlížeč se znovu nezeptá,
+// takže tohle nikoho neobtěžuje opakovaně. Manuální tlačítko v Trase zůstává
+// jako záloha (např. když se mezi prvním vstupem a odjezdem přesunul).
+function silentCaptureStartLocationOnce(){
+  if (!navigator.geolocation || isStartLocationFresh()) return;
+  const key = 'silent_gps_attempt_' + today();
+  if (lsg(key)) return;
+  lss(key, true);
+  navigator.geolocation.getCurrentPosition(
+    pos => setStartLocation(pos.coords.latitude, pos.coords.longitude, 'gps-auto'),
+    () => {},
+    { enableHighAccuracy: true, timeout: 8000 }
+  );
+}
+
 // Čas odjezdu — potřebný pro spočítání reálného příjezdu na zastávky a
 // porovnání s otevírací dobou POS. Technik si ho může upravit, default 08:00.
 function startTimeKey(){
@@ -3260,19 +4184,22 @@ function recordRouteDecision(week, day, decision){
 function moveRouteStop(week, day, posId, dir){
   const all = posData[week] || [];
   const dayPos = applyStoredRouteOrder(all.filter(p => p.d === day), week, day);
-  const idx = dayPos.findIndex(p => p.id === posId);
+  const { visited, unvisited } = splitVisitedRoute(dayPos);
+  const idx = unvisited.findIndex(p => p.id === posId);
   const swapIdx = idx + dir;
-  if (idx < 0 || swapIdx < 0 || swapIdx >= dayPos.length) return;
-  [dayPos[idx], dayPos[swapIdx]] = [dayPos[swapIdx], dayPos[idx]];
-  setStoredRouteOrder(week, day, dayPos.map(p => p.id));
+  if (idx < 0 || swapIdx < 0 || swapIdx >= unvisited.length) return; // hotové zastávky jsou zamčené, nepřeřazují se
+  [unvisited[idx], unvisited[swapIdx]] = [unvisited[swapIdx], unvisited[idx]];
+  setStoredRouteOrder(week, day, [...visited.map(p => p.id), ...unvisited.map(p => p.id)]);
   showRouteView(week, day);
 }
 
 function useRecommendedRoute(week, day){
   const all = posData[week] || [];
   const dayPos = applyStoredRouteOrder(all.filter(p => p.d === day), week, day);
-  const cmp = RouteEngine.compareRoutes(dayPos, getStartLocation(), getStartTime(), day, today());
-  setStoredRouteOrder(week, day, cmp.optimizedOrderIds);
+  const { visited, unvisited } = splitVisitedRoute(dayPos);
+  const startLoc = remainingRouteStartPoint(visited, getEffectiveStartLocation());
+  const cmp = RouteEngine.compareRoutes(unvisited, startLoc, getStartTime(), day, today());
+  setStoredRouteOrder(week, day, [...visited.map(p => p.id), ...cmp.optimizedOrderIds]);
   recordRouteDecision(week, day, 'accepted');
   showRouteView(week, day);
 }
@@ -3294,7 +4221,19 @@ function renderRouteMap(dayPos, startLoc){
   }
   try {
     techRouteMap = L.map('route-map', { zoomControl: true, attributionControl: false });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 18 }).addTo(techRouteMap);
+    const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 18 }).addTo(techRouteMap);
+    let tilesLoaded = 0, tilesErrored = 0;
+    tiles.on('load', () => { tilesLoaded++; });
+    tiles.on('tileerror', () => {
+      tilesErrored++;
+      if (tilesErrored >= 4 && tilesLoaded === 0) {
+        mapEl.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">
+          Podkladová mapa se nenačetla — zkontroluj připojení k internetu.<br>
+          <button style="margin-top:10px;padding:8px 16px;border-radius:8px;border:1.5px solid var(--border);background:var(--w);color:var(--text);font-size:12px;font-weight:600;cursor:pointer" onclick="renderRouteMap(window.__lastRouteDayPos||[], window.__lastRouteStartLoc)">Zkusit znovu</button>
+        </div>`;
+      }
+    });
+    window.__lastRouteDayPos = dayPos; window.__lastRouteStartLoc = startLoc;
     const coords = [];
     if (startLoc) {
       coords.push([startLoc.lat, startLoc.lng]);
@@ -3320,7 +4259,7 @@ function showRouteView(week, day){
   wrap.innerHTML = '';
   const all = posData[week] || [];
   const dayPos = applyStoredRouteOrder(all.filter(p => p.d === day), week, day);
-  const startLoc = getStartLocation();
+  const startLoc = getEffectiveStartLocation();
   const meta = WEEKS_META[week];
 
   const back = document.createElement('div');
@@ -3341,7 +4280,7 @@ function showRouteView(week, day){
   startCard.innerHTML = `
     <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:6px">Odkud a kdy dnes vyjíždíš?</div>
     <div id="route-start-status" style="margin-bottom:8px">${startLoc
-      ? `<span class="gps-badge gps-ok">✓ ${isStartLocationFresh() ? 'Dnešní pozice' : 'Uložená pozice'} · ${startLoc.lat.toFixed(3)}, ${startLoc.lng.toFixed(3)}</span>`
+      ? `<span class="gps-badge gps-ok">✓ ${startLocationSourceLabel()} · ${startLoc.lat.toFixed(3)}, ${startLoc.lng.toFixed(3)}</span>`
       : '<span class="gps-badge gps-warn"><svg class="ic ic-sm"><use href="#ic-warning"/></svg> Pozice nezjištěna</span>'}</div>
     <button onclick="captureStartLocation(()=>showRouteView('${week}',${day}))" style="width:100%;padding:9px;background:var(--navy);color:var(--teal);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:8px">Zjistit moji pozici</button>
     <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Čas odjezdu</label>
@@ -3357,17 +4296,35 @@ function showRouteView(week, day){
     return;
   }
 
+  // Lock navštívené POS — hotové zastávky jsou zamčené (žádné přeřazení),
+  // optimalizace/otevírací doba se počítá jen pro zbytek dne. Poslední
+  // navštívené POS je reálnější výchozí bod než ranní GPS.
+  const { visited, unvisited } = splitVisitedRoute(dayPos);
+  const orderedDisplay = [...visited, ...unvisited];
+  const effectiveStart = remainingRouteStartPoint(visited, startLoc);
+  // Reálně uplynulý čas (jízda + práce na hotových POS) — posune odhad
+  // příjezdu na zbylé zastávky za to, co technik už opravdu odjel/odpracoval.
+  // Zdroj: stejný engine, žádné vymyšlené zpoždění.
+  let elapsedMin = visited.reduce((sum, p) => sum + RouteEngine.getVisitDurationMin(p), 0);
+  if (startLoc && visited.length) {
+    elapsedMin = RouteEngine.calculateRoute(visited, startLoc).totalMin;
+  }
+  const effectiveStartTime = visited.length
+    ? RouteEngine.formatClock(RouteEngine.parseHM(startTime) + elapsedMin)
+    : startTime;
+
   // Mapa
   const mapWrap = document.createElement('div');
   mapWrap.style.cssText = 'margin:0 12px 10px;border-radius:12px;overflow:hidden;border:1.5px solid var(--border)';
   mapWrap.innerHTML = `<div id="route-map" style="height:240px"></div>`;
   wrap.appendChild(mapWrap);
-  setTimeout(() => renderRouteMap(dayPos, startLoc), 50);
+  setTimeout(() => renderRouteMap(orderedDisplay, startLoc), 50);
 
   // Otevírací doba — jen fakta o příjezdu vs. otevírací době, žádné tiché
   // přeřazení. Vyžaduje výchozí pozici (jinak nelze spočítat reálný příjezd).
-  if (startLoc) {
-    const baseCalc = RouteEngine.calculateRoute(dayPos, startLoc);
+  // Počítá se jen pro nenavštívené zastávky — hotové se už neřeší.
+  if (effectiveStart && unvisited.length) {
+    const baseCalc = RouteEngine.calculateRoute(unvisited, effectiveStart);
 
     if (baseCalc.warnings.length) {
       const gpsCard = document.createElement('div');
@@ -3379,7 +4336,7 @@ function showRouteView(week, day){
       wrap.appendChild(gpsCard);
     }
 
-    const ohIssues = RouteEngine.checkOpeningHours(dayPos, baseCalc, startTime, day);
+    const ohIssues = RouteEngine.checkOpeningHours(unvisited, baseCalc, effectiveStartTime, day);
     if (ohIssues.length) {
       const ohCard = document.createElement('div');
       ohCard.style.cssText = 'margin:0 12px 10px;padding:14px;background:#fff7e6;border:1.5px solid #f5c542;border-radius:12px';
@@ -3397,19 +4354,45 @@ function showRouteView(week, day){
       `;
       wrap.appendChild(ohCard);
     }
+
+    // Kapacita dne — porovnání odhadovaného celkového času (jízda + práce,
+    // včetně už uplynulého času na hotových POS) s rozpočtem pracovní doby.
+    // Jen upozornění + doporučení, nikdy automatické vynechání POS — technik
+    // i Velín vidí stejné doporučení a o přesunu rozhoduje technik sám.
+    const capCheck = RouteEngine.checkCapacity({ totalMin: elapsedMin + baseCalc.totalMin });
+    if (capCheck.overBudget) {
+      const skipSuggestions = RouteEngine.recommendCapacitySkips(unvisited, effectiveStart, elapsedMin, undefined, today());
+      const capCard = document.createElement('div');
+      capCard.style.cssText = 'margin:0 12px 10px;padding:14px;background:#fff7e6;border:1.5px solid #f5c542;border-radius:12px';
+      capCard.innerHTML = `
+        <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:6px"><svg class="ic ic-sm" style="color:#b8860b"><use href="#ic-warning"/></svg> Kapacita dne</div>
+        <div style="font-size:12px;color:var(--td);margin-bottom:${skipSuggestions.length ? '8px' : '0'}">Odhad ${RouteEngine.formatHM(capCheck.totalMin)} přesahuje pracovní dobu (${RouteEngine.formatHM(capCheck.budgetMin)}) o ${RouteEngine.formatHM(capCheck.overMin)}.</div>
+        ${skipSuggestions.length ? `
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Bez vysoké priority/termínu — zvaž přesun na jiný den:</div>
+        ${skipSuggestions.map(s => `
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px">
+            <div style="font-size:12px;color:var(--td)">#${s.posId} ${s.posName} <span style="color:var(--muted)">(${RouteEngine.formatHM(s.durationMin)})</span></div>
+            <button onclick="openAssign('${s.posId}')" style="background:none;color:var(--teal);border:1.5px solid var(--teal);border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0">Naplánovat jinam</button>
+          </div>
+        `).join('')}` : `<div style="font-size:11px;color:var(--muted)">Žádné nízkoprioritní POS k přesunu — všechny zbývající mají servis/termín.</div>`}
+      `;
+      wrap.appendChild(capCard);
+    }
   }
 
-  // Porovnání + volba (jen pokud je co porovnávat a je víc než 1 zastávka)
-  if (dayPos.length > 1) {
-    const cmp = RouteEngine.compareRoutes(dayPos, startLoc, startTime, day, today());
+  // Porovnání + volba (jen pokud je co porovnávat — minimálně 2 nenavštívené
+  // zastávky; hotové POS jsou zamčené a optimalizace se jich nedotýká)
+  if (unvisited.length > 1) {
+    const cmp = RouteEngine.compareRoutes(unvisited, effectiveStart, effectiveStartTime, day, today(), { elapsedMin });
     const fewerViolations = cmp.optimizedViolations != null && cmp.optimizedViolations < cmp.currentViolations;
     const showOpportunity = cmp.savedKm > 0.5 || fewerViolations;
-    const slaCount = dayPos.filter(p => RouteEngine.getSlaWeight(p, today()) > 0).length;
+    const slaCount = unvisited.filter(p => RouteEngine.getSlaWeight(p, today()) > 0).length;
     const checklist = `
       <div style="font-size:11px;font-weight:700;color:var(--navy);letter-spacing:.03em;margin-bottom:8px">ROUTE INTELLIGENCE</div>
-      <div style="font-size:12px;color:var(--td);margin-bottom:2px">✓ Zkontrolováno ${dayPos.length} POS${cmp.exact ? ' (porovnána všechna pořadí)' : ' (optimalizace 2-opt)'}</div>
+      <div style="font-size:12px;color:var(--td);margin-bottom:2px">✓ Zkontrolováno ${unvisited.length} zbývajících POS${visited.length ? ` (${visited.length} hotovo, zamčeno)` : ''}${cmp.exact ? ' (porovnána všechna pořadí)' : ' (optimalizace 2-opt)'}</div>
       <div style="font-size:12px;color:var(--td);margin-bottom:2px">✓ Zkontrolována vzdálenost trasy</div>
       <div style="font-size:12px;color:var(--td);margin-bottom:2px">${cmp.currentViolations != null ? '✓ Zkontrolována otevírací doba' : '○ Otevírací dobu nelze ověřit — chybí pozice/čas odjezdu'}</div>
+      <div style="font-size:12px;color:var(--td);margin-bottom:2px">${cmp.currentCapacity ? `✓ Zkontrolována kapacita dne${cmp.currentCapacity.overBudget ? ` — přetížení o ${RouteEngine.formatHM(cmp.currentCapacity.overMin)}` : ' — v rámci pracovní doby'}` : '○ Kapacitu dne nelze ověřit'}</div>
       <div style="font-size:12px;color:var(--td);margin-bottom:10px">${slaCount > 0 ? `✓ Zkontrolována priorita/SLA — ${slaCount} ${slaCount === 1 ? 'POS' : 'POS'} s vyšší prioritou zohledněno v pořadí` : '✓ Zkontrolována priorita/SLA — žádné POS s blížícím se termínem'}</div>
     `;
     const cmpCard = document.createElement('div');
@@ -3429,7 +4412,7 @@ function showRouteView(week, day){
     ` : `
       ${checklist}
       <div style="font-size:12px;font-weight:700;color:var(--navy)">Výsledek: nejlepší varianta nalezena</div>
-      <div style="font-size:11px;color:var(--muted);margin-top:2px">Tvoje pořadí je už nejlepší možné${cmp.exact ? ' — zkontroloval jsem všechna možná pořadí těchto ' + dayPos.length + ' POS' : ''}.</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">Tvoje pořadí je už nejlepší možné${cmp.exact ? ' — zkontroloval jsem všechna možná pořadí těchto ' + unvisited.length + ' POS' : ''}.</div>
     `;
     wrap.appendChild(cmpCard);
   }
@@ -3441,14 +4424,15 @@ function showRouteView(week, day){
     wrap.appendChild(resetRow);
   }
 
-  // Seznam zastávek s ručním přeřazením
+  // Seznam zastávek — hotové (zamčené, bez přeřazení) nahoře, zbytek dne
+  // editovatelný pod tím. Číslování pokračuje napříč oběma blok
   const lbl = document.createElement('div');
   lbl.className = 'sec-lbl';
   lbl.textContent = `Pořadí zastávek (${dayPos.length})`;
   wrap.appendChild(lbl);
 
   const todayStr = today();
-  dayPos.forEach((p, i) => {
+  function renderStopRow(p, num, opts){
     const tasks = p.taskState || [];
     const hasServis = tasks.some(t => !t.done && t.priority === 'servis');
     const hasDeadline = tasks.some(t => !t.done && t.deadline && t.deadline <= todayStr);
@@ -3463,20 +4447,36 @@ function showRouteView(week, day){
     const row = document.createElement('div');
     row.className = 'pos-card';
     row.style.cursor = 'default';
-    row.innerHTML = `
-      <div class="pci">
-        <div style="width:26px;height:26px;border-radius:50%;background:var(--tl);color:var(--navy);font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i + 1}</div>
-        <div class="pinfo">
-          <div class="pname">${p.n} <span style="font-weight:600;color:var(--muted);font-size:11px">#${p.id}</span>${slaBadge}</div>
-          <div class="paddr">${p.a}</div>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0">
-          <button onclick="moveRouteStop('${week}',${day},'${p.id}',-1)" ${i === 0 ? 'disabled' : ''} style="width:30px;height:26px;border:1px solid var(--border);background:#fff;border-radius:6px;cursor:${i === 0 ? 'default' : 'pointer'};opacity:${i === 0 ? .35 : 1};font-size:13px;font-weight:700">↑</button>
-          <button onclick="moveRouteStop('${week}',${day},'${p.id}',1)" ${i === dayPos.length - 1 ? 'disabled' : ''} style="width:30px;height:26px;border:1px solid var(--border);background:#fff;border-radius:6px;cursor:${i === dayPos.length - 1 ? 'default' : 'pointer'};opacity:${i === dayPos.length - 1 ? .35 : 1};font-size:13px;font-weight:700">↓</button>
-        </div>
-      </div>`;
+    if (opts.locked) {
+      row.style.opacity = '.6';
+      row.innerHTML = `
+        <div class="pci">
+          <div style="width:26px;height:26px;border-radius:50%;background:var(--green);color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">✓</div>
+          <div class="pinfo">
+            <div class="pname">${p.n} <span style="font-weight:600;color:var(--muted);font-size:11px">#${p.id}</span>${slaBadge}</div>
+            <div class="paddr">${p.a}</div>
+          </div>
+          <div style="font-size:11px;color:var(--muted);flex-shrink:0">Hotovo</div>
+        </div>`;
+    } else {
+      row.innerHTML = `
+        <div class="pci">
+          <div style="width:26px;height:26px;border-radius:50%;background:var(--tl);color:var(--navy);font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">${num}</div>
+          <div class="pinfo">
+            <div class="pname">${p.n} <span style="font-weight:600;color:var(--muted);font-size:11px">#${p.id}</span>${slaBadge}</div>
+            <div class="paddr">${p.a}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0">
+            <button onclick="moveRouteStop('${week}',${day},'${p.id}',-1)" ${opts.isFirst ? 'disabled' : ''} style="width:30px;height:26px;border:1px solid var(--border);background:#fff;border-radius:6px;cursor:${opts.isFirst ? 'default' : 'pointer'};opacity:${opts.isFirst ? .35 : 1};font-size:13px;font-weight:700">↑</button>
+            <button onclick="moveRouteStop('${week}',${day},'${p.id}',1)" ${opts.isLast ? 'disabled' : ''} style="width:30px;height:26px;border:1px solid var(--border);background:#fff;border-radius:6px;cursor:${opts.isLast ? 'default' : 'pointer'};opacity:${opts.isLast ? .35 : 1};font-size:13px;font-weight:700">↓</button>
+          </div>
+        </div>`;
+    }
     wrap.appendChild(row);
-  });
+  }
+
+  visited.forEach((p, i) => renderStopRow(p, i + 1, { locked: true }));
+  unvisited.forEach((p, i) => renderStopRow(p, visited.length + i + 1, { locked: false, isFirst: i === 0, isLast: i === unvisited.length - 1 }));
 }
 
 // ── Ranní souhrn dne — co technika čeká + tichá nabídka lepší trasy ─────────
@@ -3484,11 +4484,14 @@ function showRouteView(week, day){
 function buildMorningBriefCard(todayPos, week, day){
   const s = getSession();
   const firstName = ((s && s.user && s.user.name) || '').trim().split(/\s+/).pop() || '';
-  const startLoc = getStartLocation();
-  const cmp = todayPos.length > 1 ? RouteEngine.compareRoutes(todayPos, startLoc, getStartTime(), day, today()) : null;
-  const workMin = todayPos.reduce((sum, p) => sum + RouteEngine.getVisitDurationMin(p), 0);
-  const drivingMin = cmp ? cmp.before.drivingMin : 0;
-  const totalMin = workMin + drivingMin;
+  const startLoc = getEffectiveStartLocation();
+  const { visited, unvisited } = splitVisitedRoute(todayPos);
+  const fullCalc = RouteEngine.calculateRoute(todayPos, startLoc);
+  const totalMin = fullCalc.totalMin;
+  const dayCapacity = RouteEngine.checkCapacity({ totalMin });
+  // Návrh lepší trasy se vztahuje jen na zbytek dne — hotové POS jsou zamčené.
+  const effectiveStart = remainingRouteStartPoint(visited, startLoc);
+  const cmp = unvisited.length > 1 ? RouteEngine.compareRoutes(unvisited, effectiveStart, getStartTime(), day, today()) : null;
   const fewerViolations = cmp && cmp.optimizedViolations != null && cmp.optimizedViolations < cmp.currentViolations;
   const hasSuggestion = cmp && (cmp.savedKm > 0.5 || fewerViolations);
 
@@ -3497,7 +4500,7 @@ function buildMorningBriefCard(todayPos, week, day){
   el.innerHTML = `
     <div style="font-size:15px;font-weight:800">Dobré ráno${firstName ? ', ' + firstName : ''}</div>
     <div style="font-size:12px;color:rgba(255,255,255,.75);margin-top:6px">
-      Dnes: <strong style="color:#fff">${todayPos.length} POS</strong> naplánováno · Odhad <strong style="color:#fff">${RouteEngine.formatHM(totalMin)}</strong>
+      Dnes: <strong style="color:#fff">${todayPos.length} POS</strong> naplánováno · Odhad <strong style="color:${dayCapacity.overBudget ? '#ffd166' : '#fff'}">${RouteEngine.formatHM(totalMin)}</strong>${dayCapacity.overBudget ? ` <span style="color:#ffd166;font-weight:700">(o ${RouteEngine.formatHM(dayCapacity.overMin)} nad pracovní dobou)</span>` : ''}
     </div>
     ${hasSuggestion ? `
     <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.15);display:flex;align-items:center;justify-content:space-between;gap:10px">
@@ -3655,7 +4658,10 @@ makePosCard = function(p, ri, showAssign, locked) {
 const _origMarkVisited2 = markVisited;
 markVisited = function() {
   const p = posData[cWeek][cIdx];
-  if (!p || p.v || !p.taskState.every(t => t.done)) return;
+  if (!p) return;
+  if (p.v) { _origMarkVisited2(); return; } // reopen path — žádný nový visit record
+  if (!p.taskState.every(t => t.done)) return;
+  if (!allPhotosOk(p)) { showMissingPhotosPrompt(); return; }
   recordVisit(p.id, p.n, cWeek, cDay);
   _origMarkVisited2();
 };
@@ -3870,7 +4876,7 @@ function setAdminMaterialStatus(posId, weekKey, section, itemId, status) {
 // ── Make admin live list rows clickable ────────────────────────────────────
 function showTechPOSList(techName) {
   // POS přiřazené KONKRÉTNÍMU technikovi (filtr přes Excel TECHNICIAN), ne celá firma.
-  const all = (FULL_POS_DATA['25'] || []).filter(p => p.assignedTechnician === techName);
+  const all = (FULL_POS_DATA[CURRENT_OPS_WEEK] || []).filter(p => p.assignedTechnician === techName);
   let html = `<div style="padding:20px 18px 32px">
     <div style="font-size:18px;font-weight:800;margin-bottom:4px">${techName}</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:16px">W25 · ${all.length} POS přiřazeno</div>`;
@@ -4098,7 +5104,7 @@ function makePlanCard(p, ri, selectable) {
 // EDITOR SECTIONS (texty / kampaně / inventory katalog)
 // ══════════════════════════════════════════════════════════════════════════
 function showEditorSection(sec, btn) {
-  ['texty','kampane','inventory','ukoly','checklist'].forEach(s => {
+  ['texty','kampane','inventory','ukoly','checklist','merch','refs'].forEach(s => {
     const el = document.getElementById('ed-sec-' + s);
     if (el) el.style.display = s === sec ? 'block' : 'none';
   });
@@ -4108,6 +5114,8 @@ function showEditorSection(sec, btn) {
   if (sec === 'inventory') renderEditorCatalog();
   if (sec === 'ukoly') renderEditorTaskTemplates();
   if (sec === 'checklist') renderEditorChecklistTemplates();
+  if (sec === 'merch') renderEditorMerchItems();
+  if (sec === 'refs') renderEditorRefs();
 }
 
 // ── EDITABLE CAMPAIGNS ─────────────────────────────────────────────────────
@@ -4118,13 +5126,15 @@ function getEditorCampaigns() {
   return [
     {type:'Losy', name:'Zlatá rybka — nová emise', dates:'W23–W28', deadline:'2025-07-11', items:'POUZE nová emise Zlaté rybky — ne původní!\nPlakát A4 nad displej\nStojánek 20 Mega'},
     {type:'Loterie', name:'EuroJackpot', dates:'W23–W28', deadline:'2025-07-11', items:'Plakát A4 EuroJackpot nad displej\nNa Corn totem: 2 plakáty (losy + loterie)'},
-    {type:'Rebranding', name:'Rebranding — 2 POS/den', dates:'Probíhá', deadline:'2025-07-11', items:'Norma 2 rebrandované POS/den\nOdstranit samolepky Sazka mobil\nORLEN: jen výměna losů, NE rebranding'},
+    {type:'Rebranding', name:'Rebranding — 2 POS/den', dates:'Probíhá', deadline:'2025-07-11', items:'Norma 2 rebrandované POS/den\nOdstranit samolepky Sazka mobil\nORLEN: jen výměna losů, NE rebranding', checklistTemplateId:'rebranding-idt-kam'},
   ];
 }
 function saveEditorCampaigns(camps) { lss('editor_campaigns', camps); }
 
 function renderEditorCampaigns() {
   const camps = getEditorCampaigns();
+  const tpls = getChecklistTemplates();
+  const tplIds = Object.keys(tpls);
   const el = document.getElementById('ed-campaigns-list');
   if (!el) return;
   el.innerHTML = camps.map((c,i) => `
@@ -4139,6 +5149,17 @@ function renderEditorCampaigns() {
           <input type="date" value="${c.deadline||''}" oninput="updateCampaign(${i},'deadline',this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:12px;outline:none"/>
         </div>
         <textarea placeholder="Co osadit (každý řádek = položka)" oninput="updateCampaign(${i},'items',this.value)" style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:12px;font-family:inherit;resize:none;min-height:60px;outline:none;line-height:1.5">${c.items||''}</textarea>
+        <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+          <span style="font-size:11px;color:var(--muted);white-space:nowrap">Kanál</span>
+          <select onchange="updateCampaign(${i},'channel',this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:12px;outline:none">
+            ${['ALL','IDT','KA','PETROL','CORN'].map(ch => `<option value="${ch}" ${(c.channel||'ALL')===ch?'selected':''}>${ch==='ALL'?'Všechny kanály':ch}</option>`).join('')}
+          </select>
+          <span style="font-size:11px;color:var(--muted);white-space:nowrap;margin-left:6px">Checklist na POS</span>
+          <select onchange="updateCampaign(${i},'checklistTemplateId',this.value)" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:12px;outline:none">
+            <option value="" ${!c.checklistTemplateId?'selected':''}>— žádný —</option>
+            ${tplIds.map(id => `<option value="${id}" ${c.checklistTemplateId===id?'selected':''}>${tpls[id].name||id}</option>`).join('')}
+          </select>
+        </div>
         <button onclick="deleteCampaign(${i})" style="margin-top:8px;padding:6px 12px;background:var(--rl);color:var(--red);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Smazat kampaň</button>
       </div>
     </div>`).join('');
@@ -4195,6 +5216,128 @@ function deleteCatalogItem(section, i) {
   renderEditorCatalog();
 }
 
+// ── EDITABLE REFERENCE MATERIÁLY ────────────────────────────────────────────
+// Partnerské kódy se berou z reálně naimportovaných POS (p.partner = kategorie
+// z Tourplan exportu) — žádný vymyšlený seznam partnerů.
+function getKaPartnerCodes() {
+  const set = new Set();
+  Object.values(FULL_POS_DATA).forEach(week => week.forEach(p => {
+    if (p.typ === 'KA' && p.partner) set.add(p.partner);
+  }));
+  return Array.from(set).sort();
+}
+
+function refCardHtml(card, removeFn) {
+  return `
+    <div class="editor-item" style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--bg)">
+      <div style="width:64px;height:64px;flex-shrink:0;border-radius:8px;overflow:hidden;background:var(--bg);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative" onclick="this.querySelector('input[type=file]').click()">
+        ${card.img ? `<img src="${card.img}" style="width:100%;height:100%;object-fit:cover"/>` : `<span style="font-size:24px">${card.i||'🖼️'}</span>`}
+        <input type="file" accept="image/*" style="display:none" onchange="${card._onImg}"/>
+      </div>
+      <div style="flex:1">
+        <input value="${(card.l||'').replace(/"/g,'&quot;')}" placeholder="Název" oninput="${card._onLabel}" style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:7px;font-size:13px;font-weight:700;outline:none;margin-bottom:6px"/>
+        <textarea placeholder="Popis — co a kam přesně" oninput="${card._onDesc}" style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:7px;font-size:12px;font-family:inherit;resize:none;min-height:44px;outline:none;line-height:1.4">${card.d||''}</textarea>
+      </div>
+      <button onclick="${removeFn}" style="background:none;border:none;color:var(--red);font-size:16px;cursor:pointer;padding:4px;flex-shrink:0">✕</button>
+    </div>`;
+}
+
+function renderEditorRefsChannel(channel) {
+  const el = document.getElementById('ed-refs-' + channel);
+  if (!el) return;
+  const store = getEditorRefs();
+  const cards = store[channel] || [];
+  el.innerHTML = cards.map((card, i) => {
+    card._onImg = `handleRefImage(event,'${channel}',${i})`;
+    card._onLabel = `updateRefCard('${channel}',${i},'l',this.value)`;
+    card._onDesc = `updateRefCard('${channel}',${i},'d',this.value)`;
+    return refCardHtml(card, `deleteRefCard('${channel}',${i})`);
+  }).join('') || '<div style="padding:14px;text-align:center;color:var(--muted);font-size:12px">Žádné reference</div>';
+}
+function addRefCard(channel) {
+  const store = getEditorRefs();
+  if (!store[channel]) store[channel] = [];
+  store[channel].push({ i: '🖼️', l: 'Nová reference', d: '' });
+  saveEditorRefs(store);
+  renderEditorRefsChannel(channel);
+}
+function updateRefCard(channel, i, field, val) {
+  const store = getEditorRefs();
+  store[channel][i][field] = val;
+  saveEditorRefs(store);
+}
+function deleteRefCard(channel, i) {
+  const store = getEditorRefs();
+  store[channel].splice(i, 1);
+  saveEditorRefs(store);
+  renderEditorRefsChannel(channel);
+}
+function handleRefImage(e, channel, i) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const store = getEditorRefs();
+    if (channel === 'KA') {
+      const key = document.getElementById('ed-refs-ka-key').value;
+      store.KA[key][i].img = ev.target.result;
+    } else {
+      store[channel][i].img = ev.target.result;
+    }
+    saveEditorRefs(store);
+    if (channel === 'KA') renderEditorRefsKa(); else renderEditorRefsChannel(channel);
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderEditorRefsKaPicker() {
+  const sel = document.getElementById('ed-refs-ka-key');
+  if (!sel) return;
+  const partners = getKaPartnerCodes();
+  sel.innerHTML = `<option value="default">Výchozí (všichni KA partneři)</option>` +
+    partners.map(p => `<option value="${p}">${p}</option>`).join('');
+}
+function renderEditorRefsKa() {
+  const key = document.getElementById('ed-refs-ka-key').value || 'default';
+  const store = getEditorRefs();
+  if (!store.KA[key]) store.KA[key] = [];
+  const el = document.getElementById('ed-refs-KA');
+  const cards = store.KA[key];
+  el.innerHTML = cards.map((card, i) => {
+    card._onImg = `handleRefImage(event,'KA',${i})`;
+    card._onLabel = `updateRefCardKa(${i},'l',this.value)`;
+    card._onDesc = `updateRefCardKa(${i},'d',this.value)`;
+    return refCardHtml(card, `deleteRefCardKa(${i})`);
+  }).join('') || '<div style="padding:14px;text-align:center;color:var(--muted);font-size:12px">Žádné reference — použije se výchozí sada</div>';
+}
+function addRefCardKa() {
+  const key = document.getElementById('ed-refs-ka-key').value || 'default';
+  const store = getEditorRefs();
+  if (!store.KA[key]) store.KA[key] = [];
+  store.KA[key].push({ i: '🖼️', l: 'Nová reference', d: '' });
+  saveEditorRefs(store);
+  renderEditorRefsKa();
+}
+function updateRefCardKa(i, field, val) {
+  const key = document.getElementById('ed-refs-ka-key').value || 'default';
+  const store = getEditorRefs();
+  store.KA[key][i][field] = val;
+  saveEditorRefs(store);
+}
+function deleteRefCardKa(i) {
+  const key = document.getElementById('ed-refs-ka-key').value || 'default';
+  const store = getEditorRefs();
+  store.KA[key].splice(i, 1);
+  saveEditorRefs(store);
+  renderEditorRefsKa();
+}
+
+function renderEditorRefs() {
+  ['IDT', 'PETROL', 'CORN'].forEach(renderEditorRefsChannel);
+  renderEditorRefsKaPicker();
+  renderEditorRefsKa();
+}
+
 // ── EDITABLE TASK TEMPLATES — "Úkoly na místě" šablona per kanál (IDT/
 // PETROL/KA/CORN). Velín edituje, technik vidí výsledek v checklistu na POS.
 // Stejný override pattern jako kampaně/inventory katalog výše — beze
@@ -4236,6 +5379,37 @@ function deleteTaskTemplateItem(channel, i) {
   renderEditorTaskTemplates();
 }
 
+// ── EDITABLE MERCH ITEMS — Velín volí, které merch položky vyžadují foto-
+// důkaz při osazení. Většina položek foto nepotřebuje, jen vybrané (např.
+// citlivé/kontrolní). Stejný override pattern jako úkoly na místě výše —
+// beze zásahu do MERCH_ITEMS konstanty, jen lsg/lss override nad ní.
+function getMerchTemplates() {
+  return lsg('editor_merch_items') || JSON.parse(JSON.stringify(MERCH_ITEMS));
+}
+function saveMerchTemplates(t) { lss('editor_merch_items', t); }
+
+function renderEditorMerchItems() {
+  const tpl = getMerchTemplates();
+  Object.keys(MERCH_ITEMS).forEach(channel => {
+    const el = document.getElementById('ed-merch-' + channel);
+    if (!el) return;
+    const items = tpl[channel] || [];
+    el.innerHTML = items.map((x,i) => `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--bg)">
+        <div style="flex:1;font-size:13px">${x.n}</div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer">
+          <input type="checkbox" ${x.reqPhoto?'checked':''} onchange="toggleMerchReqPhoto('${channel}',${i},this.checked)"/>
+          Vyžaduje foto
+        </label>
+      </div>`).join('') || '<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px">Žádné položky</div>';
+  });
+}
+function toggleMerchReqPhoto(channel, i, val) {
+  const tpl = getMerchTemplates();
+  tpl[channel][i].reqPhoto = val;
+  saveMerchTemplates(tpl);
+}
+
 // ── EDITABLE CHECKLIST ŠABLONY — podmíněný checklist (chytrý checklist
 // v detailu POS u technika). Stejný override pattern jako úkoly na místě
 // výše — beze zásahu do CHECKLIST_TEMPLATES konstanty, jen lsg/lss override.
@@ -4257,9 +5431,43 @@ function renderEditorChecklistTemplates() {
     picker.innerHTML = ids.map(id => `<option value="${id}" ${id===edChecklistTplId?'selected':''}>${tpls[id].name || id}</option>`).join('');
     edChecklistTplId = picker.value;
   }
+  const nameInput = document.getElementById('ck-tpl-name');
+  if (nameInput) nameInput.value = (tpls[edChecklistTplId] && tpls[edChecklistTplId].name) || '';
   edChecklistPreviewAnswers = {};
   renderEditorChecklistQuestions();
   renderEdChecklistPreview();
+}
+function addChecklistTemplate() {
+  const tpls = getChecklistTemplates();
+  let n = 1, id = 'nova-sablona';
+  while (tpls[id]) { id = 'nova-sablona-' + (++n); }
+  tpls[id] = { id, name: 'Nová šablona', questions: [] };
+  saveChecklistTemplatesStore(tpls);
+  edChecklistTplId = id;
+  renderEditorChecklistTemplates();
+}
+function renameChecklistTemplate(val) {
+  const tpls = getChecklistTemplates();
+  const tpl = tpls[edChecklistTplId];
+  if (!tpl) return;
+  tpl.name = val;
+  saveChecklistTemplatesStore(tpls);
+  renderEditorChecklistTemplates();
+}
+function deleteChecklistTemplate() {
+  const tpls = getChecklistTemplates();
+  const ids = Object.keys(tpls);
+  if (ids.length <= 1) { alert('Musí zůstat alespoň jedna šablona.'); return; }
+  const usedBy = getEditorCampaigns().filter(c => c.checklistTemplateId === edChecklistTplId);
+  if (usedBy.length) {
+    alert('Šablonu nelze smazat — používá ji kampaň "' + usedBy[0].name + '". Nejdřív jí v Kampaních vyber jinou šablonu.');
+    return;
+  }
+  if (!confirm('Smazat šablonu "' + (tpls[edChecklistTplId].name || edChecklistTplId) + '"?')) return;
+  delete tpls[edChecklistTplId];
+  saveChecklistTemplatesStore(tpls);
+  edChecklistTplId = Object.keys(tpls)[0];
+  renderEditorChecklistTemplates();
 }
 
 function renderEditorChecklistQuestions() {
@@ -4268,26 +5476,50 @@ function renderEditorChecklistQuestions() {
   const el = document.getElementById('ed-checklist-questions');
   if (!el || !tpl) return;
   const ids = tpl.questions.map(q => q.id);
+  // photo nemá smysluplnou "rovná se" hodnotu (jen pending/nic) — nelze na něj větvit
+  const dependableIds = ids.filter(id => tpl.questions.find(q => q.id === id).type !== 'photo');
   el.innerHTML = tpl.questions.map((q,i) => {
-    const otherIds = ids.filter(id => id !== q.id);
+    const otherDependableIds = dependableIds.filter(id => id !== q.id);
     const depOpts = `<option value="">— vždy zobrazit —</option>` +
-      otherIds.map(id => `<option value="${id}" ${q.condition && q.condition.dependsOn===id ? 'selected' : ''}>${id}</option>`).join('');
+      otherDependableIds.map(id => {
+        const depQ = tpl.questions.find(dq => dq.id === id);
+        const depLabel = (depQ && depQ.label) ? depQ.label : id;
+        return `<option value="${id}" ${q.condition && q.condition.dependsOn===id ? 'selected' : ''}>${depLabel.replace(/"/g,'&quot;')}</option>`;
+      }).join('');
+    let equalsField = '';
+    if (q.condition) {
+      const depQ = tpl.questions.find(dq => dq.id === q.condition.dependsOn);
+      if (depQ && depQ.type === 'select') {
+        equalsField = `<select onchange="updateChecklistQuestion(${i},'equals',this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:6px;font-size:12px;outline:none">
+          ${(depQ.options||[]).map(v => `<option value="${v}" ${q.condition.equals===v?'selected':''}>${v}</option>`).join('')}
+        </select>`;
+      } else if (depQ && depQ.type === 'text') {
+        equalsField = `<input value="${(q.condition.equals||'').replace(/"/g,'&quot;')}" placeholder="přesná hodnota" oninput="updateChecklistQuestion(${i},'equals',this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:6px;font-size:12px;outline:none;width:120px"/>`;
+      } else {
+        equalsField = `<select onchange="updateChecklistQuestion(${i},'equals',this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:6px;font-size:12px;outline:none">
+          ${['Ano','Ne'].map(v => `<option value="${v}" ${q.condition.equals===v?'selected':''}>${v}</option>`).join('')}
+        </select>`;
+      }
+    }
     return `
     <div style="padding:12px 14px;border-bottom:1px solid var(--bg)">
       <div style="display:flex;gap:8px;margin-bottom:8px">
+        <div style="display:flex;flex-direction:column">
+          <button onclick="moveChecklistQuestion(${i},-1)" ${i===0?'disabled':''} style="background:none;border:none;color:${i===0?'var(--border)':'var(--muted)'};font-size:12px;cursor:${i===0?'default':'pointer'};padding:0 4px;line-height:1.2">▲</button>
+          <button onclick="moveChecklistQuestion(${i},1)" ${i===tpl.questions.length-1?'disabled':''} style="background:none;border:none;color:${i===tpl.questions.length-1?'var(--border)':'var(--muted)'};font-size:12px;cursor:${i===tpl.questions.length-1?'default':'pointer'};padding:0 4px;line-height:1.2">▼</button>
+        </div>
         <input value="${(q.label||'').replace(/"/g,'&quot;')}" placeholder="Text otázky" oninput="updateChecklistQuestion(${i},'label',this.value)" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:13px;outline:none"/>
         <select onchange="updateChecklistQuestion(${i},'type',this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:12px;outline:none">
           ${['bool','text','photo','select'].map(t => `<option value="${t}" ${q.type===t?'selected':''}>${t}</option>`).join('')}
         </select>
         <button onclick="deleteChecklistQuestion(${i})" style="background:none;border:none;color:var(--red);font-size:16px;cursor:pointer;padding:4px">✕</button>
       </div>
+      ${q.type==='select' ? `<input value="${(q.options||[]).join(', ').replace(/"/g,'&quot;')}" placeholder="Možnosti, oddělené čárkou" oninput="updateChecklistQuestion(${i},'options',this.value)" style="width:100%;margin-bottom:8px;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:12px;outline:none"/>` : ''}
       <div style="display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted)">
         <span>id: <code>${q.id}</code></span>
         <span style="margin-left:auto">Závisí na</span>
         <select onchange="updateChecklistQuestion(${i},'dependsOn',this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:6px;font-size:12px;outline:none">${depOpts}</select>
-        ${q.condition ? `<span>rovná se</span><select onchange="updateChecklistQuestion(${i},'equals',this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:6px;font-size:12px;outline:none">
-          ${['Ano','Ne'].map(v => `<option value="${v}" ${q.condition.equals===v?'selected':''}>${v}</option>`).join('')}
-        </select>` : ''}
+        ${q.condition ? `<span>rovná se</span>${equalsField}` : ''}
       </div>
     </div>`;
   }).join('') || '<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px">Žádné otázky</div>';
@@ -4298,10 +5530,17 @@ function updateChecklistQuestion(i, field, val) {
   const tpl = tpls[edChecklistTplId];
   const q = tpl.questions[i];
   if (field === 'dependsOn') {
-    if (!val) delete q.condition;
-    else q.condition = { dependsOn: val, equals: (q.condition && q.condition.equals) || 'Ano' };
+    if (!val) {
+      delete q.condition;
+    } else {
+      const depQ = tpl.questions.find(dq => dq.id === val);
+      const defaultEquals = depQ && depQ.type === 'select' ? (depQ.options||[])[0] || '' : depQ && depQ.type === 'text' ? '' : 'Ano';
+      q.condition = { dependsOn: val, equals: defaultEquals };
+    }
   } else if (field === 'equals') {
     if (q.condition) q.condition.equals = val;
+  } else if (field === 'options') {
+    q.options = val.split(',').map(s => s.trim()).filter(Boolean);
   } else {
     q[field] = val;
   }
@@ -4311,6 +5550,17 @@ function updateChecklistQuestion(i, field, val) {
   renderEdChecklistPreview();
 }
 
+function moveChecklistQuestion(i, dir) {
+  const tpls = getChecklistTemplates();
+  const tpl = tpls[edChecklistTplId];
+  const j = i + dir;
+  if (j < 0 || j >= tpl.questions.length) return;
+  [tpl.questions[i], tpl.questions[j]] = [tpl.questions[j], tpl.questions[i]];
+  saveChecklistTemplatesStore(tpls);
+  renderEditorChecklistQuestions();
+  edChecklistPreviewAnswers = {};
+  renderEdChecklistPreview();
+}
 function addChecklistQuestion() {
   const tpls = getChecklistTemplates();
   const tpl = tpls[edChecklistTplId];
