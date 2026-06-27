@@ -108,35 +108,37 @@ const INV_DEFAULT = {
 };
 
 // Merch items per channel - co se osazuje (bez podpisu)
+// sapCode: prázdné, dokud Velín nedoplní v Editoru — žádný vymyšlený kód
+// (potřeba pro report odepsaného materiálu → reálný odpis v SAPu).
 const MERCH_ITEMS = {
   IDT:[
-    {n:'Plakát A4 — aktuální kampaň',done:null,reqPhoto:false},
-    {n:'Samolepka na stojan (20 Mega)',done:null,reqPhoto:false},
-    {n:'Odstranění starých materiálů Sazka',done:null,reqPhoto:false},
+    {n:'Plakát A4 — aktuální kampaň',done:null,reqPhoto:false,sapCode:''},
+    {n:'Samolepka na stojan (20 Mega)',done:null,reqPhoto:false,sapCode:''},
+    {n:'Odstranění starých materiálů Sazka',done:null,reqPhoto:false,sapCode:''},
   ],
   PETROL:[
-    {n:'Plakát A4 — aktuální kampaň',done:null,reqPhoto:false},
-    {n:'Samolepka na stojan (20 Mega)',done:null,reqPhoto:false},
-    {n:'Osadit totem — plakáty přední + zadní',done:null,reqPhoto:false},
-    {n:'Korunka 15" — Zlatá rybka',done:null,reqPhoto:false},
-    {n:'Odstranění starých materiálů Sazka',done:null,reqPhoto:false},
+    {n:'Plakát A4 — aktuální kampaň',done:null,reqPhoto:false,sapCode:''},
+    {n:'Samolepka na stojan (20 Mega)',done:null,reqPhoto:false,sapCode:''},
+    {n:'Osadit totem — plakáty přední + zadní',done:null,reqPhoto:false,sapCode:''},
+    {n:'Korunka 15" — Zlatá rybka',done:null,reqPhoto:false,sapCode:''},
+    {n:'Odstranění starých materiálů Sazka',done:null,reqPhoto:false,sapCode:''},
   ],
   KA:[
-    {n:'Plakát A4 losy — dle plánogramu partnera',done:null,reqPhoto:false},
-    {n:'Samolepka na stojan (20 Mega)',done:null,reqPhoto:false},
-    {n:'Osadit totem — 2 plakáty (losy + loterie)',done:null,reqPhoto:false},
-    {n:'Korunka 15" — Zlatá rybka',done:null,reqPhoto:false},
-    {n:'Kontrola planogramu — správná pozice',done:null,reqPhoto:false},
-    {n:'Odstranění starých materiálů Sazka',done:null,reqPhoto:false},
+    {n:'Plakát A4 losy — dle plánogramu partnera',done:null,reqPhoto:false,sapCode:''},
+    {n:'Samolepka na stojan (20 Mega)',done:null,reqPhoto:false,sapCode:''},
+    {n:'Osadit totem — 2 plakáty (losy + loterie)',done:null,reqPhoto:false,sapCode:''},
+    {n:'Korunka 15" — Zlatá rybka',done:null,reqPhoto:false,sapCode:''},
+    {n:'Kontrola planogramu — správná pozice',done:null,reqPhoto:false,sapCode:''},
+    {n:'Odstranění starých materiálů Sazka',done:null,reqPhoto:false,sapCode:''},
   ],
   CORN:[
-    {n:'Primární pult — osadit aktuální emisi dle plánogramu',done:null,reqPhoto:false},
-    {n:'Sekundární pult — osadit všechny losy dle plánogramu',done:null,reqPhoto:false},
-    {n:'Totem přední strana — plakát Losy (Zlatá rybka)',done:null,reqPhoto:false},
-    {n:'Totem zadní strana — plakát Loterie (EuroJackpot)',done:null,reqPhoto:false},
-    {n:'Barketa Rybky + stojánek 20 Mega',done:null,reqPhoto:false},
-    {n:'Kontrola: žádná bílá plocha na totemu',done:null,reqPhoto:false},
-    {n:'Odstranění starých materiálů — veškerá Sazka visibilita',done:null,reqPhoto:false},
+    {n:'Primární pult — osadit aktuální emisi dle plánogramu',done:null,reqPhoto:false,sapCode:''},
+    {n:'Sekundární pult — osadit všechny losy dle plánogramu',done:null,reqPhoto:false,sapCode:''},
+    {n:'Totem přední strana — plakát Losy (Zlatá rybka)',done:null,reqPhoto:false,sapCode:''},
+    {n:'Totem zadní strana — plakát Loterie (EuroJackpot)',done:null,reqPhoto:false,sapCode:''},
+    {n:'Barketa Rybky + stojánek 20 Mega',done:null,reqPhoto:false,sapCode:''},
+    {n:'Kontrola: žádná bílá plocha na totemu',done:null,reqPhoto:false,sapCode:''},
+    {n:'Odstranění starých materiálů — veškerá Sazka visibilita',done:null,reqPhoto:false,sapCode:''},
   ],
 };
 // Servisní dotazník — datově řízený strom polí (žádná logika tu není,

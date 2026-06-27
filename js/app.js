@@ -359,6 +359,7 @@ function showAdmPage(p,btn){
   if(p==='posnet') renderAdminPosNet();
   if(p==='foto') renderAdminFoto();
   if(p==='alerts') renderAdminAlerts();
+  if(p==='odpis') renderAdminOdpis();
   pushRoute();
 }
 
@@ -1194,7 +1195,7 @@ function getCampaignTaskOverridesForChannel(channel){
 function getCampaignMerchOverridesForChannel(channel){
   const items=[];
   getActiveCampaignsForChannel(channel).forEach(c=>{
-    (c.merchOverride||[]).forEach(m=>{ if(m&&m.n&&m.n.trim()) items.push({n:m.n.trim(),done:null,reqPhoto:!!m.reqPhoto,src:'campaign',campaign:c.name}); });
+    (c.merchOverride||[]).forEach(m=>{ if(m&&m.n&&m.n.trim()) items.push({n:m.n.trim(),done:null,reqPhoto:!!m.reqPhoto,sapCode:m.sapCode||'',src:'campaign',campaign:c.name}); });
   });
   return items;
 }
@@ -3285,6 +3286,109 @@ function renderAdminFoto() {
         if (title) title.textContent = 'Žádné fotky neodpovídají filtru';
         if (body) body.textContent = 'Zkus zúžit nebo zrušit vybrané filtry.';
       }
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// ODPIS MATERIÁLU — report pro reálný odpis v SAPu.
+// Zdroj: 'merch_{posId}_{YYYY-MM-DD}' (stejný klíč jako getMediaItems),
+// jen filtrujeme done===true (osazeno) a agregujeme podle SAP kódu.
+// Položky bez SAP kódu se NEVYNECHÁVAJÍ ani nedostanou vymyšlený kód —
+// zobrazí se zvlášť jako "chybí SAP kód", ať je Velín doplní v Editoru.
+// ══════════════════════════════════════════════════════
+function getMaterialWriteOffData(filters) {
+  filters = filters || {};
+  const instances = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    const m = key && key.match(/^merch_(\d+)_(\d{4}-\d{2}-\d{2})$/);
+    if (!m) continue;
+    const [, posId, date] = m;
+    const found = findPosAcrossWeeks(posId);
+    (lsg(key, []) || []).forEach(item => {
+      if (item.done !== true) return;
+      instances.push({
+        n: item.n, sapCode: item.sapCode || '', posId,
+        posName: found ? found.pos.n : posId,
+        technician: found ? found.pos.assignedTechnician : null,
+        date,
+      });
+    });
+  }
+  const filtered = instances.filter(it => {
+    if (filters.date && it.date !== filters.date) return false;
+    if (filters.technician && it.technician !== filters.technician) return false;
+    return true;
+  });
+  const groups = {};
+  filtered.forEach(it => {
+    const key = (it.sapCode || '\0') + '||' + it.n;
+    if (!groups[key]) groups[key] = { n: it.n, sapCode: it.sapCode, qty: 0, instances: [] };
+    groups[key].qty++;
+    groups[key].instances.push(it);
+  });
+  return Object.values(groups).sort((a, b) => (a.sapCode ? 0 : 1) - (b.sapCode ? 0 : 1) || b.qty - a.qty);
+}
+
+let writeOffFilters = { date: null, technician: null };
+
+function setWriteOffFilter(key, value) {
+  writeOffFilters[key] = writeOffFilters[key] === value ? null : value;
+  renderAdminOdpis();
+}
+
+function exportWriteOffReport() {
+  const groups = getMaterialWriteOffData(writeOffFilters);
+  if (!groups.length) { alert('Žádná osazená položka k odpisu v aktuálním filtru.'); return; }
+  const summaryRows = [['SAP kód', 'Název položky', 'Počet ks']];
+  groups.forEach(g => summaryRows.push([g.sapCode || 'CHYBÍ SAP KÓD', g.n, g.qty]));
+  const detailRows = [['SAP kód', 'Název položky', 'POS ID', 'POS název', 'Technik', 'Datum']];
+  groups.forEach(g => g.instances.forEach(it => detailRows.push([g.sapCode || 'CHYBÍ SAP KÓD', g.n, it.posId, it.posName, it.technician || '', it.date])));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryRows), 'Souhrn pro SAP');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(detailRows), 'Detail po POS');
+  XLSX.writeFile(wb, 'odpis_materialu_' + today() + '.xlsx');
+}
+
+function renderAdminOdpis() {
+  const allGroups = getMaterialWriteOffData({});
+  const dates = [...new Set(allGroups.flatMap(g => g.instances.map(it => it.date)))].sort().reverse();
+  const technicians = [...new Set(allGroups.flatMap(g => g.instances.map(it => it.technician)).filter(Boolean))].sort();
+
+  const filtersEl = document.getElementById('odpis-filters');
+  if (filtersEl) {
+    const chip = (label, active, key, value) => `<button onclick="setWriteOffFilter('${key}','${value}')" style="font-size:11px;font-weight:700;padding:5px 11px;border-radius:20px;border:1.5px solid ${active ? 'var(--navy)' : 'var(--border)'};background:${active ? 'var(--navy)' : '#fff'};color:${active ? '#fff' : 'var(--text)'};cursor:pointer">${label}</button>`;
+    let html = '';
+    technicians.forEach(t => { html += chip(t, writeOffFilters.technician === t, 'technician', t); });
+    dates.slice(0, 8).forEach(d => { html += chip(d, writeOffFilters.date === d, 'date', d); });
+    filtersEl.innerHTML = html;
+  }
+
+  const groups = getMaterialWriteOffData(writeOffFilters);
+  const withSap = groups.filter(g => g.sapCode);
+  const withoutSap = groups.filter(g => !g.sapCode);
+
+  const row = g => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--bg)">
+      <div style="width:90px;font-size:12px;font-weight:700;color:${g.sapCode ? 'var(--text)' : 'var(--orange)'}">${g.sapCode || 'chybí SAP'}</div>
+      <div style="flex:1;font-size:13px">${g.n}</div>
+      <div style="font-size:13px;font-weight:800">${g.qty} ks</div>
+    </div>`;
+
+  const tableEl = document.getElementById('odpis-table');
+  if (tableEl) {
+    tableEl.innerHTML = withSap.length
+      ? withSap.map(row).join('')
+      : '<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px">Žádná osazená položka se SAP kódem v tomto filtru</div>';
+  }
+
+  const warnEl = document.getElementById('odpis-missing-sap');
+  if (warnEl) {
+    warnEl.style.display = withoutSap.length ? 'block' : 'none';
+    if (withoutSap.length) {
+      warnEl.innerHTML = `<div style="font-weight:800;font-size:12px;color:var(--orange);margin-bottom:6px">⚠ ${withoutSap.length} položek bez SAP kódu — nelze odepsat v SAPu, doplň kód v Editoru → Merch položky</div>` +
+        withoutSap.map(row).join('');
     }
   }
 }
@@ -5849,6 +5953,7 @@ function renderEditorCampaigns() {
             ${(c.merchOverride||[]).map((m,j) => `
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
               <input value="${m.n||''}" placeholder="Název položky" oninput="updateCampaignMerchItem(${i},${j},'n',this.value)" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:7px;font-size:12px;outline:none"/>
+              <input value="${m.sapCode||''}" placeholder="SAP kód" oninput="updateCampaignMerchItem(${i},${j},'sapCode',this.value)" style="width:100px;border:1.5px solid ${m.sapCode?'var(--border)':'var(--orange)'};border-radius:8px;padding:7px;font-size:11px;outline:none"/>
               <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);cursor:pointer;white-space:nowrap">
                 <input type="checkbox" ${m.reqPhoto?'checked':''} onchange="updateCampaignMerchItem(${i},${j},'reqPhoto',this.checked)"/> Foto
               </label>
@@ -5869,7 +5974,7 @@ function updateCampaignTaskOverride(i, val) {
 function addCampaignMerchItem(i) {
   const camps = getEditorCampaigns();
   if (!camps[i].merchOverride) camps[i].merchOverride = [];
-  camps[i].merchOverride.push({ n: 'Nová položka', reqPhoto: false });
+  camps[i].merchOverride.push({ n: 'Nová položka', reqPhoto: false, sapCode: '' });
   saveEditorCampaigns(camps);
   renderEditorCampaigns();
 }
@@ -6117,6 +6222,7 @@ function renderEditorMerchItems() {
     el.innerHTML = items.map((x,i) => `
       <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--bg)">
         <input value="${x.n}" oninput="updateMerchTemplateItem('${channel}',${i},this.value)" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:13px;outline:none"/>
+        <input value="${x.sapCode||''}" placeholder="SAP kód" oninput="updateMerchTemplateSap('${channel}',${i},this.value)" style="width:110px;border:1.5px solid ${x.sapCode?'var(--border)':'var(--orange)'};border-radius:8px;padding:8px;font-size:12px;outline:none"/>
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap">
           <input type="checkbox" ${x.reqPhoto?'checked':''} onchange="toggleMerchReqPhoto('${channel}',${i},this.checked)"/>
           Vyžaduje foto
@@ -6135,10 +6241,16 @@ function updateMerchTemplateItem(channel, i, val) {
   tpl[channel][i].n = val;
   saveMerchTemplates(tpl);
 }
+function updateMerchTemplateSap(channel, i, val) {
+  const tpl = getMerchTemplates();
+  tpl[channel][i].sapCode = val;
+  saveMerchTemplates(tpl);
+  renderEditorMerchItems();
+}
 function addMerchTemplateItem(channel) {
   const tpl = getMerchTemplates();
   if (!tpl[channel]) tpl[channel] = [];
-  tpl[channel].push({ n: 'Nová položka', done: null, reqPhoto: false });
+  tpl[channel].push({ n: 'Nová položka', done: null, reqPhoto: false, sapCode: '' });
   saveMerchTemplates(tpl);
   renderEditorMerchItems();
 }

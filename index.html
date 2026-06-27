@@ -692,6 +692,7 @@
       <button class="adm-btn" onclick="showAdmPage('import',this)"><svg class="ic ic-sm"><use href="#ic-upload"/></svg> Import dat</button>
       <button class="adm-btn" onclick="showAdmPage('alerts',this)"><svg class="ic ic-sm"><use href="#ic-warning"/></svg> Flagy</button>
       <button class="adm-btn" onclick="showAdmPage('foto',this)"><svg class="ic ic-sm"><use href="#ic-camera"/></svg> Fotky</button>
+      <button class="adm-btn" onclick="showAdmPage('odpis',this)"><svg class="ic ic-sm"><use href="#ic-upload"/></svg> Odpis materiálu</button>
       <button class="adm-btn" onclick="showAdmPage('redakce',this)"><svg class="ic ic-sm"><use href="#ic-edit"/></svg> Úkoly</button>
       <button class="adm-btn" onclick="showAdmPage('ai',this)"><svg class="ic ic-sm"><use href="#ic-intel"/></svg> Intelligence</button>
       <button class="adm-btn" onclick="showAdmPage('editor',this)"><svg class="ic ic-sm"><use href="#ic-edit"/></svg> Editor</button>
@@ -1191,6 +1192,19 @@
         <div id="foto-empty-title" style="font-weight:700;color:var(--text);margin-bottom:4px">Fotky z návštěv</div>
         <div id="foto-empty-body">Technici fotí terminál, merch položky a evidenci úkolů. Zobrazí se zde v reálném čase.</div>
       </div>
+    </div>
+
+    <div class="adm-page" id="adm-odpis">
+      <div class="adm-sh">
+        <div class="adm-st">Odpis materiálu</div>
+        <button onclick="exportWriteOffReport()" style="padding:7px 14px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Export do Excelu (pro SAP)</button>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Osazené merch položky agregované podle SAP kódu — slouží jako podklad pro odpis materiálu v SAPu. Položky bez SAP kódu se odepsat nedají, dokud kód nedoplníš v Editoru → Merch položky.</div>
+      <div id="odpis-filters" style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px"></div>
+      <div style="background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden">
+        <div id="odpis-table"></div>
+      </div>
+      <div id="odpis-missing-sap" style="margin-top:14px;background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;display:none"></div>
     </div>
 
   </div>
