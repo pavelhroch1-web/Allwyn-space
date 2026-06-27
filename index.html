@@ -1170,7 +1170,12 @@
         </div>
         <div class="editor-card" id="ed-refs-CORN"></div>
 
-        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">KA partner</div>
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">KA partner</div></div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Skupiny partnerů — víc partnerů (např. Albert + Geco) může sdílet stejnou referenci, beze ztráty možnosti mít jednoho partnera zvlášť.</div>
+        <div id="ed-refs-ka-groups" style="margin-bottom:10px"></div>
+        <button onclick="addKaPartnerGroup()" style="background:var(--gl);color:var(--green);border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;margin-bottom:14px">+ Skupina partnerů</button>
+
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">Editovat referenci</div>
           <button onclick="addRefCardKa()" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Reference</button>
         </div>
         <select id="ed-refs-ka-key" onchange="renderEditorRefsKa()" style="width:100%;margin-bottom:10px;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:13px;outline:none"></select>

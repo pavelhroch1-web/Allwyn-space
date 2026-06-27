@@ -891,6 +891,11 @@ function getRefsForPos(p){
   const store = getEditorRefs();
   if (p.typ === 'KA') {
     const partner = p.partner;
+    // Skupina partnerů (Albert+Geco apod.) má přednost před samostatným
+    // per-partner klíčem — Velín tím může víc partnerům přiřadit stejnou
+    // referenci najednou, beze ztráty možnosti mít jednoho partnera zvlášť.
+    const grp = partner && (store.KA_GROUPS||[]).find(g => (g.partners||[]).includes(partner));
+    if (grp && store.KA[grp.id] && store.KA[grp.id].length) return store.KA[grp.id];
     if (partner && store.KA[partner] && store.KA[partner].length) return store.KA[partner];
     return store.KA.default || [];
   }
@@ -1168,11 +1173,19 @@ function getPosChannel(p){
 // Kampaně, které právě běží pro daný kanál (kanál sedí + deadline nevypršel).
 // Sdílený match pattern pro checklist/úkoly/merch override níže — kampaň
 // "smí" přepsat/doplnit kanálový globál, ne ho nahradit natvrdo.
+// Kanály kampaně — nově multi-select (c.channels=[]). Prázdné/chybí pole
+// = všechny kanály (nahrazuje starší c.channel==='ALL'). c.channel (string)
+// je zpětně kompatibilní zápis ze starších dat, čte se jen když channels chybí.
+function getCampaignChannels(c){
+  if(c.channels&&c.channels.length)return c.channels;
+  if(c.channel&&c.channel!=='ALL')return [c.channel];
+  return null; // null = všechny kanály
+}
 function getActiveCampaignsForChannel(channel){
   const today=new Date();today.setHours(0,0,0,0);
   return getEditorCampaigns().filter(c=>{
-    const ch=c.channel||'ALL';
-    if(ch!=='ALL'&&ch!==channel)return false;
+    const chans=getCampaignChannels(c);
+    if(chans&&!chans.includes(channel))return false;
     if(c.deadline){const dl=new Date(c.deadline);if(dl<today)return false;}
     return true;
   });
@@ -5932,12 +5945,16 @@ function renderEditorCampaigns() {
           <input type="date" value="${c.deadline||''}" oninput="updateCampaign(${i},'deadline',this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:12px;outline:none"/>
         </div>
         <textarea placeholder="Co osadit (každý řádek = položka)" oninput="updateCampaign(${i},'items',this.value)" style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:12px;font-family:inherit;resize:none;min-height:60px;outline:none;line-height:1.5">${c.items||''}</textarea>
+        <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:11px;color:var(--muted);white-space:nowrap">Kanály</span>
+          ${(() => { const chans = getCampaignChannels(c); return ['IDT','KA','PETROL','CORN'].map(ch => {
+            const active = chans === null || chans.includes(ch);
+            return `<button type="button" onclick="toggleCampaignChannel(${i},'${ch}')" style="font-size:11px;font-weight:700;padding:5px 11px;border-radius:20px;border:1.5px solid ${active ? 'var(--navy)' : 'var(--border)'};background:${active ? 'var(--navy)' : '#fff'};color:${active ? '#fff' : 'var(--text)'};cursor:pointer">${ch}</button>`;
+          }).join(''); })()}
+          <span style="font-size:10px;color:var(--muted)">${getCampaignChannels(c) === null ? '(nic vybráno = všechny kanály)' : ''}</span>
+        </div>
         <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
-          <span style="font-size:11px;color:var(--muted);white-space:nowrap">Kanál</span>
-          <select onchange="updateCampaign(${i},'channel',this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:12px;outline:none">
-            ${['ALL','IDT','KA','PETROL','CORN'].map(ch => `<option value="${ch}" ${(c.channel||'ALL')===ch?'selected':''}>${ch==='ALL'?'Všechny kanály':ch}</option>`).join('')}
-          </select>
-          <span style="font-size:11px;color:var(--muted);white-space:nowrap;margin-left:6px">Checklist na POS</span>
+          <span style="font-size:11px;color:var(--muted);white-space:nowrap">Checklist na POS</span>
           <select onchange="updateCampaign(${i},'checklistTemplateId',this.value)" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:12px;outline:none">
             <option value="" ${!c.checklistTemplateId?'selected':''}>— žádný —</option>
             ${tplIds.map(id => `<option value="${id}" ${c.checklistTemplateId===id?'selected':''}>${tpls[id].name||id}</option>`).join('')}
@@ -5965,6 +5982,17 @@ function renderEditorCampaigns() {
         <button onclick="deleteCampaign(${i})" style="margin-top:10px;padding:6px 12px;background:var(--rl);color:var(--red);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Smazat kampaň</button>
       </div>
     </div>`).join('');
+}
+function toggleCampaignChannel(i, ch) {
+  const camps = getEditorCampaigns();
+  const c = camps[i];
+  let chans = getCampaignChannels(c);
+  chans = chans === null ? ['IDT','KA','PETROL','CORN'] : [...chans];
+  if (chans.includes(ch)) chans = chans.filter(x => x !== ch); else chans.push(ch);
+  c.channels = chans.length === 4 ? [] : chans;
+  delete c.channel;
+  saveEditorCampaigns(camps);
+  renderEditorCampaigns();
 }
 function updateCampaignTaskOverride(i, val) {
   const camps = getEditorCampaigns();
@@ -6119,8 +6147,69 @@ function renderEditorRefsKaPicker() {
   const sel = document.getElementById('ed-refs-ka-key');
   if (!sel) return;
   const partners = getKaPartnerCodes();
+  const groups = getEditorRefs().KA_GROUPS || [];
   sel.innerHTML = `<option value="default">Výchozí (všichni KA partneři)</option>` +
-    partners.map(p => `<option value="${p}">${p}</option>`).join('');
+    (groups.length ? `<optgroup label="Skupiny partnerů">${groups.map(g => `<option value="${g.id}">👥 ${g.label||g.id} (${(g.partners||[]).join(', ')||'bez partnerů'})</option>`).join('')}</optgroup>` : '') +
+    `<optgroup label="Jednotlivý partner">${partners.map(p => `<option value="${p}">${p}</option>`).join('')}</optgroup>`;
+}
+
+// ── SKUPINY KA PARTNERŮ — víc partnerů (Albert, Geco…) sdílí jednu
+// referenční sadu, beze ztráty možnosti mít jednoho partnera samostatně
+// (getRefsForPos výše skupinu zkouší jako první, pak per-partner klíč).
+function addKaPartnerGroup() {
+  const store = getEditorRefs();
+  if (!store.KA_GROUPS) store.KA_GROUPS = [];
+  const id = 'grp_' + Date.now();
+  store.KA_GROUPS.push({ id, label: 'Nová skupina', partners: [] });
+  saveEditorRefs(store);
+  renderEditorRefsKaGroups();
+  renderEditorRefsKaPicker();
+}
+function updateKaPartnerGroupLabel(id, val) {
+  const store = getEditorRefs();
+  const g = (store.KA_GROUPS||[]).find(x => x.id === id);
+  if (!g) return;
+  g.label = val;
+  saveEditorRefs(store);
+  renderEditorRefsKaPicker();
+}
+function toggleKaPartnerGroupMember(id, partner) {
+  const store = getEditorRefs();
+  const g = (store.KA_GROUPS||[]).find(x => x.id === id);
+  if (!g) return;
+  g.partners = g.partners || [];
+  g.partners = g.partners.includes(partner) ? g.partners.filter(p => p !== partner) : [...g.partners, partner];
+  saveEditorRefs(store);
+  renderEditorRefsKaGroups();
+  renderEditorRefsKaPicker();
+}
+function deleteKaPartnerGroup(id) {
+  const store = getEditorRefs();
+  store.KA_GROUPS = (store.KA_GROUPS||[]).filter(x => x.id !== id);
+  delete store.KA[id];
+  saveEditorRefs(store);
+  renderEditorRefsKaGroups();
+  renderEditorRefsKaPicker();
+}
+function renderEditorRefsKaGroups() {
+  const el = document.getElementById('ed-refs-ka-groups');
+  if (!el) return;
+  const store = getEditorRefs();
+  const groups = store.KA_GROUPS || [];
+  const partners = getKaPartnerCodes();
+  el.innerHTML = groups.map(g => `
+    <div class="editor-card" style="padding:10px;margin-bottom:8px">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+        <input value="${(g.label||'').replace(/"/g,'&quot;')}" placeholder="Název skupiny" oninput="updateKaPartnerGroupLabel('${g.id}',this.value)" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:7px;font-size:12px;font-weight:700;outline:none"/>
+        <button onclick="deleteKaPartnerGroup('${g.id}')" style="background:none;border:none;color:var(--red);font-size:15px;cursor:pointer;padding:2px">✕</button>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${partners.length ? partners.map(p => {
+          const active = (g.partners||[]).includes(p);
+          return `<button type="button" onclick="toggleKaPartnerGroupMember('${g.id}','${p}')" style="font-size:11px;font-weight:700;padding:5px 11px;border-radius:20px;border:1.5px solid ${active ? 'var(--navy)' : 'var(--border)'};background:${active ? 'var(--navy)' : '#fff'};color:${active ? '#fff' : 'var(--text)'};cursor:pointer">${p}</button>`;
+        }).join('') : '<span style="font-size:11px;color:var(--muted)">Žádní KA partneři v naimportovaných datech</span>'}
+      </div>
+    </div>`).join('') || '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Žádné skupiny — každý partner má samostatnou referenci</div>';
 }
 function renderEditorRefsKa() {
   const key = document.getElementById('ed-refs-ka-key').value || 'default';
@@ -6159,6 +6248,7 @@ function deleteRefCardKa(i) {
 
 function renderEditorRefs() {
   ['IDT', 'PETROL', 'CORN'].forEach(renderEditorRefsChannel);
+  renderEditorRefsKaGroups();
   renderEditorRefsKaPicker();
   renderEditorRefsKa();
 }
