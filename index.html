@@ -694,6 +694,7 @@
       <button class="adm-btn" onclick="showAdmPage('alerts',this)"><svg class="ic ic-sm"><use href="#ic-warning"/></svg> Flagy</button>
       <button class="adm-btn" onclick="showAdmPage('foto',this)"><svg class="ic ic-sm"><use href="#ic-camera"/></svg> Fotky</button>
       <button class="adm-btn" onclick="showAdmPage('odpis',this)"><svg class="ic ic-sm"><use href="#ic-upload"/></svg> Odpis materiálu</button>
+      <button class="adm-btn" onclick="showAdmPage('aktivita',this)"><svg class="ic ic-sm"><use href="#ic-dashboard"/></svg> Aktivita</button>
       <button class="adm-btn" onclick="showAdmPage('redakce',this)"><svg class="ic ic-sm"><use href="#ic-edit"/></svg> Úkoly</button>
       <button class="adm-btn" onclick="showAdmPage('ai',this)"><svg class="ic ic-sm"><use href="#ic-intel"/></svg> Intelligence</button>
       <button class="adm-btn" onclick="showAdmPage('editor',this)"><svg class="ic ic-sm"><use href="#ic-edit"/></svg> Editor</button>
@@ -1211,6 +1212,20 @@
         <div id="odpis-table"></div>
       </div>
       <div id="odpis-missing-sap" style="margin-top:14px;background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;display:none"></div>
+    </div>
+
+    <div class="adm-page" id="adm-aktivita">
+      <div class="adm-sh"><div class="adm-st">Aktivita techniků</div></div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Reálné počty z dat techniků — hotové úkoly a instalovaný merch, podle technika a podle kanálu. Základ pro budoucí AI vyhodnocení (žádná vymyšlená čísla).</div>
+      <div class="kpi-grid" id="aktivita-kpis" style="margin-bottom:18px"></div>
+      <div class="adm-sh" style="margin-bottom:8px"><div class="adm-st" style="font-size:14px">Podle technika</div></div>
+      <div style="background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;margin-bottom:18px">
+        <div id="aktivita-technicians"></div>
+      </div>
+      <div class="adm-sh" style="margin-bottom:8px"><div class="adm-st" style="font-size:14px">Podle kanálu</div></div>
+      <div style="background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden">
+        <div id="aktivita-channels"></div>
+      </div>
     </div>
 
   </div>

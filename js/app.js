@@ -360,6 +360,7 @@ function showAdmPage(p,btn){
   if(p==='foto') renderAdminFoto();
   if(p==='alerts') renderAdminAlerts();
   if(p==='odpis') renderAdminOdpis();
+  if(p==='aktivita') renderAdminAktivita();
   pushRoute();
 }
 
@@ -2102,6 +2103,7 @@ function startAdminRefresh() {
       if (activePage.id === 'adm-casy') renderAdminCasy();
       if (activePage.id === 'adm-alerts') renderAdminAlerts();
       if (activePage.id === 'adm-foto') renderAdminFoto();
+      if (activePage.id === 'adm-aktivita') renderAdminAktivita();
     }
   }, 5000);
 }
@@ -3438,6 +3440,75 @@ function renderAdminOdpis() {
       warnEl.innerHTML = `<div style="font-weight:800;font-size:12px;color:var(--orange);margin-bottom:6px">⚠ ${withoutSap.length} položek bez SAP kódu — nelze odepsat v SAPu, doplň kód v Editoru → Merch položky</div>` +
         withoutSap.map(row).join('');
     }
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// AKTIVITA — agregovaný přehled reálné práce techniků pro Velín.
+// Zdroj: FULL_POS_DATA[*].taskState (živý in-memory stav úkolů, stejné
+// objekty jako mutuje toggleTask/handleTaskPhoto) + merch_{posId}_{date}
+// (stejný zdroj jako getMaterialWriteOffData). Žádná vymyšlená čísla —
+// jen sumy reálných dat. Základ pro pozdější AI použití (Pavel: potřebuje
+// vidět "kolik se toho udělalo", ne jen jednotlivé POS detaily).
+// ══════════════════════════════════════════════════════
+function getActivityData() {
+  const byTechnician = {};
+  const ensureTech = name => name ? (byTechnician[name] = byTechnician[name] || { tasksCompleted: 0, tasksTotal: 0, merchInstalled: 0 }) : null;
+  const byChannel = {};
+  const ensureChannel = ch => byChannel[ch] = byChannel[ch] || { tasksCompleted: 0, tasksTotal: 0, merchInstalled: 0 };
+
+  let tasksCompleted = 0, tasksTotal = 0;
+  POS_WEEK_KEYS.forEach(w => {
+    (FULL_POS_DATA[w] || []).forEach(p => {
+      const tech = ensureTech(p.assignedTechnician);
+      const chan = ensureChannel(p.typ);
+      (p.taskState || []).forEach(t => {
+        tasksTotal++; chan.tasksTotal++; if (tech) tech.tasksTotal++;
+        if (t.done) { tasksCompleted++; chan.tasksCompleted++; if (tech) tech.tasksCompleted++; }
+      });
+    });
+  });
+
+  let merchInstalled = 0;
+  getMaterialWriteOffData({}).forEach(g => g.instances.forEach(it => {
+    merchInstalled++;
+    const tech = ensureTech(it.technician);
+    if (tech) tech.merchInstalled++;
+    const found = findPosAcrossWeeks(it.posId);
+    if (found) ensureChannel(found.pos.typ).merchInstalled++;
+  }));
+
+  return { tasksCompleted, tasksTotal, merchInstalled, byTechnician, byChannel };
+}
+
+function renderAdminAktivita() {
+  const data = getActivityData();
+  const kpiEl = document.getElementById('aktivita-kpis');
+  if (kpiEl) kpiEl.innerHTML = `
+    <div class="kpi-card"><div class="kpi-icon"><svg class="ic ic-lg"><use href="#ic-check-circle"/></svg></div><div class="kpi-val">${data.tasksCompleted}/${data.tasksTotal}</div><div class="kpi-lbl">Úkoly hotové — celkem</div></div>
+    <div class="kpi-card"><div class="kpi-icon"><svg class="ic ic-lg"><use href="#ic-pin"/></svg></div><div class="kpi-val">${data.merchInstalled}</div><div class="kpi-lbl">Merch instalace — celkem</div></div>
+  `;
+
+  const activityRow = (label, s) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--bg)">
+      <div style="flex:1;font-size:13px;font-weight:700">${label}</div>
+      <div style="font-size:11px;color:var(--muted)">úkoly</div>
+      <div style="font-size:13px;font-weight:800;width:62px;text-align:right">${s.tasksCompleted}/${s.tasksTotal}</div>
+      <div style="font-size:11px;color:var(--muted)">merch</div>
+      <div style="font-size:13px;font-weight:800;width:34px;text-align:right">${s.merchInstalled}</div>
+    </div>`;
+
+  const techEl = document.getElementById('aktivita-technicians');
+  if (techEl) {
+    const rows = Object.entries(data.byTechnician).sort((a, b) => b[1].tasksCompleted - a[1].tasksCompleted);
+    techEl.innerHTML = rows.length ? rows.map(([name, s]) => activityRow(name, s)).join('')
+      : '<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px">Žádná data o technicích</div>';
+  }
+
+  const chEl = document.getElementById('aktivita-channels');
+  if (chEl) {
+    const rows = Object.entries(data.byChannel);
+    chEl.innerHTML = rows.length ? rows.map(([ch, s]) => activityRow(ch, s)).join('') : '';
   }
 }
 
