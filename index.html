@@ -894,68 +894,95 @@
 
     <!-- REDAKČNÍ OKNO -->
     <div class="adm-page" id="adm-redakce">
-      <div class="adm-sh" style="margin-bottom:12px">
-        <div class="adm-st">Redakční okno — zadávání úkolů</div>
-        <button onclick="openEditModal('group')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Nový úkol</button>
+      <div class="adm-sh" style="margin-bottom:6px">
+        <div class="adm-st">Úkoly</div>
       </div>
 
-      <!-- Quick action buttons -->
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-        <button onclick="openEditModal('group')" style="flex:1;min-width:120px;padding:12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;text-align:center;cursor:pointer;font-size:12px;font-weight:700;color:var(--navy)">
-          <div style="margin-bottom:4px;color:var(--teal)"><svg class="ic ic-lg"><use href="#ic-users"/></svg></div>Skupině POS
-        </button>
-        <button onclick="openEditModal('technik')" style="flex:1;min-width:120px;padding:12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;text-align:center;cursor:pointer;font-size:12px;font-weight:700;color:var(--navy)">
-          <div style="margin-bottom:4px;color:var(--teal)"><svg class="ic ic-lg"><use href="#ic-user"/></svg></div>Technikovi
-        </button>
-        <button onclick="openEditModal('pos')" style="flex:1;min-width:120px;padding:12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;text-align:center;cursor:pointer;font-size:12px;font-weight:700;color:var(--navy)">
-          <div style="margin-bottom:4px;color:var(--teal)"><svg class="ic ic-lg"><use href="#ic-pin"/></svg></div>Konkrétní POS
-        </button>
+      <!-- Redakce sub-nav: dva odlišné koncepty, dnes vědomě oddělené (viz docs/VELIN_ARCHITECTURE.md) -->
+      <div style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto">
+        <button class="ed-subnav active" onclick="showRedakceSection('checklist',this)"><svg class="ic ic-sm"><use href="#ic-check-circle"/></svg> Checklist instrukce</button>
+        <button class="ed-subnav" onclick="showRedakceSection('tracked',this)"><svg class="ic ic-sm"><use href="#ic-notes"/></svg> Sledované úkoly</button>
       </div>
 
-      <!-- Active task feed -->
-      <div class="adm-sh"><div class="adm-st">Aktivní on-top úkoly</div></div>
-      <div class="cw" id="task-feed"></div>
-
-      <!-- Task Pool — sledované ad hoc úkoly s historií a evidencí -->
-      <div class="adm-sh" style="margin-top:24px">
-        <div class="adm-st">Task Pool — sledované úkoly</div>
-        <div style="display:flex;gap:8px">
-          <button onclick="document.getElementById('task-import-block').style.display = document.getElementById('task-import-block').style.display === 'none' ? 'block' : 'none'" style="background:#fff;color:var(--navy);border:1.5px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">⇪ Import z Excelu</button>
-          <button onclick="openTaskCreateModal()" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Sledovaný úkol</button>
+      <!-- CHECKLIST INSTRUKCE — admin_tasks: trvalá instrukce vpsaná do taskState,
+           zamyká tlačítko "Dokončit návštěvu", platí na každou budoucí návštěvu
+           matchující POS. NENÍ totéž jako Sledovaný úkol vpravo — viz nápověda níž. -->
+      <div id="red-sec-checklist">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px;padding:10px 12px;background:var(--bg);border-radius:8px">
+          Tahle instrukce se vepíše do checklistu na POS a <strong>technik musí
+          odškrtnout, než může návštěvu dokončit</strong>. Platí na každou
+          budoucí návštěvu matchujících POS, ne jen jednou.
         </div>
+        <div class="adm-sh" style="margin-bottom:12px">
+          <div class="adm-st">Aktivní checklist instrukce</div>
+          <button onclick="openEditModal('group')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Nová instrukce</button>
+        </div>
+
+        <!-- Quick action buttons -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+          <button onclick="openEditModal('group')" style="flex:1;min-width:120px;padding:12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;text-align:center;cursor:pointer;font-size:12px;font-weight:700;color:var(--navy)">
+            <div style="margin-bottom:4px;color:var(--teal)"><svg class="ic ic-lg"><use href="#ic-users"/></svg></div>Skupině POS
+          </button>
+          <button onclick="openEditModal('technik')" style="flex:1;min-width:120px;padding:12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;text-align:center;cursor:pointer;font-size:12px;font-weight:700;color:var(--navy)">
+            <div style="margin-bottom:4px;color:var(--teal)"><svg class="ic ic-lg"><use href="#ic-user"/></svg></div>Technikovi
+          </button>
+          <button onclick="openEditModal('pos')" style="flex:1;min-width:120px;padding:12px;background:#fff;border:1.5px solid var(--border);border-radius:10px;text-align:center;cursor:pointer;font-size:12px;font-weight:700;color:var(--navy)">
+            <div style="margin-bottom:4px;color:var(--teal)"><svg class="ic ic-lg"><use href="#ic-pin"/></svg></div>Konkrétní POS
+          </button>
+        </div>
+
+        <div class="cw" id="task-feed"></div>
       </div>
 
-      <!-- Import úkolů z externích systémů (dnes Excel, do budoucna i API — source.kind se jen rozšíří) -->
-      <div id="task-import-block" style="display:none;margin-bottom:16px;padding:14px;background:var(--bg);border-radius:10px">
-        <div style="font-size:13px;color:var(--muted);margin:0 0 10px">Nahraj úkoly z externího systému (servisní požadavky, kampaně apod.) přes Excel. Sloupce: POS_ID, TITLE, DESCRIPTION, TYPE, PRIORITY, DEADLINE, REQUIRED_TECHNICIANS, ESTIMATED_DURATION_HOURS, ASSIGNED_TECHNICIAN, EXTERNAL_REF.</div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <button onclick="downloadTaskImportTemplate()" style="background:#fff;color:var(--navy);border:1.5px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">⬇ Stáhnout šablonu</button>
-          <input type="file" id="task-import-file-input" accept=".xlsx,.xls,.csv" onchange="handleTaskImportFile(event)" style="font-size:13px">
+      <!-- SLEDOVANÉ ÚKOLY — task_pool (TaskEngine): jednorázový úkol na jedno
+           konkrétní POS, plný lifecyklus + evidence (foto/GPS/komentář),
+           NEzamyká checkout. -->
+      <div id="red-sec-tracked" style="display:none">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px;padding:10px 12px;background:var(--bg);border-radius:8px">
+          Jednorázový úkol na konkrétní POS s plnou evidencí (foto, GPS,
+          komentář) a historií stavu. <strong>Nezamyká dokončení návštěvy</strong>
+          — technik ho řeší podle vlastní priority, Velín sleduje průběh.
         </div>
-        <div id="task-import-status" style="font-size:12px;color:var(--muted);margin-top:8px"></div>
-        <div id="task-import-preview-block" style="display:none;margin-top:12px">
-          <div id="task-import-preview-kpis" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px"></div>
-          <div id="task-import-warnings" style="margin-bottom:8px"></div>
-          <div id="task-import-errors" style="margin-bottom:8px"></div>
+        <div class="adm-sh" style="margin-bottom:12px">
+          <div class="adm-st">Task Pool</div>
           <div style="display:flex;gap:8px">
-            <button id="task-import-confirm-btn" onclick="confirmTaskImport()" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">Potvrdit import</button>
-            <button onclick="cancelTaskImportPreview()" style="background:#fff;color:var(--td);border:1.5px solid var(--border);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">Zrušit</button>
+            <button onclick="document.getElementById('task-import-block').style.display = document.getElementById('task-import-block').style.display === 'none' ? 'block' : 'none'" style="background:#fff;color:var(--navy);border:1.5px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">⇪ Import z Excelu</button>
+            <button onclick="openTaskCreateModal()" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Sledovaný úkol</button>
           </div>
         </div>
-      </div>
 
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <div class="ef-chips" id="task-pool-filters">
-          <div class="ef-chip on" onclick="setTaskPoolFilter('open',this)">Otevřené</div>
-          <div class="ef-chip" onclick="setTaskPoolFilter('all',this)">Vše</div>
-          <div class="ef-chip" onclick="setTaskPoolFilter('pending',this)">Nepřiřazeno</div>
-          <div class="ef-chip" onclick="setTaskPoolFilter('in_progress',this)">Rozjeto</div>
-          <div class="ef-chip" onclick="setTaskPoolFilter('waiting_next_visit',this)">Čeká</div>
-          <div class="ef-chip" onclick="setTaskPoolFilter('done',this)">Hotovo</div>
+        <!-- Import úkolů z externích systémů (dnes Excel, do budoucna i API — source.kind se jen rozšíří) -->
+        <div id="task-import-block" style="display:none;margin-bottom:16px;padding:14px;background:var(--bg);border-radius:10px">
+          <div style="font-size:13px;color:var(--muted);margin:0 0 10px">Nahraj úkoly z externího systému (servisní požadavky, kampaně apod.) přes Excel. Sloupce: POS_ID, TITLE, DESCRIPTION, TYPE, PRIORITY, DEADLINE, REQUIRED_TECHNICIANS, ESTIMATED_DURATION_HOURS, ASSIGNED_TECHNICIAN, EXTERNAL_REF.</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button onclick="downloadTaskImportTemplate()" style="background:#fff;color:var(--navy);border:1.5px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">⬇ Stáhnout šablonu</button>
+            <input type="file" id="task-import-file-input" accept=".xlsx,.xls,.csv" onchange="handleTaskImportFile(event)" style="font-size:13px">
+          </div>
+          <div id="task-import-status" style="font-size:12px;color:var(--muted);margin-top:8px"></div>
+          <div id="task-import-preview-block" style="display:none;margin-top:12px">
+            <div id="task-import-preview-kpis" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px"></div>
+            <div id="task-import-warnings" style="margin-bottom:8px"></div>
+            <div id="task-import-errors" style="margin-bottom:8px"></div>
+            <div style="display:flex;gap:8px">
+              <button id="task-import-confirm-btn" onclick="confirmTaskImport()" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">Potvrdit import</button>
+              <button onclick="cancelTaskImportPreview()" style="background:#fff;color:var(--td);border:1.5px solid var(--border);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">Zrušit</button>
+            </div>
+          </div>
         </div>
-        <div id="task-pool-summary" style="font-size:11px;color:var(--muted);white-space:nowrap;margin-left:10px"></div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div class="ef-chips" id="task-pool-filters">
+            <div class="ef-chip on" onclick="setTaskPoolFilter('open',this)">Otevřené</div>
+            <div class="ef-chip" onclick="setTaskPoolFilter('all',this)">Vše</div>
+            <div class="ef-chip" onclick="setTaskPoolFilter('pending',this)">Nepřiřazeno</div>
+            <div class="ef-chip" onclick="setTaskPoolFilter('in_progress',this)">Rozjeto</div>
+            <div class="ef-chip" onclick="setTaskPoolFilter('waiting_next_visit',this)">Čeká</div>
+            <div class="ef-chip" onclick="setTaskPoolFilter('done',this)">Hotovo</div>
+          </div>
+          <div id="task-pool-summary" style="font-size:11px;color:var(--muted);white-space:nowrap;margin-left:10px"></div>
+        </div>
+        <div class="cw" id="task-pool-list"></div>
       </div>
-      <div class="cw" id="task-pool-list"></div>
     </div>
 
     <!-- SCHVÁLENÍ NÁVŠTĚV -->

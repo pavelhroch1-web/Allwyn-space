@@ -5594,6 +5594,17 @@ function showEditorSection(sec, btn) {
   if (sec === 'refs') renderEditorRefs();
 }
 
+function showRedakceSection(sec, btn) {
+  const root = document.getElementById('adm-redakce');
+  if (!root) return;
+  ['checklist','tracked'].forEach(s => {
+    const el = document.getElementById('red-sec-' + s);
+    if (el) el.style.display = s === sec ? 'block' : 'none';
+  });
+  root.querySelectorAll(':scope > div > .ed-subnav').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+}
+
 // ── EDITABLE CAMPAIGNS ─────────────────────────────────────────────────────
 function getEditorCampaigns() {
   const saved = lsg('editor_campaigns');
