@@ -2140,8 +2140,14 @@ function saveDecisions(list) { lss('decisions', list); }
 
 // Vygeneruje nové capacity_overload kandidáty a přidá jen ty, pro které ještě
 // neexistuje žádný záznam (type+technician+week) — jednou rozhodnuté se znovu
-// nenabízí, i když DecisionEngine běží při každém otevření dashboardu.
+// nenabízí. Přepočet je nutný jen po načtení dat (Tourplan import se neměnní
+// po 5 vteřinách) — bez téhle pojistky by ho auto-refresh (startAdminRefresh,
+// interval 5s) spustil znovu při každém tiku, zbytečně skenoval celý
+// FULL_POS_DATA pro každého technika a týden.
+let _decisionsGeneratedThisSession = false;
 function generateAndPersistCapacityDecisions() {
+  if (_decisionsGeneratedThisSession) return getDecisions();
+  _decisionsGeneratedThisSession = true;
   const weeklyCounts = {};
   PosModel.PILOT_TECHNICIANS.forEach(name => {
     weeklyCounts[name] = {};
