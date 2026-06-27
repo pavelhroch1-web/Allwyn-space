@@ -5,7 +5,7 @@ const CURRENT_OPS_WEEK = '25';
 // ══════════════════════════════════════════════════════
 // STATE
 // ══════════════════════════════════════════════════════
-let cWeek=CURRENT_OPS_WEEK, cDay=0, cIdx=null, pendingSlot=null, assigningId=null;
+let cWeek=CURRENT_OPS_WEEK, cDay=0, cIdx=null, pendingSlot=null, assigningId=null, pendingTaskPhotoId=null;
 let cView='list'; // 'list' | 'planning' | 'overdue' — perzistováno přes refresh (PART 6)
 let adminMap=null, adminMarkers=[], adminTechnicians=[];
 let activeRegion='all';
@@ -713,6 +713,7 @@ function openDetail(ri){
   document.getElementById('merch-section').style.display=p.servisOnly?'none':'';
   document.getElementById('supply-section').style.display=p.servisOnly?'none':'';
   renderTasks();
+  renderTrackedTasks();
   renderCampaignChecklist();
   renderPhotos();
   renderCompleteBtn();
@@ -1071,6 +1072,83 @@ function toggleTask(ti){
     VisitStore.setTaskDone(tech, p.id, p.n, p.a, null, p.taskState[ti].text, p.taskState[ti].done);
   }
   renderTasks();renderCompleteBtn();
+}
+
+// ══════════════════════════════════════════════════════
+// TRACKED TASKS (technik) — úkoly z task_pool zadané Velínem pro tohle POS.
+// Oddělené od taskState/on_top (broadcast checklist výše) — task_pool má
+// stavový životní cyklus, evidenci a historii, broadcast jen done/not-done.
+// ══════════════════════════════════════════════════════
+function currentTechnicianName(){
+  return currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
+}
+function renderTrackedTasks(){
+  const p=posData[cWeek][cIdx];
+  const wrap=document.getElementById('tracked-tasks-wrap');
+  const list=document.getElementById('tracked-tasks-list');
+  const tasks=getTasksForPos(p.id).filter(t=>t.status!=='cancelled');
+  if(!tasks.length){wrap.style.display='none';return;}
+  wrap.style.display='block';
+  tasks.sort((a,b)=>(a.status==='done'||a.status==='verified')-(b.status==='done'||b.status==='verified'));
+  list.innerHTML=tasks.map(trackedTaskItemHtml).join('');
+}
+const TRACKED_TASK_ACTION_LABELS={assigned:'Přiřadit',in_progress:'Rozjet',done:'Dokončit',waiting_next_visit:'Čeká na další návštěvu',verified:'Ověřit',pending:'Vrátit na nepřiřazeno'};
+function trackedTaskItemHtml(t){
+  const nextActions=(TaskEngine.TRANSITIONS[t.status]||[]).filter(s=>s!=='cancelled');
+  const overdue=TaskEngine.isOverdue(t,new Date());
+  return `<div class="titem" style="padding:10px 0;border-bottom:1px solid var(--bg)">
+    <div style="display:flex;align-items:flex-start;gap:8px">
+      <span class="pdot ${TASK_PRIORITY_DOT[t.priority]||'dot-yellow'}" style="margin-top:4px"></span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700;color:var(--navy)">${t.title}</div>
+        ${t.description?`<div style="font-size:12px;color:var(--td);margin-top:2px">${t.description}</div>`:''}
+        <div style="margin-top:4px"><span class="approval-badge ${t.status==='done'||t.status==='verified'?'appr-ok':overdue?'appr-rej':'appr-wait'}">${TASK_STATUS_LABELS[t.status]}${overdue?' · po termínu':''}</span>${t.requiredTechnicians>1?` <span style="font-size:11px;color:var(--muted)">· potřeba ${t.requiredTechnicians} techniků</span>`:''}</div>
+        ${t.window&&t.window.to?`<div style="font-size:11px;color:var(--muted);margin-top:2px">Termín do: ${new Date(t.window.to).toLocaleDateString('cs-CZ')}</div>`:''}
+      </div>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+      ${nextActions.map(s=>`<button onclick="trackedTaskAdvance('${t.id}','${s}')" style="padding:7px 10px;background:var(--navy);color:var(--teal);border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer">${TRACKED_TASK_ACTION_LABELS[s]||s}</button>`).join('')}
+      <button onclick="trackedTaskCapturePhoto('${t.id}')" style="padding:7px 10px;background:none;color:var(--td);border:1.5px solid var(--border);border-radius:8px;font-size:11px;font-weight:700;cursor:pointer">📷 Foto${t.evidence.photos.length?` (${t.evidence.photos.length})`:''}</button>
+      <button onclick="trackedTaskCaptureGps('${t.id}')" style="padding:7px 10px;background:none;color:var(--td);border:1.5px solid var(--border);border-radius:8px;font-size:11px;font-weight:700;cursor:pointer">📍 GPS${t.evidence.gps?' ✓':''}</button>
+    </div>
+    <textarea placeholder="Komentář k úkolu…" onblur="trackedTaskSaveComment('${t.id}',this.value)" style="width:100%;margin-top:8px;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit;resize:vertical;min-height:32px">${t.evidence.comment||''}</textarea>
+  </div>`;
+}
+function trackedTaskAdvance(taskId, newStatus){
+  setTaskStatus(taskId, newStatus, currentTechnicianName());
+  renderTrackedTasks();
+}
+function trackedTaskSaveComment(taskId, comment){
+  const t=findTask(taskId);
+  if(!t || t.evidence.comment===comment) return;
+  addTaskEvidence(taskId, { comment }, currentTechnicianName());
+}
+function trackedTaskCaptureGps(taskId){
+  getGeoTag(geo=>{
+    if(!geo){ alert('GPS se nepodařilo zjistit.'); return; }
+    addTaskEvidence(taskId, { gps:{lat:geo.lat,lng:geo.lng} }, currentTechnicianName());
+    renderTrackedTasks();
+  });
+}
+function trackedTaskCapturePhoto(taskId){
+  pendingTaskPhotoId=taskId;
+  document.getElementById('task-photo-input').click();
+}
+function handleTaskPhoto(e){
+  const file=e.target.files[0];if(!file)return;
+  const taskId=pendingTaskPhotoId;
+  const p=posData[cWeek][cIdx];
+  getGeoTag(geo=>{
+    const r=new FileReader();
+    r.onload=ev=>{
+      stampPhoto(ev.target.result, buildStampLines(p, geo), stamped=>{
+        addTaskEvidence(taskId, { photo: stamped }, currentTechnicianName());
+        pendingTaskPhotoId=null;e.target.value='';
+        renderTrackedTasks();
+      });
+    };
+    r.readAsDataURL(file);
+  });
 }
 
 // ══════════════════════════════════════════════════════

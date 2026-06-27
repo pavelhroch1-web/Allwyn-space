@@ -495,6 +495,13 @@
       </div>
     </details>
 
+    <!-- TRACKED TASKS — sledované úkoly zadané Velínem pro tohle POS (task_pool), odlišné od on_top/own checklistu níže -->
+    <div id="tracked-tasks-wrap" style="display:none">
+      <div class="sec-lbl">Sledované úkoly od Velínu</div>
+      <div id="tracked-tasks-list"></div>
+    </div>
+    <input type="file" id="task-photo-input" accept="image/*" capture="environment" onchange="handleTaskPhoto(event)" style="display:none"/>
+
     <!-- TASKS — detailní úkoly, technik je otevře až ve chvíli kdy reálně začíná pracovat -->
     <div class="sec-lbl">Úkoly na místě</div>
     <div class="tsec" id="tasks-list"></div>
