@@ -626,6 +626,32 @@
   </div>
 </div>
 
+<!-- TASK CREATE MODAL -->
+<div class="edit-modal-ov" id="task-create-modal">
+  <div class="edit-modal">
+    <div class="edit-modal-hdr">
+      <div class="edit-modal-title">Nový sledovaný úkol</div>
+      <button class="edit-modal-close" onclick="closeTaskCreateModal()">✕</button>
+    </div>
+    <div class="edit-modal-body" id="task-create-modal-body"></div>
+    <div class="edit-modal-footer">
+      <button class="ef-btn-cancel" onclick="closeTaskCreateModal()">Zrušit</button>
+      <button class="ef-btn-save" onclick="saveNewTask()">Uložit úkol</button>
+    </div>
+  </div>
+</div>
+
+<!-- TASK DETAIL MODAL -->
+<div class="edit-modal-ov" id="task-detail-modal">
+  <div class="edit-modal" style="max-width:580px">
+    <div class="edit-modal-hdr">
+      <div class="edit-modal-title" id="task-detail-title">Detail úkolu</div>
+      <button class="edit-modal-close" onclick="closeTaskDetail()">✕</button>
+    </div>
+    <div class="edit-modal-body" id="task-detail-body"></div>
+  </div>
+</div>
+
 <!-- DECISION DETAIL MODAL -->
 <div class="edit-modal-ov" id="decision-detail-modal">
   <div class="edit-modal" style="max-width:580px">
@@ -882,6 +908,24 @@
       <!-- Active task feed -->
       <div class="adm-sh"><div class="adm-st">Aktivní on-top úkoly</div></div>
       <div class="cw" id="task-feed"></div>
+
+      <!-- Task Pool — sledované ad hoc úkoly s historií a evidencí -->
+      <div class="adm-sh" style="margin-top:24px">
+        <div class="adm-st">Task Pool — sledované úkoly</div>
+        <button onclick="openTaskCreateModal()" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Sledovaný úkol</button>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div class="ef-chips" id="task-pool-filters">
+          <div class="ef-chip on" onclick="setTaskPoolFilter('open',this)">Otevřené</div>
+          <div class="ef-chip" onclick="setTaskPoolFilter('all',this)">Vše</div>
+          <div class="ef-chip" onclick="setTaskPoolFilter('pending',this)">Nepřiřazeno</div>
+          <div class="ef-chip" onclick="setTaskPoolFilter('in_progress',this)">Rozjeto</div>
+          <div class="ef-chip" onclick="setTaskPoolFilter('waiting_next_visit',this)">Čeká</div>
+          <div class="ef-chip" onclick="setTaskPoolFilter('done',this)">Hotovo</div>
+        </div>
+        <div id="task-pool-summary" style="font-size:11px;color:var(--muted);white-space:nowrap;margin-left:10px"></div>
+      </div>
+      <div class="cw" id="task-pool-list"></div>
     </div>
 
     <!-- SCHVÁLENÍ NÁVŠTĚV -->

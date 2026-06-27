@@ -3367,6 +3367,223 @@ function deleteAdminTask(id) {
 }
 
 // ══════════════════════════════════════════════════════
+// TASK POOL — sledované úkoly s plnou historií/evidencí (TaskEngine).
+// ══════════════════════════════════════════════════════
+// Odlišné od "admin_tasks" rozesílání výše: rozesílání je broadcast textová
+// položka do checklistu skupiny/technika/POS (žádný stavový automat).
+// Task pool je naproti tomu jednotlivě sledovaný úkol s vlastním stavem,
+// přiřazením, evidencí a historií — pro ad hoc úkoly na konkrétním POS, kde
+// Velín potřebuje vědět přesně co se s úkolem děje, ne jen že "byl rozeslán".
+const TASK_STATUS_LABELS = {
+  pending: 'Nepřiřazeno', assigned: 'Přiřazeno', in_progress: 'Rozjeto',
+  waiting_next_visit: 'Čeká na další návštěvu', done: 'Hotovo', verified: 'Ověřeno', cancelled: 'Zrušeno',
+};
+const TASK_PRIORITY_DOT = { normal: 'dot-yellow', high: 'dot-orange', urgent: 'dot-red' };
+
+let taskPoolFilter = 'open'; // 'open' = vše kromě verified/cancelled
+let tpNewPosSel = null;
+let tpNewPriority = 'normal';
+let tpNewReqTech = 1;
+
+function openTaskCreateModal() {
+  tpNewPosSel = null;
+  tpNewPriority = 'normal';
+  tpNewReqTech = 1;
+  renderTaskCreateModalBody();
+  document.getElementById('task-create-modal').classList.add('open');
+}
+function closeTaskCreateModal() { document.getElementById('task-create-modal').classList.remove('open'); }
+
+function renderTaskCreateModalBody() {
+  const allPos = FULL_POS_DATA[CURRENT_OPS_WEEK] || [];
+  const html = `
+    <label class="ef-label" style="margin-top:0">Vyhledat POS (ID nebo název)</label>
+    <input class="ef-input" id="tp-pos-search" type="text" placeholder="POS ID nebo název…" oninput="tpFilterPosList(this.value)" />
+    <div id="tp-pos-list" style="margin-top:8px;max-height:140px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px">
+      ${allPos.slice(0,8).map(p => `<div class="task-feed-item" style="cursor:pointer" onclick="tpSelectPos('${p.id}','${p.n.replace(/'/g,"\\'")}',this)">
+        <div class="tfi-body"><div class="tfi-title">${p.id} · ${p.n}</div><div class="tfi-sub">${p.a}</div></div>
+      </div>`).join('')}
+    </div>
+    <div id="tp-pos-selected" style="display:none;margin-top:6px;padding:8px 12px;background:var(--tl);border-radius:8px;font-size:13px;font-weight:700;color:var(--tm)"></div>
+
+    <label class="ef-label">Název úkolu</label>
+    <input class="ef-input" id="tp-title" type="text" placeholder="Co je potřeba udělat…" />
+
+    <label class="ef-label">Popis (volitelné)</label>
+    <textarea class="ef-textarea" id="tp-desc" placeholder="Detaily…" style="min-height:50px"></textarea>
+
+    <label class="ef-label">Priorita</label>
+    <div class="ef-chips" id="tp-priority">
+      <div class="ef-chip" onclick="tpSetPriority('urgent',this)" style="background:var(--rl);color:var(--red);border-color:var(--red)"><span class="pdot dot-red" style="display:inline-block;margin-right:3px"></span>Urgentní</div>
+      <div class="ef-chip" onclick="tpSetPriority('high',this)"><span class="pdot dot-orange" style="display:inline-block;margin-right:3px"></span>Vysoká</div>
+      <div class="ef-chip on" onclick="tpSetPriority('normal',this)"><span class="pdot dot-yellow" style="display:inline-block;margin-right:3px"></span>Standardní</div>
+    </div>
+
+    <div class="ef-row" style="margin-top:14px">
+      <div>
+        <label class="ef-label" style="margin-top:0">Termín do</label>
+        <input class="ef-input" id="tp-deadline" type="date" />
+      </div>
+      <div>
+        <label class="ef-label" style="margin-top:0">Počet techniků</label>
+        <div class="ef-chips" id="tp-reqtech">
+          <div class="ef-chip on" onclick="tpSetReqTech(1,this)">1</div>
+          <div class="ef-chip" onclick="tpSetReqTech(2,this)">2</div>
+        </div>
+      </div>
+    </div>
+
+    <label class="ef-label">Přiřadit technika (volitelné, lze i později)</label>
+    <select class="ef-select" id="tp-technik">
+      <option value="">— nepřiřazeno —</option>
+      ${TECHNICIAN_NAMES.map(n => `<option value="${n}">${n}</option>`).join('')}
+    </select>
+  `;
+  document.getElementById('task-create-modal-body').innerHTML = html;
+}
+function tpFilterPosList(q) {
+  const all = FULL_POS_DATA[CURRENT_OPS_WEEK] || [];
+  let filtered;
+  if (q) {
+    const ql = q.toLowerCase();
+    const idMatches = all.filter(p => p.id.includes(q));
+    const nameMatches = all.filter(p => !p.id.includes(q) && p.n.toLowerCase().includes(ql));
+    filtered = idMatches.concat(nameMatches).slice(0, 8);
+  } else {
+    filtered = all.slice(0, 8);
+  }
+  document.getElementById('tp-pos-list').innerHTML = filtered.map(p => `<div class="task-feed-item" style="cursor:pointer" onclick="tpSelectPos('${p.id}','${p.n.replace(/'/g,"\\'")}',this)">
+    <div class="tfi-body"><div class="tfi-title">${p.id} · ${p.n}</div><div class="tfi-sub">${p.a}</div></div>
+  </div>`).join('');
+}
+function tpSelectPos(id, name, el) {
+  tpNewPosSel = id;
+  document.querySelectorAll('#tp-pos-list .task-feed-item').forEach(x => x.style.background = '');
+  if (el) el.style.background = 'var(--tl)';
+  const sel = document.getElementById('tp-pos-selected');
+  sel.textContent = '✓ Vybráno: ' + id + ' · ' + name;
+  sel.style.display = 'block';
+}
+function tpSetPriority(p, btn) {
+  tpNewPriority = p;
+  document.querySelectorAll('#tp-priority .ef-chip').forEach(c => c.classList.remove('on'));
+  btn.classList.add('on');
+}
+function tpSetReqTech(n, btn) {
+  tpNewReqTech = n;
+  document.querySelectorAll('#tp-reqtech .ef-chip').forEach(c => c.classList.remove('on'));
+  btn.classList.add('on');
+}
+function saveNewTask() {
+  const title = document.getElementById('tp-title').value.trim();
+  if (!tpNewPosSel) { alert('Vyber POS.'); return; }
+  if (!title) { alert('Zadej název úkolu.'); return; }
+  const deadline = document.getElementById('tp-deadline').value;
+  const technik = document.getElementById('tp-technik').value;
+  const session = getSession();
+  const task = createAdhocTask({
+    posId: tpNewPosSel,
+    title,
+    description: document.getElementById('tp-desc').value.trim(),
+    priority: tpNewPriority,
+    requiredTechnicians: tpNewReqTech,
+    window: deadline ? { to: new Date(deadline + 'T23:59:59').toISOString() } : null,
+  }, session && session.user ? session.user.name : 'velin');
+  if (technik) assignTaskTechnicians(task.id, [technik], session && session.user ? session.user.name : 'velin');
+  closeTaskCreateModal();
+  renderTaskPool();
+}
+
+function setTaskPoolFilter(f, btn) {
+  taskPoolFilter = f;
+  document.querySelectorAll('#task-pool-filters .ef-chip').forEach(c => c.classList.remove('on'));
+  btn.classList.add('on');
+  renderTaskPool();
+}
+
+function renderTaskPool() {
+  const el = document.getElementById('task-pool-list'); if (!el) return;
+  let tasks = getTaskPool().slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  if (taskPoolFilter === 'open') tasks = tasks.filter(t => ['verified', 'cancelled'].indexOf(t.status) === -1);
+  else if (taskPoolFilter !== 'all') tasks = tasks.filter(t => t.status === taskPoolFilter);
+
+  const summary = TaskEngine.poolSummary(getTaskPool());
+  const sumEl = document.getElementById('task-pool-summary');
+  if (sumEl) sumEl.textContent = `${summary.total} celkem · ${summary.overdue} po termínu · ${summary.urgent} urgentních`;
+
+  if (!tasks.length) {
+    el.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">Žádné úkoly v tomto filtru.</div>';
+    return;
+  }
+  el.innerHTML = tasks.map(t => {
+    const p = (FULL_POS_DATA[CURRENT_OPS_WEEK] || []).find(x => x.id === t.posId);
+    const posLabel = p ? `${t.posId} · ${p.n}` : t.posId;
+    const overdue = TaskEngine.isOverdue(t, new Date());
+    return `<div class="task-feed-item" style="cursor:pointer" onclick="openTaskDetail('${t.id}')">
+      <div class="tfi-icon"><span class="pdot ${TASK_PRIORITY_DOT[t.priority] || 'dot-yellow'}"></span></div>
+      <div class="tfi-body">
+        <div class="tfi-title">${t.title}</div>
+        <div class="tfi-sub">${posLabel} ${t.assignedTechnicianIds.length ? '· ' + t.assignedTechnicianIds.join(', ') : ''}</div>
+        <div class="tfi-meta">
+          <span style="font-size:10px;color:var(--muted)">${new Date(t.createdAt).toLocaleDateString('cs-CZ')}</span>
+          <span class="approval-badge ${t.status === 'done' || t.status === 'verified' ? 'appr-ok' : overdue ? 'appr-rej' : 'appr-wait'}">${TASK_STATUS_LABELS[t.status]}${overdue ? ' · po termínu' : ''}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openTaskDetail(taskId) {
+  const t = findTask(taskId); if (!t) return;
+  const p = (FULL_POS_DATA[CURRENT_OPS_WEEK] || []).find(x => x.id === t.posId);
+  document.getElementById('task-detail-title').textContent = t.title;
+  document.getElementById('task-detail-body').innerHTML = taskDetailBodyHtml(t, p);
+  document.getElementById('task-detail-modal').classList.add('open');
+}
+function closeTaskDetail() { document.getElementById('task-detail-modal').classList.remove('open'); }
+
+function taskDetailBodyHtml(t, p) {
+  const nextActions = (TaskEngine.TRANSITIONS[t.status] || []).filter(s => s !== 'cancelled');
+  const actionLabels = { assigned: 'Přiřadit', in_progress: 'Rozjet', done: 'Dokončit', waiting_next_visit: 'Čeká na další návštěvu', verified: 'Ověřit', pending: 'Vrátit na nepřiřazeno' };
+  return `
+    <div style="margin-bottom:14px">
+      <div style="font-size:13px;color:var(--muted)">${p ? `${t.posId} · ${p.n} · ${p.a}` : t.posId}</div>
+      <div style="margin-top:6px"><span class="approval-badge appr-wait">${TASK_STATUS_LABELS[t.status]}</span> <span class="pdot ${TASK_PRIORITY_DOT[t.priority]}" style="display:inline-block;margin-left:8px"></span> ${t.priority}</div>
+      ${t.description ? `<div style="margin-top:8px;font-size:13px">${t.description}</div>` : ''}
+      <div style="margin-top:8px;font-size:12px;color:var(--muted)">Přiřazeno: ${t.assignedTechnicianIds.length ? t.assignedTechnicianIds.join(', ') : '—'} · Potřeba techniků: ${t.requiredTechnicians}</div>
+      ${t.window && t.window.to ? `<div style="font-size:12px;color:var(--muted)">Termín do: ${new Date(t.window.to).toLocaleDateString('cs-CZ')}</div>` : ''}
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+      ${nextActions.map(s => `<button onclick="taskPoolAdvance('${t.id}','${s}')" style="padding:8px 12px;background:var(--navy);color:var(--teal);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">${actionLabels[s] || s}</button>`).join('')}
+      ${t.status !== 'cancelled' && t.status !== 'verified' ? `<button onclick="taskPoolAdvance('${t.id}','cancelled')" style="padding:8px 12px;background:var(--rl);color:var(--red);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Zrušit úkol</button>` : ''}
+    </div>
+
+    <div class="adm-st" style="margin-bottom:8px">Evidence</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:14px">
+      ${t.evidence.comment ? `Komentář: ${t.evidence.comment}<br>` : ''}
+      ${t.evidence.gps ? `GPS: ${t.evidence.gps.lat.toFixed(4)}, ${t.evidence.gps.lng.toFixed(4)}<br>` : ''}
+      ${t.evidence.photos.length ? `Fotky: ${t.evidence.photos.length}<br>` : ''}
+      ${!t.evidence.comment && !t.evidence.gps && !t.evidence.photos.length ? 'Zatím žádná evidence.' : ''}
+    </div>
+
+    <div class="adm-st" style="margin-bottom:8px">Historie</div>
+    <div style="font-size:12px;color:var(--muted)">
+      ${t.history.slice().reverse().map(h => `<div style="padding:6px 0;border-bottom:1px solid var(--bg)">${new Date(h.ts).toLocaleString('cs-CZ')} · ${h.actor || '—'} · ${h.action}${h.note ? ' (' + h.note + ')' : ''}</div>`).join('')}
+    </div>
+  `;
+}
+
+function taskPoolAdvance(taskId, newStatus) {
+  const t = findTask(taskId); if (!t) return;
+  const session = getSession();
+  const actor = session && session.user ? session.user.name : 'velin';
+  setTaskStatus(taskId, newStatus, actor);
+  openTaskDetail(taskId);
+  renderTaskPool();
+}
+
+// ══════════════════════════════════════════════════════
 // SCHVÁLENÍ NÁVŠTĚV
 // ══════════════════════════════════════════════════════
 function renderSchvaleni() {
@@ -3429,7 +3646,7 @@ function approveVisit(posId, decision) {
 const __origShowAdmPage2 = showAdmPage;
 showAdmPage = function(p, btn) {
   __origShowAdmPage2(p, btn);
-  if (p === 'redakce') { renderTaskFeed(); injectAdminTasksIntoPosData(); }
+  if (p === 'redakce') { renderTaskFeed(); injectAdminTasksIntoPosData(); renderTaskPool(); }
   if (p === 'schvaleni') renderSchvaleni();
 };
 
