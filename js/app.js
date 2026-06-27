@@ -5429,6 +5429,65 @@ function deleteMerchTemplateItem(channel, i) {
   renderEditorMerchItems();
 }
 
+// ── TASK POOL — perzistence nad TaskEngine (js/taskEngine.js). Stejný vzor
+// jako merch/checklist šablony výše: lsg/lss nad jedním globálním klíčem
+// (přidaný do SYNC_GLOBAL_KEYS v js/sync.js, takže Velín i technik vidí
+// stejný pool na všech zařízeních). TaskEngine je čistá logika (validace,
+// přechody stavu, evidence) — tahle vrstva jen čte/zapisuje pole úkolů.
+function getTaskPool() {
+  return lsg('task_pool') || [];
+}
+function saveTaskPool(tasks) { lss('task_pool', tasks); }
+
+function findTask(taskId) {
+  return getTaskPool().find(t => t.id === taskId) || null;
+}
+
+function replaceTask(updatedTask) {
+  const pool = getTaskPool();
+  const idx = pool.findIndex(t => t.id === updatedTask.id);
+  if (idx === -1) throw new Error('Úkol nenalezen v poolu: ' + updatedTask.id);
+  pool[idx] = updatedTask;
+  saveTaskPool(pool);
+  return updatedTask;
+}
+
+// createAdhocTask(input, actor) -> nový Task uložený do poolu. input viz
+// TaskEngine.validateTaskInput (posId, title povinné).
+function createAdhocTask(input, actor) {
+  const task = TaskEngine.newTask(input, actor);
+  const pool = getTaskPool();
+  pool.push(task);
+  saveTaskPool(pool);
+  return task;
+}
+
+function setTaskStatus(taskId, newStatus, actor, note) {
+  const task = findTask(taskId);
+  if (!task) throw new Error('Úkol nenalezen: ' + taskId);
+  return replaceTask(TaskEngine.transitionStatus(task, newStatus, actor, note));
+}
+
+function assignTaskTechnicians(taskId, technicianIds, actor) {
+  const task = findTask(taskId);
+  if (!task) throw new Error('Úkol nenalezen: ' + taskId);
+  return replaceTask(TaskEngine.assignTechnicians(task, technicianIds, actor));
+}
+
+function addTaskEvidence(taskId, evidencePatch, actor) {
+  const task = findTask(taskId);
+  if (!task) throw new Error('Úkol nenalezen: ' + taskId);
+  return replaceTask(TaskEngine.addEvidence(task, evidencePatch, actor));
+}
+
+function getTasksForPos(posId) {
+  return TaskEngine.filterTasks(getTaskPool(), { posId });
+}
+
+function getTasksForTechnician(technicianId) {
+  return TaskEngine.filterTasks(getTaskPool(), { technicianId });
+}
+
 // ── EDITABLE CHECKLIST ŠABLONY — podmíněný checklist (chytrý checklist
 // v detailu POS u technika). Stejný override pattern jako úkoly na místě
 // výše — beze zásahu do CHECKLIST_TEMPLATES konstanty, jen lsg/lss override.
