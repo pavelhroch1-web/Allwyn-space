@@ -4051,15 +4051,35 @@ function downloadTaskImportTemplate() {
   XLSX.writeFile(wb, 'allwyn_space_task_import_sablona.xlsx');
 }
 
-function handleTaskImportFile(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  const statusEl = document.getElementById('task-import-status');
+// Sdílená kostra pro Excel import handlery (Tourplan/POS Master/Task Pool) —
+// FileReader + XLSX.read + try/catch + status text je u všech tří identické,
+// liší se jen parsing/validace/preview, ty zůstávají v parse() volajícího.
+function runImportFileFlow(file, { statusElId, previewBlockId, parse, onError }) {
+  const statusEl = document.getElementById(statusElId);
   statusEl.textContent = 'Načítám a parsuji soubor…';
   const reader = new FileReader();
   reader.onload = (ev) => {
     try {
       const workbook = XLSX.read(ev.target.result, { type: 'array' });
+      const rowCount = parse(workbook);
+      statusEl.textContent = `Soubor „${file.name}“ načten — ${rowCount} řádků.`;
+    } catch (err) {
+      statusEl.textContent = `Chyba při zpracování souboru: ${err.message}`;
+      document.getElementById(previewBlockId).style.display = 'none';
+      if (onError) onError();
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function handleTaskImportFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  runImportFileFlow(file, {
+    statusElId: 'task-import-status',
+    previewBlockId: 'task-import-preview-block',
+    onError: () => { pendingTaskImportData = null; },
+    parse: (workbook) => {
       const rows = parseSheetRows(workbook, (first) => first.length >= 2 && /^[a-z_]+$/i.test(String(first[0]).trim()));
       TaskImport.validateColumns(rows);
       const validPosIds = new Set((FULL_POS_DATA[CURRENT_OPS_WEEK] || []).map(p => p.id));
@@ -4069,14 +4089,9 @@ function handleTaskImportFile(e) {
       pendingTaskImportData = result;
       pendingTaskImportFileName = file.name;
       renderTaskImportPreview(result);
-      statusEl.textContent = `Soubor „${file.name}“ načten — ${rows.length} řádků.`;
-    } catch (err) {
-      statusEl.textContent = `Chyba při zpracování souboru: ${err.message}`;
-      document.getElementById('task-import-preview-block').style.display = 'none';
-      pendingTaskImportData = null;
-    }
-  };
-  reader.readAsArrayBuffer(file);
+      return rows.length;
+    },
+  });
 }
 
 function renderTaskImportPreview(result) {
@@ -6815,12 +6830,11 @@ function parseSheetRows(workbook, isHeaderRow){
 function handleImportFile(e){
   const file = e.target.files[0];
   if(!file) return;
-  const statusEl = document.getElementById('import-status');
-  statusEl.textContent = 'Načítám a parsuji soubor…';
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    try {
-      const workbook = XLSX.read(ev.target.result, { type: 'array' });
+  runImportFileFlow(file, {
+    statusElId: 'import-status',
+    previewBlockId: 'import-preview-block',
+    onError: () => { pendingImportRows = null; },
+    parse: (workbook) => {
       // Tourplan: TERMINAL_ID + POS_ID, oba čistě číselné — hlavička je popisek, ne čísla.
       const rows = parseSheetRows(workbook, (first) =>
         first.length >= 2 && (!/^\d+$/.test(String(first[0]).trim()) || !/^\d+$/.test(String(first[1]).trim()))
@@ -6830,14 +6844,9 @@ function handleImportFile(e){
       pendingImportRows = rows;
       pendingImportFileName = file.name;
       renderImportPreview(summary, warnings);
-      statusEl.textContent = `Soubor „${file.name}“ načten — ${rows.length} řádků.`;
-    } catch(err){
-      statusEl.textContent = `Chyba při zpracování souboru: ${err.message}`;
-      document.getElementById('import-preview-block').style.display = 'none';
-      pendingImportRows = null;
-    }
-  };
-  reader.readAsArrayBuffer(file);
+      return rows.length;
+    },
+  });
 }
 
 function renderImportPreview(summary, warnings){
@@ -6895,12 +6904,11 @@ function renderPosMasterSourceLabel(){
 function handlePosMasterImportFile(e){
   const file = e.target.files[0];
   if(!file) return;
-  const statusEl = document.getElementById('pos-master-status');
-  statusEl.textContent = 'Načítám a parsuji soubor…';
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    try {
-      const workbook = XLSX.read(ev.target.result, { type: 'array' });
+  runImportFileFlow(file, {
+    statusElId: 'pos-master-status',
+    previewBlockId: 'pos-master-preview-block',
+    onError: () => { pendingPosMasterRows = null; },
+    parse: (workbook) => {
       // POS Master: jen POS_ID musí být čistě číselné — LAT (sloupec 1) je desetinné
       // číslo, takže ho nelze použít ke kontrole hlavičky stejně jako u Tourplan importu.
       const rows = parseSheetRows(workbook, (first) =>
@@ -6911,14 +6919,9 @@ function handlePosMasterImportFile(e){
       pendingPosMasterRows = rows;
       pendingPosMasterFileName = file.name;
       renderPosMasterPreview(summary, warnings);
-      statusEl.textContent = `Soubor „${file.name}“ načten — ${rows.length} řádků.`;
-    } catch(err){
-      statusEl.textContent = `Chyba při zpracování souboru: ${err.message}`;
-      document.getElementById('pos-master-preview-block').style.display = 'none';
-      pendingPosMasterRows = null;
-    }
-  };
-  reader.readAsArrayBuffer(file);
+      return rows.length;
+    },
+  });
 }
 
 function renderPosMasterPreview(summary, warnings){
