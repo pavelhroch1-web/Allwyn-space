@@ -5396,11 +5396,12 @@ function renderEditorMerchItems() {
     const items = tpl[channel] || [];
     el.innerHTML = items.map((x,i) => `
       <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--bg)">
-        <div style="flex:1;font-size:13px">${x.n}</div>
-        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer">
+        <input value="${x.n}" oninput="updateMerchTemplateItem('${channel}',${i},this.value)" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:13px;outline:none"/>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap">
           <input type="checkbox" ${x.reqPhoto?'checked':''} onchange="toggleMerchReqPhoto('${channel}',${i},this.checked)"/>
           Vyžaduje foto
         </label>
+        <button onclick="deleteMerchTemplateItem('${channel}',${i})" style="background:none;border:none;color:var(--red);font-size:16px;cursor:pointer;padding:4px">✕</button>
       </div>`).join('') || '<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px">Žádné položky</div>';
   });
 }
@@ -5408,6 +5409,24 @@ function toggleMerchReqPhoto(channel, i, val) {
   const tpl = getMerchTemplates();
   tpl[channel][i].reqPhoto = val;
   saveMerchTemplates(tpl);
+}
+function updateMerchTemplateItem(channel, i, val) {
+  const tpl = getMerchTemplates();
+  tpl[channel][i].n = val;
+  saveMerchTemplates(tpl);
+}
+function addMerchTemplateItem(channel) {
+  const tpl = getMerchTemplates();
+  if (!tpl[channel]) tpl[channel] = [];
+  tpl[channel].push({ n: 'Nová položka', done: null, reqPhoto: false });
+  saveMerchTemplates(tpl);
+  renderEditorMerchItems();
+}
+function deleteMerchTemplateItem(channel, i) {
+  const tpl = getMerchTemplates();
+  tpl[channel].splice(i, 1);
+  saveMerchTemplates(tpl);
+  renderEditorMerchItems();
 }
 
 // ── EDITABLE CHECKLIST ŠABLONY — podmíněný checklist (chytrý checklist
