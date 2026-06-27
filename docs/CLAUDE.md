@@ -151,6 +151,28 @@ Doporučený stack (návrh, ne dogma): frontend buď ponechat vanilla/lehký fra
 
 ---
 
+## TRVALÝ PRACOVNÍ PRINCIP (Pavel, 2026-06-27)
+
+> Business cíl a směr produktu určuje Pavel. **Technickou cestu vlastní Claude.**
+
+- **Jasná oprava** (bug, technický dluh, nekonzistence, nevyužitá funkcionalita,
+  špatně navázaná data) **bez dopadu na chování produktu nebo business logiku**
+  → oprav rovnou, nečekej na zadání. Po opravě stručně řekni co a proč.
+- **Víc možných řešení nebo nutné business rozhodnutí** (cokoliv, co změní
+  chování produktu, datový model navenek, nebo workflow uživatele) → připrav
+  varianty, řekni svoje doporučení, zeptej se.
+- **Architektonický nesmysl nebo blokující dluh** bez nutnosti business
+  rozhodnutí → navrhni lepší řešení a rovnou ho implementuj.
+- Při každé nové featuře nejdřív zvážit, jestli nezapadá do existující části
+  systému místo nové obrazovky/komponenty — viz `VELIN_ARCHITECTURE.md`.
+- Necílíme na jednorázový redesign. Cílová architektura Velínu (duplicity,
+  sjednocení, priority) je v `docs/VELIN_ARCHITECTURE.md` — realizuje se
+  postupně, při běžném vývoji, ne najednou.
+- Neptej se na business rozhodnutí, které už bylo jednou uděláno — drž se
+  zapsaných pravidel v tomto souboru a v `PROJECT_CONTEXT.md`.
+
+---
+
 ## Když si nejsi jistý
 1. Přečti `PROJECT_CONTEXT.md` (business) a `MIGRATION_PLAN.md` (technický postup).
 2. Zachovej existující business pravidla z tohoto souboru.
