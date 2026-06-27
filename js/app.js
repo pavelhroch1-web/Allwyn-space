@@ -3657,6 +3657,102 @@ function saveNewTask() {
   renderTaskPool();
 }
 
+// ══════════════════════════════════════════════════════
+// TASK IMPORT — Excel ingestion externích úkolů do task_pool (Fáze 6)
+// ══════════════════════════════════════════════════════
+// Dnes jediný reálný "external ingestion" kanál je Excel upload — žádné
+// API napojení neexistuje. Task.source = { kind, refId, createdBy } je ale
+// už obecné, takže budoucí API ingestion půjde napojit beze změny datového
+// modelu, jen přidáním další cesty, která zavolá createAdhocTask se
+// source.kind = 'api' namísto 'excel_import'.
+let pendingTaskImportData = null, pendingTaskImportFileName = null;
+
+function downloadTaskImportTemplate() {
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([TaskImport.TEMPLATE_HEADERS, TaskImport.TEMPLATE_EXAMPLE_ROW]);
+  XLSX.utils.book_append_sheet(wb, ws, 'Task Import');
+  XLSX.writeFile(wb, 'allwyn_space_task_import_sablona.xlsx');
+}
+
+function handleTaskImportFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('task-import-status');
+  statusEl.textContent = 'Načítám a parsuji soubor…';
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const workbook = XLSX.read(ev.target.result, { type: 'array' });
+      const rows = parseSheetRows(workbook, (first) => first.length >= 2 && /^[a-z_]+$/i.test(String(first[0]).trim()));
+      TaskImport.validateColumns(rows);
+      const validPosIds = new Set((FULL_POS_DATA[CURRENT_OPS_WEEK] || []).map(p => p.id));
+      const validTechnicianNames = new Set(TECHNICIAN_NAMES);
+      const existingExternalRefs = new Set(getTaskPool().map(t => t.source && t.source.refId).filter(Boolean));
+      const result = TaskImport.buildTasksFromRows(rows, { validPosIds, validTechnicianNames, existingExternalRefs });
+      pendingTaskImportData = result;
+      pendingTaskImportFileName = file.name;
+      renderTaskImportPreview(result);
+      statusEl.textContent = `Soubor „${file.name}“ načten — ${rows.length} řádků.`;
+    } catch (err) {
+      statusEl.textContent = `Chyba při zpracování souboru: ${err.message}`;
+      document.getElementById('task-import-preview-block').style.display = 'none';
+      pendingTaskImportData = null;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function renderTaskImportPreview(result) {
+  const { summary, warnings, errors } = result;
+  const block = document.getElementById('task-import-preview-block');
+  block.style.display = 'block';
+  document.getElementById('task-import-preview-kpis').innerHTML = `
+    <div class="kpi"><div class="kpi-v">${summary.totalRows}</div><div class="kpi-l">řádků v souboru</div></div>
+    <div class="kpi"><div class="kpi-v">${summary.imported}</div><div class="kpi-l">úkolů k importu</div></div>
+    <div class="kpi"><div class="kpi-v">${summary.skippedDuplicateRef}</div><div class="kpi-l">duplicit přeskočeno</div></div>
+  `;
+  document.getElementById('task-import-errors').innerHTML = errors.length
+    ? `<div style="font-size:13px;color:#cc2200"><strong>Vynechané řádky:</strong><br>${errors.map(w => `• ${w}`).join('<br>')}</div>`
+    : '';
+  document.getElementById('task-import-warnings').innerHTML = warnings.length
+    ? `<div style="font-size:13px;color:var(--muted)"><strong>Upozornění:</strong><br>${warnings.map(w => `• ${w}`).join('<br>')}</div>`
+    : '';
+  const confirmBtn = document.getElementById('task-import-confirm-btn');
+  confirmBtn.disabled = summary.imported === 0;
+  confirmBtn.style.opacity = summary.imported === 0 ? '0.5' : '1';
+  confirmBtn.style.cursor = summary.imported === 0 ? 'not-allowed' : 'pointer';
+}
+
+function confirmTaskImport() {
+  if (!pendingTaskImportData || !pendingTaskImportData.tasksInput.length) return;
+  const session = getSession();
+  const actor = session && session.user ? session.user.name : 'velin';
+  pendingTaskImportData.tasksInput.forEach(input => {
+    const task = createAdhocTask({
+      posId: input.posId,
+      title: input.title,
+      description: input.description,
+      type: input.type,
+      priority: input.priority,
+      requiredTechnicians: input.requiredTechnicians,
+      estimatedDurationMin: input.estimatedDurationMin,
+      window: input.window,
+      source: { kind: 'excel_import', refId: input.externalRef, createdBy: actor },
+    }, actor);
+    if (input.assignedTechnician) assignTaskTechnicians(task.id, [input.assignedTechnician], actor);
+  });
+  cancelTaskImportPreview();
+  renderTaskPool();
+}
+
+function cancelTaskImportPreview() {
+  pendingTaskImportData = null;
+  pendingTaskImportFileName = null;
+  document.getElementById('task-import-preview-block').style.display = 'none';
+  document.getElementById('task-import-file-input').value = '';
+  document.getElementById('task-import-status').textContent = '';
+}
+
 function setTaskPoolFilter(f, btn) {
   taskPoolFilter = f;
   document.querySelectorAll('#task-pool-filters .ef-chip').forEach(c => c.classList.remove('on'));

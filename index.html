@@ -919,8 +919,31 @@
       <!-- Task Pool — sledované ad hoc úkoly s historií a evidencí -->
       <div class="adm-sh" style="margin-top:24px">
         <div class="adm-st">Task Pool — sledované úkoly</div>
-        <button onclick="openTaskCreateModal()" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Sledovaný úkol</button>
+        <div style="display:flex;gap:8px">
+          <button onclick="document.getElementById('task-import-block').style.display = document.getElementById('task-import-block').style.display === 'none' ? 'block' : 'none'" style="background:#fff;color:var(--navy);border:1.5px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">⇪ Import z Excelu</button>
+          <button onclick="openTaskCreateModal()" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Sledovaný úkol</button>
+        </div>
       </div>
+
+      <!-- Import úkolů z externích systémů (dnes Excel, do budoucna i API — source.kind se jen rozšíří) -->
+      <div id="task-import-block" style="display:none;margin-bottom:16px;padding:14px;background:var(--bg);border-radius:10px">
+        <div style="font-size:13px;color:var(--muted);margin:0 0 10px">Nahraj úkoly z externího systému (servisní požadavky, kampaně apod.) přes Excel. Sloupce: POS_ID, TITLE, DESCRIPTION, TYPE, PRIORITY, DEADLINE, REQUIRED_TECHNICIANS, ESTIMATED_DURATION_HOURS, ASSIGNED_TECHNICIAN, EXTERNAL_REF.</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button onclick="downloadTaskImportTemplate()" style="background:#fff;color:var(--navy);border:1.5px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">⬇ Stáhnout šablonu</button>
+          <input type="file" id="task-import-file-input" accept=".xlsx,.xls,.csv" onchange="handleTaskImportFile(event)" style="font-size:13px">
+        </div>
+        <div id="task-import-status" style="font-size:12px;color:var(--muted);margin-top:8px"></div>
+        <div id="task-import-preview-block" style="display:none;margin-top:12px">
+          <div id="task-import-preview-kpis" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px"></div>
+          <div id="task-import-warnings" style="margin-bottom:8px"></div>
+          <div id="task-import-errors" style="margin-bottom:8px"></div>
+          <div style="display:flex;gap:8px">
+            <button id="task-import-confirm-btn" onclick="confirmTaskImport()" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">Potvrdit import</button>
+            <button onclick="cancelTaskImportPreview()" style="background:#fff;color:var(--td);border:1.5px solid var(--border);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">Zrušit</button>
+          </div>
+        </div>
+      </div>
+
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <div class="ef-chips" id="task-pool-filters">
           <div class="ef-chip on" onclick="setTaskPoolFilter('open',this)">Otevřené</div>
@@ -1157,6 +1180,7 @@
 <script src="js/technicianModel.js?v=20260626k"></script>
 <script src="js/decisionEngine.js?v=20260626k"></script>
 <script src="js/taskEngine.js?v=20260626k"></script>
+<script src="js/taskImport.js?v=20260626k"></script>
 <script src="js/app.js?v=20260626k"></script>
 <script src="js/visitStore.js?v=20260626k"></script>
 <script src="js/sync.js?v=20260626k"></script>
