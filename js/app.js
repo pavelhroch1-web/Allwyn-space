@@ -8,7 +8,7 @@ const CURRENT_OPS_WEEK = '25';
 let cWeek=CURRENT_OPS_WEEK, cDay=0, cIdx=null, pendingSlot=null, assigningId=null, pendingTaskPhotoId=null;
 let cView='list'; // 'list' | 'planning' | 'overdue' — perzistováno přes refresh (PART 6)
 let adminMap=null, adminMarkers=[], adminTechnicians=[];
-let activeRegion='all';
+let activeRegion=getPersistedFilter('region', 'all');
 let ciTimer=null;
 let sigCanvas=null, sigCtx=null, sigDrawing=false, sigMark=false;
 let supplyItems=[], supplyLocked=false;
@@ -146,6 +146,18 @@ function techDisplayLatLng(t){
 function lsg(k,d=null){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch{return d;}}
 function lss(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
 function today(){return new Date().toISOString().split('T')[0];}
+
+// Perzistence filtrů ve Velínu — výběr filtru přežije reload/přechod mezi
+// stránkami (dřív jen v JS proměnné, resetlo se to při refreshi).
+function getPersistedFilter(key, fallback) { return lsg('filter_' + key, fallback); }
+function setPersistedFilter(key, value) { lss('filter_' + key, value); }
+
+// Jednotná chip kostra pro filtry napříč Velínem (dřív si každá obrazovka
+// stavěla vlastní HTML string se stejným vzorem) — variant: barva při 'on'.
+function filterChipHtml(label, active, onclick, variant) {
+  const cls = variant ? `ef-chip ${active ? 'on ' + variant : ''}` : `ef-chip ${active ? 'on' : ''}`;
+  return `<button class="${cls}" onclick="${onclick}">${label}</button>`;
+}
 
 // Perzistuje vybraný týden + aktivní pohled technika (list/planning/overdue),
 // aby F5 zůstal na stejné obrazovce/týdnu (PART 6 — refresh nesmí vracet na landing).
@@ -1997,6 +2009,7 @@ function initAdminMap(){
       adminMarkers.push(marker);
     });
   } catch(e){console.warn('Map init failed',e);}
+  if (activeRegion !== 'all') filterRegion(activeRegion, null);
 }
 
 // ══════════════════════════════════════════════════════
@@ -2016,8 +2029,10 @@ function setDashView(view){
 
 function filterRegion(region,btn){
   activeRegion=region;
+  setPersistedFilter('region', region);
   document.querySelectorAll('#rf-row .rfb').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
+  if (btn) btn.classList.add('active');
+  else document.querySelector(`#rf-row .rfb[onclick="filterRegion('${region}',this)"]`)?.classList.add('active');
   renderAdminLive();
   adminMarkers.forEach((m,i)=>{
     const t=adminTechnicians[i];
@@ -2213,6 +2228,9 @@ function renderAdminDashboard() {
   const regionRows = Object.values(byRegion)
     .map(r => ({ ...r, pct: r.total ? Math.round(r.done / r.total * 100) : 0 }))
     .sort((a, b) => a.pct - b.pct);
+  const regChartEl = document.getElementById('dash-regions-chart');
+  if (regChartEl) regChartEl.innerHTML = barChartHtml(regionRows.map(r => ({ label: r.region, value: r.pct, highlight: r.behind > 0 })));
+
   const regEl = document.getElementById('dash-regions');
   if (regEl) {
     regEl.innerHTML = regionRows.map(r => `
@@ -2476,20 +2494,31 @@ function renderDecisionFeed() {
 // ── DECISION DETAIL — důkazy za doporučením (priorita 1). Manažer musí
 // rozhodovat na základě faktů, ne jen textu. Vše z evidence reálných dat
 // (DecisionEngine), nic vymyšleného.
-function trendBarsHtml(weeklyTrend, targetWeek) {
-  if (!weeklyTrend || !weeklyTrend.length) return '';
-  const max = Math.max(...weeklyTrend.map(t => t.count), 1);
-  return `<div style="display:flex;align-items:flex-end;gap:8px;height:90px;margin-top:8px">
-    ${weeklyTrend.map(t => {
-      const h = Math.round((t.count / max) * 70) + 14;
-      const isTarget = t.week === targetWeek;
-      return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
-        <div style="font-size:11px;font-weight:800;color:${isTarget ? 'var(--red)' : 'var(--ink)'}">${t.count}</div>
-        <div style="width:100%;height:${h}px;border-radius:5px 5px 0 0;background:${isTarget ? 'var(--red)' : 'var(--border)'}"></div>
-        <div style="font-size:10px;color:var(--muted)">T${t.week}</div>
+// Obecný sloupcový graf (žádná knihovna — div/flex stejně jako dřív
+// trendBarsHtml, teď použitelný pro libovolná data: technici, kanály, týdny).
+// items: [{ label, value, highlight }]
+function barChartHtml(items, opts) {
+  opts = opts || {};
+  if (!items || !items.length) return '';
+  const height = opts.height || 90;
+  const barMax = height - 20;
+  const max = Math.max(...items.map(i => i.value), 1);
+  return `<div style="display:flex;align-items:flex-end;gap:8px;height:${height}px;margin-top:8px">
+    ${items.map(it => {
+      const h = Math.round((it.value / max) * (barMax - 14)) + 14;
+      const color = it.highlight ? 'var(--red)' : 'var(--navy)';
+      return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0">
+        <div style="font-size:11px;font-weight:800;color:${color}">${it.value}</div>
+        <div style="width:100%;height:${h}px;border-radius:5px 5px 0 0;background:${color}"></div>
+        <div style="font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">${it.label}</div>
       </div>`;
     }).join('')}
   </div>`;
+}
+
+function trendBarsHtml(weeklyTrend, targetWeek) {
+  if (!weeklyTrend || !weeklyTrend.length) return '';
+  return barChartHtml(weeklyTrend.map(t => ({ label: 'T' + t.week, value: t.count, highlight: t.week === targetWeek })));
 }
 
 function taskDecisionDetailBodyHtml(d) {
@@ -2682,7 +2711,7 @@ function toggleRouteReco(idx) {
 // ══════════════════════════════════════════════════════
 // ADMIN — POS MANAGEMENT (POS Síť) — kompletní reálná POS síť
 // ══════════════════════════════════════════════════════
-let posNetFilters = { tech: 'all', region: 'all', channel: 'all', status: 'all' };
+let posNetFilters = getPersistedFilter('posnet', { tech: 'all', region: 'all', channel: 'all', status: 'all' });
 let posNetSearch = '';
 function setPosNetSearch(val) {
   posNetSearch = (val || '').trim().toLowerCase();
@@ -2869,6 +2898,7 @@ function renderAdminPosNet() {
 
 function setPosNetFilter(key, val) {
   posNetFilters[key] = val;
+  setPersistedFilter('posnet', posNetFilters);
   renderAdminPosNet();
 }
 
@@ -3276,10 +3306,11 @@ function getMediaItems(filters) {
   }).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 }
 
-let mediaGalleryFilters = { posId: null, technician: null, date: null, source: null };
+let mediaGalleryFilters = { posId: null, technician: null, date: null, source: getPersistedFilter('foto_source', null) };
 
 function setMediaFilter(key, value) {
   mediaGalleryFilters[key] = mediaGalleryFilters[key] === value ? null : value;
+  if (key === 'source') setPersistedFilter('foto_source', mediaGalleryFilters.source);
   renderAdminFoto();
 }
 
@@ -3380,10 +3411,11 @@ function getMaterialWriteOffData(filters) {
   return Object.values(groups).sort((a, b) => (a.sapCode ? 0 : 1) - (b.sapCode ? 0 : 1) || b.qty - a.qty);
 }
 
-let writeOffFilters = { date: null, technician: null };
+let writeOffFilters = getPersistedFilter('writeoff', { date: null, technician: null });
 
 function setWriteOffFilter(key, value) {
   writeOffFilters[key] = writeOffFilters[key] === value ? null : value;
+  setPersistedFilter('writeoff', writeOffFilters);
   renderAdminOdpis();
 }
 
@@ -3407,7 +3439,7 @@ function renderAdminOdpis() {
 
   const filtersEl = document.getElementById('odpis-filters');
   if (filtersEl) {
-    const chip = (label, active, key, value) => `<button onclick="setWriteOffFilter('${key}','${value}')" style="font-size:11px;font-weight:700;padding:5px 11px;border-radius:20px;border:1.5px solid ${active ? 'var(--navy)' : 'var(--border)'};background:${active ? 'var(--navy)' : '#fff'};color:${active ? '#fff' : 'var(--text)'};cursor:pointer">${label}</button>`;
+    const chip = (label, active, key, value) => filterChipHtml(label, active, `setWriteOffFilter('${key}','${value}')`);
     let html = '';
     technicians.forEach(t => { html += chip(t, writeOffFilters.technician === t, 'technician', t); });
     dates.slice(0, 8).forEach(d => { html += chip(d, writeOffFilters.date === d, 'date', d); });
@@ -3497,18 +3529,22 @@ function renderAdminAktivita() {
       <div style="font-size:13px;font-weight:800;width:34px;text-align:right">${s.merchInstalled}</div>
     </div>`;
 
+  const techRows = Object.entries(data.byTechnician).sort((a, b) => b[1].tasksCompleted - a[1].tasksCompleted);
   const techEl = document.getElementById('aktivita-technicians');
   if (techEl) {
-    const rows = Object.entries(data.byTechnician).sort((a, b) => b[1].tasksCompleted - a[1].tasksCompleted);
-    techEl.innerHTML = rows.length ? rows.map(([name, s]) => activityRow(name, s)).join('')
+    techEl.innerHTML = techRows.length ? techRows.map(([name, s]) => activityRow(name, s)).join('')
       : '<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px">Žádná data o technicích</div>';
   }
+  const techChartEl = document.getElementById('aktivita-technicians-chart');
+  if (techChartEl) techChartEl.innerHTML = barChartHtml(techRows.slice(0, 12).map(([name, s]) => ({ label: name, value: s.tasksCompleted })));
 
+  const chRows = Object.entries(data.byChannel);
   const chEl = document.getElementById('aktivita-channels');
   if (chEl) {
-    const rows = Object.entries(data.byChannel);
-    chEl.innerHTML = rows.length ? rows.map(([ch, s]) => activityRow(ch, s)).join('') : '';
+    chEl.innerHTML = chRows.length ? chRows.map(([ch, s]) => activityRow(ch, s)).join('') : '';
   }
+  const chChartEl = document.getElementById('aktivita-channels-chart');
+  if (chChartEl) chChartEl.innerHTML = barChartHtml(chRows.map(([ch, s]) => ({ label: ch, value: s.tasksCompleted })));
 }
 
 // ══════════════════════════════════════════════════════
@@ -3898,7 +3934,8 @@ const TASK_STATUS_LABELS = {
 };
 const TASK_PRIORITY_DOT = { normal: 'dot-yellow', high: 'dot-orange', urgent: 'dot-red' };
 
-let taskPoolFilter = 'open'; // 'open' = vše kromě verified/cancelled
+let taskPoolFilter = getPersistedFilter('taskpool_status', 'open'); // 'open' = vše kromě verified/cancelled
+let taskPoolTechFilter = getPersistedFilter('taskpool_tech', 'all');
 let tpNewPosSel = null;
 let tpNewPriority = 'normal';
 let tpNewReqTech = 1;
@@ -4147,16 +4184,34 @@ function cancelTaskImportPreview() {
 
 function setTaskPoolFilter(f, btn) {
   taskPoolFilter = f;
+  setPersistedFilter('taskpool_status', f);
   document.querySelectorAll('#task-pool-filters .ef-chip').forEach(c => c.classList.remove('on'));
   btn.classList.add('on');
   renderTaskPool();
 }
 
+function setTaskPoolTechFilter(value) {
+  taskPoolTechFilter = value;
+  setPersistedFilter('taskpool_tech', value);
+  renderTaskPool();
+}
+
 function renderTaskPool() {
   const el = document.getElementById('task-pool-list'); if (!el) return;
+  const techSel = document.getElementById('task-pool-tech-filter');
+  if (techSel && techSel.options.length <= 1) {
+    techSel.innerHTML = '<option value="all">Všichni technici</option>' +
+      TECHNICIAN_NAMES.map(n => `<option value="${n}">${n}</option>`).join('');
+  }
+  if (techSel) techSel.value = taskPoolTechFilter;
+  document.querySelectorAll('#task-pool-filters .ef-chip').forEach(c => {
+    c.classList.toggle('on', c.getAttribute('onclick') === `setTaskPoolFilter('${taskPoolFilter}',this)`);
+  });
+
   let tasks = getTaskPool().slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   if (taskPoolFilter === 'open') tasks = tasks.filter(t => ['verified', 'cancelled'].indexOf(t.status) === -1);
   else if (taskPoolFilter !== 'all') tasks = tasks.filter(t => t.status === taskPoolFilter);
+  if (taskPoolTechFilter !== 'all') tasks = tasks.filter(t => t.assignedTechnicianIds.includes(taskPoolTechFilter));
 
   const summary = TaskEngine.poolSummary(getTaskPool());
   const sumEl = document.getElementById('task-pool-summary');
@@ -5674,7 +5729,13 @@ function showAdminPOSDetail(posId) {
 
   // Visit history
   if (history.length) {
-    html += `<div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Historie návštěv</div>
+    const byWeek = {};
+    history.forEach(h => { byWeek[h.week] = (byWeek[h.week] || 0) + 1; });
+    const weekChart = Object.entries(byWeek).sort((a, b) => Number(a[0]) - Number(b[0])).map(([w, count]) => ({ label: 'T' + w, value: count }));
+    html += `<div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Návštěvy po týdnech</div>
+    <div style="background:white;border-radius:10px;padding:13px 13px 6px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:14px">${barChartHtml(weekChart)}</div>
+
+    <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Historie návštěv</div>
     <div style="background:white;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:14px">
     ${history.map(h => `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--bg)">
       <div style="font-size:13px;font-weight:700;min-width:70px">${h.date}</div>
