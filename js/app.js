@@ -634,7 +634,9 @@ function typTag(p){
   return`<span class="tag t-idt">IDT</span>`;
 }
 function priChip(p){
-  if(p.taskState.some(t=>t.src==='servis'&&!t.done))return`<span class="tag t-svc"><svg class="ic ic-sm"><use href="#ic-wrench"/></svg> Servis</span>`;
+  // 'servis' klasifikace musí jít přes stejnou RouteEngine.classifyVisit, kterou
+  // používá PosModel pro Velín — jinak by se karta technika a admin pohled rozjely.
+  if(RouteEngine.classifyVisit(p)==='service')return`<span class="tag t-svc"><svg class="ic ic-sm"><use href="#ic-wrench"/></svg> Servis</span>`;
   const inv=p.inventory||{vnitrni:[],venkovni:[]};
   const invItems=[...(inv.vnitrni||[]),...(inv.venkovni||[])];
   if(invItems.some(i=>i.s==='miss'))return`<span class="tag" style="background:var(--ol);color:var(--orange)"><svg class="ic ic-sm"><use href="#ic-box"/></svg> Chybí</span>`;
