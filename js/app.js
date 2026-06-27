@@ -358,9 +358,8 @@ function showAdmPage(p,btn){
   if(p==='dashboard'){ renderAdminDashboard(); renderAdminLive(); renderAdminCasy(); if(!adminMap) setTimeout(initAdminMap,100); }
   if(p==='posnet') renderAdminPosNet();
   if(p==='foto') renderAdminFoto();
-  if(p==='alerts') renderAdminAlerts();
-  if(p==='odpis') renderAdminOdpis();
-  if(p==='aktivita') renderAdminAktivita();
+  if(p==='alerts'){ renderAdminAlerts(); renderSchvaleni(); }
+  if(p==='provoz'){ renderAdminOdpis(); renderAdminAktivita(); }
   pushRoute();
 }
 
@@ -2101,9 +2100,9 @@ function startAdminRefresh() {
       if (activePage.id === 'adm-dashboard') renderAdminDashboard();
       if (activePage.id === 'adm-live') renderAdminLive();
       if (activePage.id === 'adm-casy') renderAdminCasy();
-      if (activePage.id === 'adm-alerts') renderAdminAlerts();
+      if (activePage.id === 'adm-alerts') { renderAdminAlerts(); renderSchvaleni(); }
       if (activePage.id === 'adm-foto') renderAdminFoto();
-      if (activePage.id === 'adm-aktivita') renderAdminAktivita();
+      if (activePage.id === 'adm-provoz') { renderAdminOdpis(); renderAdminAktivita(); }
     }
   }, 5000);
 }
@@ -4321,7 +4320,6 @@ const __origShowAdmPage2 = showAdmPage;
 showAdmPage = function(p, btn) {
   __origShowAdmPage2(p, btn);
   if (p === 'redakce') { renderTaskFeed(); injectAdminTasksIntoPosData(); renderTaskPool(); }
-  if (p === 'schvaleni') renderSchvaleni();
 };
 
 // ══════════════════════════════════════════════════════
@@ -6017,6 +6015,32 @@ function showRedakceSection(sec, btn) {
     if (el) el.style.display = s === sec ? 'block' : 'none';
   });
   root.querySelectorAll(':scope > div > .ed-subnav').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+}
+
+// Provoz = Odpis materiálu + Aktivita techniků sloučené pod jednu obrazovku
+// (docs/VELIN_PRODUCT_ROADMAP.md §6 Etapa F) — dřív 2 samostatné nav položky.
+function showProvozSection(sec, btn) {
+  const root = document.getElementById('adm-provoz');
+  if (!root) return;
+  ['odpis','aktivita'].forEach(s => {
+    const el = document.getElementById('prov-sec-' + s);
+    if (el) el.style.display = s === sec ? 'block' : 'none';
+  });
+  root.querySelectorAll(':scope > .ed-subnav').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+}
+
+// Flagy = alerty + schválení návštěv sloučené pod jednu obrazovku
+// (docs/VELIN_PRODUCT_ROADMAP.md §6 Etapa F) — dřív 2 samostatné nav položky.
+function showFlagySection(sec, btn) {
+  const root = document.getElementById('adm-alerts');
+  if (!root) return;
+  ['list','schvaleni'].forEach(s => {
+    const el = document.getElementById('flagy-sec-' + s);
+    if (el) el.style.display = s === sec ? 'block' : 'none';
+  });
+  root.querySelectorAll(':scope > .ed-subnav').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
 }
 

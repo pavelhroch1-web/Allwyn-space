@@ -693,12 +693,10 @@
       <button class="adm-btn" onclick="showAdmPage('import',this)"><svg class="ic ic-sm"><use href="#ic-upload"/></svg> Import dat</button>
       <button class="adm-btn" onclick="showAdmPage('alerts',this)"><svg class="ic ic-sm"><use href="#ic-warning"/></svg> Flagy</button>
       <button class="adm-btn" onclick="showAdmPage('foto',this)"><svg class="ic ic-sm"><use href="#ic-camera"/></svg> Fotky</button>
-      <button class="adm-btn" onclick="showAdmPage('odpis',this)"><svg class="ic ic-sm"><use href="#ic-upload"/></svg> Odpis materiálu</button>
-      <button class="adm-btn" onclick="showAdmPage('aktivita',this)"><svg class="ic ic-sm"><use href="#ic-dashboard"/></svg> Aktivita</button>
+      <button class="adm-btn" onclick="showAdmPage('provoz',this)"><svg class="ic ic-sm"><use href="#ic-upload"/></svg> Provoz</button>
       <button class="adm-btn" onclick="showAdmPage('redakce',this)"><svg class="ic ic-sm"><use href="#ic-edit"/></svg> Úkoly</button>
       <button class="adm-btn" onclick="showAdmPage('ai',this)"><svg class="ic ic-sm"><use href="#ic-intel"/></svg> Intelligence</button>
       <button class="adm-btn" onclick="showAdmPage('editor',this)"><svg class="ic ic-sm"><use href="#ic-edit"/></svg> Editor</button>
-      <button class="adm-btn" onclick="showAdmPage('schvaleni',this)"><svg class="ic ic-sm"><use href="#ic-check-circle"/></svg> Schválení</button>
     </div>
     <div style="position:relative;flex-shrink:0">
       <input type="text" id="global-pos-search" placeholder="POS ID, název, adresa…"
@@ -889,10 +887,22 @@
       </div>
     </div>
 
-    <!-- ALERTS -->
+    <!-- ALERTS + SCHVÁLENÍ NÁVŠTĚV (sloučeno, docs/VELIN_PRODUCT_ROADMAP.md §6 Etapa F) -->
     <div class="adm-page" id="adm-alerts">
-      <div class="adm-sh"><div class="adm-st">Flagy & nesplněné</div></div>
-      <div class="cw" id="adm-alerts-list"></div>
+      <div style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto">
+        <button class="ed-subnav active" onclick="showFlagySection('list',this)"><svg class="ic ic-sm"><use href="#ic-warning"/></svg> Flagy & nesplněné</button>
+        <button class="ed-subnav" onclick="showFlagySection('schvaleni',this)"><svg class="ic ic-sm"><use href="#ic-check-circle"/></svg> Schválení návštěv</button>
+      </div>
+      <div id="flagy-sec-list">
+        <div class="cw" id="adm-alerts-list"></div>
+      </div>
+      <div id="flagy-sec-schvaleni" style="display:none">
+        <div class="adm-sh" style="margin-bottom:12px">
+          <div class="adm-st">Schválení návštěv</div>
+          <div class="adm-sc" id="schvaleni-count">0 čeká</div>
+        </div>
+        <div class="cw" id="schvaleni-list"></div>
+      </div>
     </div>
 
     <!-- REDAKČNÍ OKNO -->
@@ -986,15 +996,6 @@
         </div>
         <div class="cw" id="task-pool-list"></div>
       </div>
-    </div>
-
-    <!-- SCHVÁLENÍ NÁVŠTĚV -->
-    <div class="adm-page" id="adm-schvaleni">
-      <div class="adm-sh" style="margin-bottom:12px">
-        <div class="adm-st">Schválení návštěv</div>
-        <div class="adm-sc" id="schvaleni-count">0 čeká</div>
-      </div>
-      <div class="cw" id="schvaleni-list"></div>
     </div>
 
     <!-- AI ANALÝZA -->
@@ -1201,30 +1202,37 @@
       </div>
     </div>
 
-    <div class="adm-page" id="adm-odpis">
-      <div class="adm-sh">
-        <div class="adm-st">Odpis materiálu</div>
-        <button onclick="exportWriteOffReport()" style="padding:7px 14px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Export do Excelu (pro SAP)</button>
+    <!-- PROVOZ = Odpis materiálu + Aktivita techniků (sloučeno, docs/VELIN_PRODUCT_ROADMAP.md §6 Etapa F) -->
+    <div class="adm-page" id="adm-provoz">
+      <div style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto">
+        <button class="ed-subnav active" onclick="showProvozSection('odpis',this)"><svg class="ic ic-sm"><use href="#ic-upload"/></svg> Odpis materiálu</button>
+        <button class="ed-subnav" onclick="showProvozSection('aktivita',this)"><svg class="ic ic-sm"><use href="#ic-dashboard"/></svg> Aktivita techniků</button>
       </div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Osazené merch položky agregované podle SAP kódu — slouží jako podklad pro odpis materiálu v SAPu. Položky bez SAP kódu se odepsat nedají, dokud kód nedoplníš v Editoru → Merch položky.</div>
-      <div id="odpis-filters" style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px"></div>
-      <div style="background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden">
-        <div id="odpis-table"></div>
-      </div>
-      <div id="odpis-missing-sap" style="margin-top:14px;background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;display:none"></div>
-    </div>
 
-    <div class="adm-page" id="adm-aktivita">
-      <div class="adm-sh"><div class="adm-st">Aktivita techniků</div></div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Reálné počty z dat techniků — hotové úkoly a instalovaný merch, podle technika a podle kanálu. Základ pro budoucí AI vyhodnocení (žádná vymyšlená čísla).</div>
-      <div class="kpi-grid" id="aktivita-kpis" style="margin-bottom:18px"></div>
-      <div class="adm-sh" style="margin-bottom:8px"><div class="adm-st" style="font-size:14px">Podle technika</div></div>
-      <div style="background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;margin-bottom:18px">
-        <div id="aktivita-technicians"></div>
+      <div id="prov-sec-odpis">
+        <div class="adm-sh">
+          <div class="adm-st">Odpis materiálu</div>
+          <button onclick="exportWriteOffReport()" style="padding:7px 14px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Export do Excelu (pro SAP)</button>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Osazené merch položky agregované podle SAP kódu — slouží jako podklad pro odpis materiálu v SAPu. Položky bez SAP kódu se odepsat nedají, dokud kód nedoplníš v Editoru → Merch položky.</div>
+        <div id="odpis-filters" style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px"></div>
+        <div style="background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden">
+          <div id="odpis-table"></div>
+        </div>
+        <div id="odpis-missing-sap" style="margin-top:14px;background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;display:none"></div>
       </div>
-      <div class="adm-sh" style="margin-bottom:8px"><div class="adm-st" style="font-size:14px">Podle kanálu</div></div>
-      <div style="background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden">
-        <div id="aktivita-channels"></div>
+
+      <div id="prov-sec-aktivita" style="display:none">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Reálné počty z dat techniků — hotové úkoly a instalovaný merch, podle technika a podle kanálu. Základ pro budoucí AI vyhodnocení (žádná vymyšlená čísla).</div>
+        <div class="kpi-grid" id="aktivita-kpis" style="margin-bottom:18px"></div>
+        <div class="adm-sh" style="margin-bottom:8px"><div class="adm-st" style="font-size:14px">Podle technika</div></div>
+        <div style="background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;margin-bottom:18px">
+          <div id="aktivita-technicians"></div>
+        </div>
+        <div class="adm-sh" style="margin-bottom:8px"><div class="adm-st" style="font-size:14px">Podle kanálu</div></div>
+        <div style="background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden">
+          <div id="aktivita-channels"></div>
+        </div>
       </div>
     </div>
 
