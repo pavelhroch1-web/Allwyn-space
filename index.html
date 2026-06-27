@@ -760,6 +760,7 @@
 
         <div class="dash-block">
           <div class="dash-block-t"><svg class="ic"><use href="#ic-pin"/></svg> Regiony — vytížení a kapacita</div>
+          <div id="dash-regions-chart" style="margin-bottom:10px"></div>
           <div class="cw" id="dash-regions"></div>
           <div class="reg-reco" id="dash-region-reco" style="display:none"></div>
         </div>
@@ -983,7 +984,7 @@
           </div>
         </div>
 
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:10px;flex-wrap:wrap">
           <div class="ef-chips" id="task-pool-filters">
             <div class="ef-chip on" onclick="setTaskPoolFilter('open',this)">Otevřené</div>
             <div class="ef-chip" onclick="setTaskPoolFilter('all',this)">Vše</div>
@@ -992,7 +993,10 @@
             <div class="ef-chip" onclick="setTaskPoolFilter('waiting_next_visit',this)">Čeká</div>
             <div class="ef-chip" onclick="setTaskPoolFilter('done',this)">Hotovo</div>
           </div>
-          <div id="task-pool-summary" style="font-size:11px;color:var(--muted);white-space:nowrap;margin-left:10px"></div>
+          <select id="task-pool-tech-filter" onchange="setTaskPoolTechFilter(this.value)" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;color:var(--td)">
+            <option value="all">Všichni technici</option>
+          </select>
+          <div id="task-pool-summary" style="font-size:11px;color:var(--muted);white-space:nowrap;margin-left:auto"></div>
         </div>
         <div class="cw" id="task-pool-list"></div>
       </div>
@@ -1226,10 +1230,16 @@
         <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Reálné počty z dat techniků — hotové úkoly a instalovaný merch, podle technika a podle kanálu. Základ pro budoucí AI vyhodnocení (žádná vymyšlená čísla).</div>
         <div class="kpi-grid" id="aktivita-kpis" style="margin-bottom:18px"></div>
         <div class="adm-sh" style="margin-bottom:8px"><div class="adm-st" style="font-size:14px">Podle technika</div></div>
+        <div style="background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;margin-bottom:18px;padding:14px 14px 6px">
+          <div id="aktivita-technicians-chart"></div>
+        </div>
         <div style="background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;margin-bottom:18px">
           <div id="aktivita-technicians"></div>
         </div>
         <div class="adm-sh" style="margin-bottom:8px"><div class="adm-st" style="font-size:14px">Podle kanálu</div></div>
+        <div style="background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;margin-bottom:18px;padding:14px 14px 6px">
+          <div id="aktivita-channels-chart"></div>
+        </div>
         <div style="background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden">
           <div id="aktivita-channels"></div>
         </div>
