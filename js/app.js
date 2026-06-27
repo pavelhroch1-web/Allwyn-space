@@ -356,6 +356,7 @@ function showAdmPage(p,btn){
   btn.classList.add('active');
   if(p==='dashboard'){ renderAdminDashboard(); renderAdminLive(); renderAdminCasy(); if(!adminMap) setTimeout(initAdminMap,100); }
   if(p==='posnet') renderAdminPosNet();
+  if(p==='foto') renderAdminFoto();
   pushRoute();
 }
 
@@ -2920,17 +2921,20 @@ function showTechDetail(name) {
       html += `</div>`;
     }
 
-    // Photos
+    // Photos — náhled, plná galerie se sjednoceným filtrem je na #adm-foto
+    // (jedna implementace pro obě obrazovky, viz docs/VELIN_PRODUCT_ROADMAP.md
+    // §6 Etapa B — žádná duplicitní render logika).
     if (live.photos.length) {
       html += `<div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Fotodokumentace (${live.photos.length})</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">`;
-      live.photos.forEach(ph => {
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px">`;
+      live.photos.slice(0, 6).forEach(ph => {
         html += `<div style="aspect-ratio:1;border-radius:8px;overflow:hidden;position:relative">
           <img src="${ph.url}" style="width:100%;height:100%;object-fit:cover"/>
           <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.6);color:#fff;font-size:9px;font-weight:700;padding:3px 5px">${ph.slot}</div>
         </div>`;
       });
-      html += `</div>`;
+      html += `</div>
+      <button onclick="openMediaGalleryForTechnician('${live.technik}')" style="width:100%;padding:8px;margin-bottom:14px;border:1.5px solid var(--border);border-radius:8px;background:transparent;font-size:12px;font-weight:700;color:var(--navy);cursor:pointer">Zobrazit vše ve fotogalerii →</button>`;
     }
 
     // Servis open
@@ -3114,23 +3118,147 @@ function renderAdminCasy() {
 }
 
 // ══════════════════════════════════════════════════════
-// ADMIN — FOTO (live)
+// ADMIN — MEDIA GALLERY (sjednocený zdroj fotek, Etapa B viz
+// docs/VELIN_PRODUCT_ROADMAP.md §6). Tři existující producenti fotek
+// (návštěva, merch, evidence úkolu) mají odlišné úložiště
+// (docs/VELIN_ARCHITECTURE.md §1.1/§2.2) — getMediaItems() je čte všechny
+// a sjednotí do jednoho tvaru bez zásahu do existujícího uložení/zápisu.
 // ══════════════════════════════════════════════════════
-function renderAdminFoto() {
-  const live = getLiveState();
-  const grid = document.getElementById('foto-grid'); if (!grid) return;
-  const infoBox = grid.nextElementSibling;
+function findPosAcrossWeeks(posId) {
+  for (const w of POS_WEEK_KEYS) {
+    const p = (FULL_POS_DATA[w] || []).find(x => x.id === posId);
+    if (p) return { pos: p, week: w };
+  }
+  return null;
+}
 
-  if (live.photos.length) {
-    grid.innerHTML = live.photos.map(ph => `
+// filters: {posId, technician, date, source} — všechny volitelné, AND.
+// Žádný filtr "kampaň" — fotky dnes nemají strukturní vazbu na kampaň
+// (viz docs/VELIN_PRODUCT_ROADMAP.md §6 Etapa B), nepřidávat vymyšlenou.
+function getMediaItems(filters) {
+  filters = filters || {};
+  const items = [];
+  const VISIT_SLOTS = ['Příchod', 'Odchod', 'Detail'];
+
+  // 1) Fotky z návštěvy — FULL_POS_DATA, napříč všemi techniky a týdny.
+  // Bez per-fotky timestampu v datech (jen slot v rámci POS+týdne), proto
+  // jako datum používáme týden návštěvy, ne vymyšlený přesný den.
+  POS_WEEK_KEYS.forEach(w => {
+    (FULL_POS_DATA[w] || []).forEach(p => {
+      (p.photos || []).forEach((url, i) => {
+        if (!url) return;
+        items.push({
+          url, posId: p.id, posName: p.n, technician: p.assignedTechnician,
+          date: 'Týden ' + w, week: w,
+          source: 'visit', sourceLabel: 'Návštěva', label: VISIT_SLOTS[i] || ('Foto ' + (i + 1)),
+        });
+      });
+    });
+  });
+
+  // 2) Merch fotky — uložené per den jako 'merch_{posId}_{YYYY-MM-DD}'.
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    const m = key && key.match(/^merch_(\d+)_(\d{4}-\d{2}-\d{2})$/);
+    if (!m) continue;
+    const [, posId, date] = m;
+    const merchList = lsg(key, []);
+    const found = findPosAcrossWeeks(posId);
+    merchList.forEach(item => {
+      if (!item.photo) return;
+      items.push({
+        url: item.photo, posId, posName: found ? found.pos.n : posId,
+        technician: found ? found.pos.assignedTechnician : null,
+        date, week: found ? found.week : null,
+        source: 'merch', sourceLabel: 'Merch', label: item.n,
+      });
+    });
+  }
+
+  // 3) Evidence fotky ze sledovaných úkolů — task_pool, evidence.photos[].
+  getTaskPool().forEach(t => {
+    if (!t.evidence || !t.evidence.photos || !t.evidence.photos.length) return;
+    const found = findPosAcrossWeeks(t.posId);
+    const date = (t.evidence.completedAt || t.createdAt || '').split('T')[0];
+    t.evidence.photos.forEach(url => {
+      items.push({
+        url, posId: t.posId, posName: found ? found.pos.n : t.posId,
+        technician: found ? found.pos.assignedTechnician : null,
+        date, week: found ? found.week : null,
+        source: 'task', sourceLabel: 'Úkol', label: t.title,
+      });
+    });
+  });
+
+  return items.filter(it => {
+    if (filters.posId && it.posId.indexOf(filters.posId) === -1) return false;
+    if (filters.technician && it.technician !== filters.technician) return false;
+    if (filters.date && it.date !== filters.date) return false;
+    if (filters.source && it.source !== filters.source) return false;
+    return true;
+  }).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+}
+
+let mediaGalleryFilters = { posId: null, technician: null, date: null, source: null };
+
+function setMediaFilter(key, value) {
+  mediaGalleryFilters[key] = mediaGalleryFilters[key] === value ? null : value;
+  renderAdminFoto();
+}
+
+function setMediaSearchFilter(value) {
+  mediaGalleryFilters.posId = value ? value.trim() : null;
+  renderAdminFoto();
+}
+
+function openMediaGalleryForTechnician(name) {
+  mediaGalleryFilters = { posId: null, technician: name, date: null, source: null };
+  const btn = document.querySelector(`[onclick="showAdmPage('foto',this)"]`);
+  if (btn) showAdmPage('foto', btn);
+}
+
+function renderAdminFoto() {
+  const grid = document.getElementById('foto-grid'); if (!grid) return;
+  const filtersEl = document.getElementById('foto-filters');
+  const emptyBox = document.getElementById('foto-empty');
+
+  const allItems = getMediaItems({});
+  const technicians = [...new Set(allItems.map(i => i.technician).filter(Boolean))].sort();
+  const dates = [...new Set(allItems.map(i => i.date).filter(Boolean))].sort().reverse();
+
+  if (filtersEl) {
+    const chip = (label, active, key, value) => `<button onclick="setMediaFilter('${key}','${value}')" style="font-size:11px;font-weight:700;padding:5px 11px;border-radius:20px;border:1.5px solid ${active ? 'var(--navy)' : 'var(--border)'};background:${active ? 'var(--navy)' : '#fff'};color:${active ? '#fff' : 'var(--text)'};cursor:pointer">${label}</button>`;
+    let html = `<input type="text" placeholder="POS ID…" value="${mediaGalleryFilters.posId || ''}" oninput="setMediaSearchFilter(this.value)" style="font-size:12px;padding:6px 10px;border-radius:20px;border:1.5px solid var(--border);width:100px;font-family:inherit"/>`;
+    html += chip('Návštěva', mediaGalleryFilters.source === 'visit', 'source', 'visit');
+    html += chip('Merch', mediaGalleryFilters.source === 'merch', 'source', 'merch');
+    html += chip('Úkol', mediaGalleryFilters.source === 'task', 'source', 'task');
+    technicians.forEach(t => { html += chip(t, mediaGalleryFilters.technician === t, 'technician', t); });
+    dates.slice(0, 8).forEach(d => { html += chip(d, mediaGalleryFilters.date === d, 'date', d); });
+    filtersEl.innerHTML = html;
+  }
+
+  const items = getMediaItems(mediaGalleryFilters);
+  if (items.length) {
+    grid.innerHTML = items.map(ph => `
       <div style="aspect-ratio:1;border-radius:8px;overflow:hidden;position:relative;background:#222">
         <img src="${ph.url}" style="width:100%;height:100%;object-fit:cover"/>
-        <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.7);color:#fff;font-size:9px;font-weight:700;padding:3px 5px;line-height:1.3">${ph.posName.substring(0,18)}<br>${ph.slot}</div>
+        <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.7);color:#fff;font-size:9px;font-weight:700;padding:3px 5px;line-height:1.3">${ph.posName.substring(0, 18)}<br>${ph.label} · ${ph.date || ''}</div>
       </div>`).join('');
-    if (infoBox) infoBox.style.display = 'none';
+    if (emptyBox) emptyBox.style.display = 'none';
   } else {
     grid.innerHTML = '';
-    if (infoBox) infoBox.style.display = 'block';
+    if (emptyBox) {
+      emptyBox.style.display = 'block';
+      const title = document.getElementById('foto-empty-title');
+      const body = document.getElementById('foto-empty-body');
+      if (allItems.length === 0) {
+        if (title) title.textContent = 'Fotky z návštěv';
+        if (body) body.textContent = 'Technici fotí terminál, merch položky a evidenci úkolů. Zobrazí se zde v reálném čase.';
+      } else {
+        if (title) title.textContent = 'Žádné fotky neodpovídají filtru';
+        if (body) body.textContent = 'Zkus zúžit nebo zrušit vybrané filtry.';
+      }
+    }
   }
 }
 
