@@ -357,6 +357,7 @@ function showAdmPage(p,btn){
   if(p==='dashboard'){ renderAdminDashboard(); renderAdminLive(); renderAdminCasy(); if(!adminMap) setTimeout(initAdminMap,100); }
   if(p==='posnet') renderAdminPosNet();
   if(p==='foto') renderAdminFoto();
+  if(p==='alerts') renderAdminAlerts();
   pushRoute();
 }
 
@@ -3015,10 +3016,10 @@ function renderAdminAlerts() {
   // Live alerts from technik actions
   live.servisOpen.forEach(p => {
     const st = p.taskState.find(t => t.src === 'servis' && !t.done);
-    alerts.push({ t: 'red', i: 'ic-wrench', title: `Servis — ${p.n}`, sub: st.text + (st.note ? ' · ' + st.note : ''), tm: 'Live' });
+    alerts.push({ t: 'red', i: 'ic-wrench', title: `Servis — ${p.n}`, sub: st.text + (st.note ? ' · ' + st.note : ''), tm: 'Live', posId: p.id });
   });
   live.shortVisits.forEach(v => {
-    alerts.push({ t: 'orange', i: 'ic-clock', title: `Krátká návštěva — ${v.posName}`, sub: `Lán Tomáš · ${v.inTime}–${v.outTime} · ${v.dur} min · zkontroluj`, tm: 'Dnes' });
+    alerts.push({ t: 'orange', i: 'ic-clock', title: `Krátká návštěva — ${v.posName}`, sub: `Lán Tomáš · ${v.inTime}–${v.outTime} · ${v.dur} min · zkontroluj`, tm: 'Dnes', posId: v.posId });
   });
   if (live.supplies.length === 0 && live.visitLog.length > 2) {
     alerts.push({ t: 'orange', i: 'ic-box', title: 'Zásobování bez podpisu', sub: 'Lán Tomáš · Žádné zásobování nebylo potvrzeno podpisem', tm: 'Dnes' });
@@ -3037,7 +3038,7 @@ function renderAdminAlerts() {
       const calc = RouteEngine.calculateRoute(ordered, startLoc);
       const delays = RouteEngine.checkDelays(ordered, calc, getStartTime(), live.checkins);
       delays.forEach(d => {
-        alerts.push({ t: 'orange', i: 'ic-clock', title: `Zpoždění — ${d.posName}`, sub: `Lán Tomáš · plán ${d.plannedArrival} · reálně ${d.actualArrival} · o ${d.deltaMin} min později`, tm: 'Live' });
+        alerts.push({ t: 'orange', i: 'ic-clock', title: `Zpoždění — ${d.posName}`, sub: `Lán Tomáš · plán ${d.plannedArrival} · reálně ${d.actualArrival} · o ${d.deltaMin} min později`, tm: 'Live', posId: d.posId });
       });
     }
   }
@@ -3057,10 +3058,14 @@ function renderAdminAlerts() {
     alerts.push({ t: 'green', i: 'ic-edit', title: `Zásobování potvrzeno — ${s.posName}`, sub: `Podepsal: ${s.receiver} · ${s.at} · Lán Tomáš`, tm: 'Dnes' });
   });
 
+  // Akce přímo z alertu — otevře POS detail bez nutnosti hledat stejný
+  // řádek znovu na jiné obrazovce (docs/VELIN_PRODUCT_ROADMAP.md §6 Etapa C).
   document.getElementById('adm-alerts-list').innerHTML = alerts.map(a => `
     <div class="alert-row ${a.t}">
       <div class="ar-ico"><svg class="ic"><use href="#${a.i}"/></svg></div>
-      <div class="ar-inf"><div class="ar-t">${a.title}</div><div class="ar-s">${a.sub}</div></div>
+      <div class="ar-inf"><div class="ar-t">${a.title}</div><div class="ar-s">${a.sub}</div>
+        ${a.posId ? `<button onclick="showAdminPOSDetail('${a.posId}')" style="margin-top:6px;font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;border:1.5px solid var(--border);background:transparent;color:var(--navy);cursor:pointer">Otevřít POS →</button>` : ''}
+      </div>
       <div class="ar-tm">${a.tm}</div>
     </div>`).join('');
 }
@@ -3973,6 +3978,8 @@ function taskPoolAdvance(taskId, newStatus) {
 // ══════════════════════════════════════════════════════
 // SCHVÁLENÍ NÁVŠTĚV
 // ══════════════════════════════════════════════════════
+let schvaleniSelected = new Set();
+
 function renderSchvaleni() {
   const live = getLiveState();
   const el = document.getElementById('schvaleni-list'); if (!el) return;
@@ -3990,11 +3997,29 @@ function renderSchvaleni() {
     items.push({ p, ci, supply, photos, shortVisit, approval, isReal: true });
   });
 
-  const waiting = items.filter(x => !x.approval).length;
+  const pending = items.filter(x => !x.approval);
+  const waiting = pending.length;
   const countEl = document.getElementById('schvaleni-count');
   if (countEl) countEl.textContent = waiting + ' čeká';
 
+  // Smaž ze selekce karty, které už nejsou pending (schváleno/zamítnuto jinde)
+  const pendingIds = new Set(pending.map(x => x.p.id));
+  schvaleniSelected.forEach(id => { if (!pendingIds.has(id)) schvaleniSelected.delete(id); });
+
   let html = '';
+
+  // Bulk akce — výběr víc karet najednou (docs/VELIN_PRODUCT_ROADMAP.md §6 Etapa C)
+  if (pending.length) {
+    const n = schvaleniSelected.size;
+    const okBg = n ? 'var(--gl)' : 'var(--border)', okFg = n ? 'var(--green)' : 'var(--muted)';
+    const rejBg = n ? 'var(--rl)' : 'var(--border)', rejFg = n ? 'var(--red)' : 'var(--muted)';
+    const cursor = n ? 'pointer' : 'default';
+    html += `<div style="display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--bg);background:var(--bg)">
+      <span style="font-size:12px;font-weight:700;color:var(--muted);flex:1">${n ? n + ' vybráno' : 'Vyber karty pro hromadnou akci'}</span>
+      <button onclick="bulkApproveVisits('ok')" ${n ? '' : 'disabled'} style="padding:7px 12px;background:${okBg};color:${okFg};border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:${cursor}">✓ Schválit vybrané</button>
+      <button onclick="bulkApproveVisits('rej')" ${n ? '' : 'disabled'} style="padding:7px 12px;background:${rejBg};color:${rejFg};border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:${cursor}">✕ Zamítnout vybrané</button>
+    </div>`;
+  }
 
   // Real items
   items.forEach(({ p, ci, supply, photos, shortVisit, approval }) => {
@@ -4003,12 +4028,16 @@ function renderSchvaleni() {
     if (shortVisit) flags.push('<svg class="ic ic-sm"><use href="#ic-warning"/></svg> Krátká návštěva');
     if (!photos) flags.push('<svg class="ic ic-sm"><use href="#ic-camera"/></svg> Bez fotek');
     if (!supply && (p.typ === 'KA' || p.typ === 'PETROL')) flags.push('<svg class="ic ic-sm"><use href="#ic-box"/></svg> Bez zásobování');
+    const checked = schvaleniSelected.has(p.id);
     html += `<div style="padding:14px;border-bottom:1px solid var(--bg)">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px">
-        <div>
-          <div style="font-size:13px;font-weight:700">${p.n}</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:2px">${ci ? ci.inTime + '–' + ci.outTime + ' · ' + ci.dur + ' min' : 'Bez check-inu'} · ${photos} fotek · ${p.typ}</div>
-          ${flags.length ? `<div style="margin-top:5px">${flags.map(f => `<span style="font-size:10px;font-weight:700;background:var(--ol);color:var(--orange);padding:2px 6px;border-radius:10px;margin-right:4px">${f}</span>`).join('')}</div>` : ''}
+        <div style="display:flex;align-items:flex-start;gap:10px">
+          ${!approval ? `<input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleSchvaleniSelect('${p.id}')" style="margin-top:3px;width:16px;height:16px;cursor:pointer"/>` : '<span style="width:16px"></span>'}
+          <div>
+            <div style="font-size:13px;font-weight:700">${p.n}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">${ci ? ci.inTime + '–' + ci.outTime + ' · ' + ci.dur + ' min' : 'Bez check-inu'} · ${photos} fotek · ${p.typ}</div>
+            ${flags.length ? `<div style="margin-top:5px">${flags.map(f => `<span style="font-size:10px;font-weight:700;background:var(--ol);color:var(--orange);padding:2px 6px;border-radius:10px;margin-right:4px">${f}</span>`).join('')}</div>` : ''}
+          </div>
         </div>
         ${apprBadge}
       </div>
@@ -4022,8 +4051,21 @@ function renderSchvaleni() {
   el.innerHTML = html || '<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">Žádné návštěvy ke schválení.</div>';
 }
 
+function toggleSchvaleniSelect(posId) {
+  if (schvaleniSelected.has(posId)) schvaleniSelected.delete(posId);
+  else schvaleniSelected.add(posId);
+  renderSchvaleni();
+}
+
+function bulkApproveVisits(decision) {
+  schvaleniSelected.forEach(posId => lss('approval_' + posId, decision));
+  schvaleniSelected.clear();
+  renderSchvaleni();
+}
+
 function approveVisit(posId, decision) {
   lss('approval_' + posId, decision);
+  schvaleniSelected.delete(posId);
   renderSchvaleni();
 }
 
