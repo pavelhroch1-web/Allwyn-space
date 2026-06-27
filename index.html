@@ -497,7 +497,7 @@
 
     <!-- TRACKED TASKS — sledované úkoly zadané Velínem pro tohle POS (task_pool), odlišné od on_top/own checklistu níže -->
     <div id="tracked-tasks-wrap" style="display:none">
-      <div class="sec-lbl">Sledované úkoly od Velínu</div>
+      <div class="sec-lbl">Úkoly od Velínu</div>
       <div id="tracked-tasks-list"></div>
     </div>
     <input type="file" id="task-photo-input" accept="image/*" capture="environment" onchange="handleTaskPhoto(event)" style="display:none"/>
@@ -528,7 +528,7 @@
     <input type="file" id="photo-input" accept="image/*" capture="environment" onchange="handlePhoto(event)" style="display:none"/>
     <div style="padding:10px 12px;background:var(--tl);border-radius:10px;font-size:11px;color:var(--tm);line-height:1.5;margin:8px 0 4px;display:flex;gap:6px">
       <svg class="ic ic-sm" style="flex-shrink:0;margin-top:1px"><use href="#ic-bulb"/></svg>
-      <span>Foto <b>Příchod</b>, <b>Odchod</b>, <b>Pokladní zóna</b> a <b>Plánogram / finální výstava</b> jsou povinné pro dokončení návštěvy. Do fotky se automaticky vloží tvoje jméno, číslo POS, čas a GPS poloha.</span>
+      <span>Foto <b>Příchod</b>, <b>Odchod</b>, <b>Pokladní zóna</b> a <b>Plánogram / finální výstava</b> jsou povinné pro dokončení návštěvy — slouží jako tvoje dokumentace odvedené práce. Fotka se automaticky označí tvým jménem, číslem POS, časem a místem, ať máš jistotu, že se k ní vždycky dohledá kontext.</span>
     </div>
 
     <!-- VÍCE INFORMACÍ — region/typ partnerství nejsou potřeba při běžné návštěvě, schované pod rozbalení -->
@@ -592,7 +592,7 @@
     <div id="dtc-karta" class="det-tc" style="display:none;padding:8px 12px">
       <div style="margin-bottom:8px;padding:10px 14px;background:var(--bg);border-radius:10px;font-size:11px;color:var(--muted);line-height:1.5;display:flex;gap:6px">
         <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-info"/></svg>
-        <span>Trvalá historie téhle provozovny — zůstává napříč všemi návštěvami, vidí ji i Velín.</span>
+        <span>Trvalá historie téhle provozovny — zůstává napříč všemi návštěvami, ať má další technik i Velín stejný kontext.</span>
       </div>
       <div style="background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);margin-bottom:10px" id="pos-card-log"></div>
       <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Přidat záznam</div>
