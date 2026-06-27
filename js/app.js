@@ -43,6 +43,7 @@ function augmentRawPos(p, assignedTechnician){
         ? (withCoords.gpsTownMatched ? 'town' : 'region')
         : 'unknown');
   const taskState = [...((getTaskTemplates()[typ]||getTaskTemplates()[rawTyp]||getTaskTemplates().IDT)).map(t=>({text:t,src:'template',done:p.v}))];
+  getCampaignTaskOverridesForChannel(typ).forEach(t => taskState.push({text:t.text,src:'campaign',done:p.v}));
   getAdminPosTasks(p.id).forEach(t => taskState.push({...t}));
   const inventory = JSON.parse(JSON.stringify(INV_DEFAULT[typ]||INV_DEFAULT[rawTyp]||INV_DEFAULT.IDT));
   const materialOverrides = getAdminMaterialOverrides(p.id);
@@ -1163,19 +1164,39 @@ function getPosChannel(p){
   const rawTyp=p.typ||'IDT';
   return (rawTyp==='CORN'||(p.k&&p.k.startsWith('9')))?'CORN':rawTyp;
 }
-function getActiveCampaignChecklist(p){
-  const camps=getEditorCampaigns();
-  const channel=getPosChannel(p);
+// Kampaně, které právě běží pro daný kanál (kanál sedí + deadline nevypršel).
+// Sdílený match pattern pro checklist/úkoly/merch override níže — kampaň
+// "smí" přepsat/doplnit kanálový globál, ne ho nahradit natvrdo.
+function getActiveCampaignsForChannel(channel){
   const today=new Date();today.setHours(0,0,0,0);
-  const tpls=getChecklistTemplates();
-  const match=camps.find(c=>{
-    if(!c.checklistTemplateId||!tpls[c.checklistTemplateId])return false;
+  return getEditorCampaigns().filter(c=>{
     const ch=c.channel||'ALL';
     if(ch!=='ALL'&&ch!==channel)return false;
     if(c.deadline){const dl=new Date(c.deadline);if(dl<today)return false;}
     return true;
   });
+}
+function getActiveCampaignChecklist(p){
+  const channel=getPosChannel(p);
+  const tpls=getChecklistTemplates();
+  const match=getActiveCampaignsForChannel(channel).find(c=>c.checklistTemplateId&&tpls[c.checklistTemplateId]);
   return match?{campaign:match,template:tpls[match.checklistTemplateId]}:null;
+}
+// Úkoly/merch položky navíc z aktivních kampaní pro daný kanál — doplňují
+// kanálovou šablonu (getTaskTemplates/getMerchTemplates), nenahrazují ji.
+function getCampaignTaskOverridesForChannel(channel){
+  const items=[];
+  getActiveCampaignsForChannel(channel).forEach(c=>{
+    (c.taskOverride||[]).forEach(t=>{ if(t&&t.trim()) items.push({text:t.trim(),campaign:c.name}); });
+  });
+  return items;
+}
+function getCampaignMerchOverridesForChannel(channel){
+  const items=[];
+  getActiveCampaignsForChannel(channel).forEach(c=>{
+    (c.merchOverride||[]).forEach(m=>{ if(m&&m.n&&m.n.trim()) items.push({n:m.n.trim(),done:null,reqPhoto:!!m.reqPhoto,src:'campaign',campaign:c.name}); });
+  });
+  return items;
 }
 function campaignChecklistKey(posId,templateId){return 'checklist_'+posId+'_'+templateId;}
 let ckPosAnswers={};
@@ -1567,8 +1588,9 @@ let pendingMerchIndex = null;
 function renderMerch(p) {
   const tpl = getMerchTemplates();
   const defaults = (tpl[p.typ] || tpl.IDT).map(x => ({...x}));
+  const campaignExtras = getCampaignMerchOverridesForChannel(getPosChannel(p));
   const saved = lsg('merch_' + p.id + '_' + today());
-  merchItems = saved || defaults;
+  merchItems = saved || [...defaults, ...campaignExtras];
   const el = document.getElementById('merch-items');
   if (!el) return;
   el.innerHTML = merchItems.map((x, i) => `
@@ -5817,9 +5839,50 @@ function renderEditorCampaigns() {
             ${tplIds.map(id => `<option value="${id}" ${c.checklistTemplateId===id?'selected':''}>${tpls[id].name||id}</option>`).join('')}
           </select>
         </div>
-        <button onclick="deleteCampaign(${i})" style="margin-top:8px;padding:6px 12px;background:var(--rl);color:var(--red);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Smazat kampaň</button>
+        <div style="margin-top:10px">
+          <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Úkoly navíc pro tuto kampaň (doplní kanálovou šablonu, nenahradí ji)</div>
+          <textarea placeholder="Jeden úkol na řádek" oninput="updateCampaignTaskOverride(${i},this.value)" style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:12px;font-family:inherit;resize:none;min-height:50px;outline:none;line-height:1.5">${(c.taskOverride||[]).join('\n')}</textarea>
+        </div>
+        <div style="margin-top:10px">
+          <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Merch navíc pro tuto kampaň</div>
+          <div id="ed-camp-merch-${i}">
+            ${(c.merchOverride||[]).map((m,j) => `
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+              <input value="${m.n||''}" placeholder="Název položky" oninput="updateCampaignMerchItem(${i},${j},'n',this.value)" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:7px;font-size:12px;outline:none"/>
+              <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);cursor:pointer;white-space:nowrap">
+                <input type="checkbox" ${m.reqPhoto?'checked':''} onchange="updateCampaignMerchItem(${i},${j},'reqPhoto',this.checked)"/> Foto
+              </label>
+              <button onclick="deleteCampaignMerchItem(${i},${j})" style="background:none;border:none;color:var(--red);font-size:15px;cursor:pointer;padding:2px">✕</button>
+            </div>`).join('') || '<div style="font-size:11px;color:var(--muted);margin-bottom:6px">Žádné merch položky navíc</div>'}
+          </div>
+          <button onclick="addCampaignMerchItem(${i})" style="padding:5px 10px;background:var(--gl);color:var(--green);border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer">+ Položka</button>
+        </div>
+        <button onclick="deleteCampaign(${i})" style="margin-top:10px;padding:6px 12px;background:var(--rl);color:var(--red);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Smazat kampaň</button>
       </div>
     </div>`).join('');
+}
+function updateCampaignTaskOverride(i, val) {
+  const camps = getEditorCampaigns();
+  camps[i].taskOverride = val.split('\n').map(s => s.trim()).filter(Boolean);
+  saveEditorCampaigns(camps);
+}
+function addCampaignMerchItem(i) {
+  const camps = getEditorCampaigns();
+  if (!camps[i].merchOverride) camps[i].merchOverride = [];
+  camps[i].merchOverride.push({ n: 'Nová položka', reqPhoto: false });
+  saveEditorCampaigns(camps);
+  renderEditorCampaigns();
+}
+function updateCampaignMerchItem(i, j, field, val) {
+  const camps = getEditorCampaigns();
+  camps[i].merchOverride[j][field] = val;
+  saveEditorCampaigns(camps);
+}
+function deleteCampaignMerchItem(i, j) {
+  const camps = getEditorCampaigns();
+  camps[i].merchOverride.splice(j, 1);
+  saveEditorCampaigns(camps);
+  renderEditorCampaigns();
 }
 function updateCampaign(i, field, val) {
   const camps = getEditorCampaigns();
