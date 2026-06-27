@@ -42,7 +42,7 @@ function augmentRawPos(p, assignedTechnician){
     : (typeof withCoords.lat === 'number'
         ? (withCoords.gpsTownMatched ? 'town' : 'region')
         : 'unknown');
-  const taskState = [...((getTaskTemplates()[typ]||getTaskTemplates()[rawTyp]||getTaskTemplates().IDT)).map(t=>({text:t,src:'template',done:p.v}))];
+  const taskState = [...((getTaskTemplates()[typ]||getTaskTemplates()[rawTyp]||getTaskTemplates().IDT)).map(t=>({text:t.text!==undefined?t.text:t,answerType:t.answerType||'check',src:'template',done:p.v}))];
   getCampaignTaskOverridesForChannel(typ).forEach(t => taskState.push({text:t.text,src:'campaign',done:p.v}));
   getAdminPosTasks(p.id).forEach(t => taskState.push({...t}));
   const inventory = JSON.parse(JSON.stringify(INV_DEFAULT[typ]||INV_DEFAULT[rawTyp]||INV_DEFAULT.IDT));
@@ -1066,21 +1066,56 @@ function renderTasks(){
     tasks.forEach(task=>{
       const ti=p.taskState.indexOf(task);
       const item=document.createElement('div');item.className='titem';
-      const onclick=src==='servis'?`openServisModal(${ti})`:`toggleTask(${ti})`;
-      item.innerHTML=`<div class="trow" onclick="${onclick}"><div class="tchk ${task.done?'on':''}"></div><div class="ttxt ${task.done?'done':''}">${task.text}</div></div>${task.note?`<div class="tnote">${task.note}</div>`:''}`;
+      const needsPhoto=task.answerType==='foto';
+      const onclick=src==='servis'?`openServisModal(${ti})`:(needsPhoto&&!task.done?`startTaskPhoto(${ti})`:`toggleTask(${ti})`);
+      item.innerHTML=`<div class="trow" onclick="${onclick}"><div class="tchk ${task.done?'on':''}"></div><div class="ttxt ${task.done?'done':''}">${task.text}</div></div>${needsPhoto&&task.photo?`<img src="${task.photo}" class="merch-thumb" alt="Foto — ${task.text}" onclick="openImageLightbox('${task.photo}','${task.text.replace(/'/g,"\\'")}')"/>`:''}${task.note?`<div class="tnote">${task.note}</div>`:''}`;
       list.appendChild(item);
     });
   });
 }
 function toggleTask(ti){
   const p=posData[cWeek][cIdx];if(p.v)return;
-  p.taskState[ti].done=!p.taskState[ti].done;
+  const task=p.taskState[ti];
+  if(task.answerType==='foto'&&!task.done)return startTaskPhoto(ti);
+  task.done=!task.done;
+  if(!task.done)task.photo=null;
   saveVisitState(p,cWeek);
   if (typeof VisitStore !== 'undefined') {
     const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
-    VisitStore.setTaskDone(tech, p.id, p.n, p.a, null, p.taskState[ti].text, p.taskState[ti].done);
+    VisitStore.setTaskDone(tech, p.id, p.n, p.a, null, task.text, task.done);
   }
   renderTasks();renderCompleteBtn();
+}
+
+let pendingTaskIndex = null;
+function startTaskPhoto(ti) {
+  pendingTaskIndex = ti;
+  document.getElementById('task-photo-input').click();
+}
+function handleTaskPhoto(e) {
+  const file = e.target.files[0];
+  const ti = pendingTaskIndex;
+  const p = posData[cWeek][cIdx];
+  if (!file || ti === null || !p.taskState[ti]) { pendingTaskIndex = null; e.target.value = ''; return; }
+  getGeoTag(geo => {
+    const r = new FileReader();
+    r.onload = ev => {
+      stampPhoto(ev.target.result, buildStampLines(p, geo).concat([p.taskState[ti].text]), stamped => {
+        p.taskState[ti].done = true;
+        p.taskState[ti].photo = stamped;
+        saveVisitState(p, cWeek);
+        if (typeof VisitStore !== 'undefined') {
+          const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
+          VisitStore.setTaskDone(tech, p.id, p.n, p.a, null, p.taskState[ti].text, true);
+        }
+        pendingTaskIndex = null;
+        e.target.value = '';
+        renderTasks();
+        renderCompleteBtn();
+      });
+    };
+    r.readAsDataURL(file);
+  });
 }
 
 // ══════════════════════════════════════════════════════
@@ -6261,6 +6296,11 @@ function getTaskTemplates() {
   return lsg('editor_task_templates') || JSON.parse(JSON.stringify(TASK_TMPL));
 }
 function saveTaskTemplates(t) { lss('editor_task_templates', t); }
+// Položky šablony mohou být starý plain string (z TASK_TMPL) nebo nový tvar
+// {text, answerType} — answerType: 'check' (dnešní zaškrtnutí, default) nebo
+// 'foto' (vyžaduje fotodůkaz před splněním, stejný capture pattern jako Merch).
+function taskTplText(item) { return item && item.text !== undefined ? item.text : (item || ''); }
+function taskTplAnswerType(item) { return (item && item.answerType) || 'check'; }
 
 function renderEditorTaskTemplates() {
   const tpl = getTaskTemplates();
@@ -6268,22 +6308,31 @@ function renderEditorTaskTemplates() {
     const el = document.getElementById('ed-task-' + channel);
     if (!el) return;
     const items = tpl[channel] || [];
-    el.innerHTML = items.map((text,i) => `
+    el.innerHTML = items.map((item,i) => `
       <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--bg)">
-        <input value="${text}" oninput="updateTaskTemplateItem('${channel}',${i},this.value)" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:13px;outline:none"/>
+        <input value="${taskTplText(item)}" oninput="updateTaskTemplateItem('${channel}',${i},this.value)" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:13px;outline:none"/>
+        <select onchange="updateTaskTemplateAnswerType('${channel}',${i},this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:12px;outline:none">
+          <option value="check" ${taskTplAnswerType(item)==='check'?'selected':''}>Zaškrtnutí</option>
+          <option value="foto" ${taskTplAnswerType(item)==='foto'?'selected':''}>Vyžaduje foto</option>
+        </select>
         <button onclick="deleteTaskTemplateItem('${channel}',${i})" style="background:none;border:none;color:var(--red);font-size:16px;cursor:pointer;padding:4px">✕</button>
       </div>`).join('') || '<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px">Žádné úkoly</div>';
   });
 }
 function updateTaskTemplateItem(channel, i, val) {
   const tpl = getTaskTemplates();
-  tpl[channel][i] = val;
+  tpl[channel][i] = { text: val, answerType: taskTplAnswerType(tpl[channel][i]) };
+  saveTaskTemplates(tpl);
+}
+function updateTaskTemplateAnswerType(channel, i, val) {
+  const tpl = getTaskTemplates();
+  tpl[channel][i] = { text: taskTplText(tpl[channel][i]), answerType: val };
   saveTaskTemplates(tpl);
 }
 function addTaskTemplateItem(channel) {
   const tpl = getTaskTemplates();
   if (!tpl[channel]) tpl[channel] = [];
-  tpl[channel].push('Nový úkol');
+  tpl[channel].push({ text: 'Nový úkol', answerType: 'check' });
   saveTaskTemplates(tpl);
   renderEditorTaskTemplates();
 }

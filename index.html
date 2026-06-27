@@ -505,6 +505,7 @@
     <!-- TASKS — detailní úkoly, technik je otevře až ve chvíli kdy reálně začíná pracovat -->
     <div class="sec-lbl">Úkoly na místě</div>
     <div class="tsec" id="tasks-list"></div>
+    <input type="file" id="task-photo-input" accept="image/*" capture="environment" onchange="handleTaskPhoto(event)" style="display:none"/>
     <div class="add-wrap">
       <button class="add-dashed" id="add-btn" onclick="showAddForm()">+ Přidat vlastní úkol</button>
       <div class="add-form" id="add-form">
