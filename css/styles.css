@@ -517,7 +517,9 @@ details[open]>.sec-lbl-collapsible::after{transform:rotate(-135deg)}
 #dash-view-toggle{margin-bottom:14px}
 
 /* DASH VERDICT — jedna věta: je provoz pod kontrolou? */
-.dash-verdict{display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:10px;font-size:13px;font-weight:800;margin-bottom:14px}
+.dash-verdict{padding:18px 20px;border-radius:14px;margin-bottom:16px}
+.dash-verdict-head{display:flex;align-items:center;gap:10px;font-size:18px;font-weight:800}
+.dash-verdict-sub{font-size:12px;font-weight:600;margin-top:6px;opacity:.85}
 .dash-verdict.ok{background:var(--gl);color:var(--green)}
 .dash-verdict.warn{background:var(--rl);color:var(--red)}
 

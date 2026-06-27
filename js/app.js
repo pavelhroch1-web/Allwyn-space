@@ -82,7 +82,26 @@ const posData={};
 for(const w of POS_WEEK_KEYS){
   FULL_POS_DATA[w] = (importedWeeks[w]||[]).map(p => augmentRawPos(p, p.assignedTechnician));
   FULL_POS_DATA[w].forEach(p => applyVisitState(p, w));
-  posData[w] = FULL_POS_DATA[w].filter(p => p.assignedTechnician === PosModel.SOLE_REAL_TECHNICIAN);
+}
+// Schválené přesuny POS z Decision Layer (Velín → Technik uzavřená smyčka) —
+// perzistované přes lss(), aby přežily reload. Tourplan import zůstává
+// reálným zdrojem; tohle je vrstva schválených změn NAD ním, ne náhrada.
+function getPosReassignments(){ return lsg('pos_reassignments', []); }
+function savePosReassignments(list){ lss('pos_reassignments', list); }
+function applyPosReassignments(){
+  getPosReassignments().forEach(r => {
+    const arr = FULL_POS_DATA[r.week];
+    const p = arr && arr.find(x => x.id === r.posId);
+    if (p) { p.assignedTechnician = r.to; p.reassignedBy = { decisionId: r.decisionId, at: r.reassignedAt, from: r.from }; }
+  });
+}
+applyPosReassignments();
+// currentViewTechnician (let, deklarováno níže) ještě není inicializované —
+// initial fill proto natvrdo na SOLE_REAL_TECHNICIAN, stejně jako dřív.
+for (const w of POS_WEEK_KEYS) posData[w] = FULL_POS_DATA[w].filter(p => p.assignedTechnician === PosModel.SOLE_REAL_TECHNICIAN);
+function refreshPosDataView(){
+  const activeName = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
+  for (const w of POS_WEEK_KEYS) posData[w] = FULL_POS_DATA[w].filter(p => p.assignedTechnician === activeName);
 }
 // Servisní úkoly (src:'servis') vznikají jen z reálného zdroje — Jira import
 // (budoucí fáze, viz docs/PROJECT_CONTEXT.md §7) nebo inventory "Chybí" →
@@ -611,6 +630,7 @@ function makePosCard(p,ri,showAssign){
   const dotCls=p.v?'pd-done':hasSvc?'pd-svc':'pd-pend';
   let tags=p.v?`<span class="tag t-done">✓ Hotovo</span>`:`<span class="tag t-task">${done}/${p.taskState.length}</span>`;
   tags+=priChip(p)+typTag(p);
+  if(p.reassignedBy) tags+=`<span class="tag" style="background:var(--gl);color:var(--green)">⇄ Přidáno Velínem</span>`;
   const card=document.createElement('div');card.className='pos-card';
   // navigace je nejčastější akce technika — patří hned do seznamu, ne schovaná v detailu
   const right=showAssign?`<button class="asgn-btn" onclick="event.stopPropagation();openAssign('${p.id}')">+ Den</button>`:`<button class="nav-btn" onclick="event.stopPropagation();navigateToPOS('${p.id}')" aria-label="Navigovat"><svg class="ic"><use href="#ic-map"/></svg></button>`;
@@ -2014,12 +2034,17 @@ function renderAdminDashboard() {
   // Jeden souhrnný verdikt — odpověď na "je dnešní provoz pod kontrolou?"
   // do 10 sekund, beze čtení jednotlivých karet.
   const issueCount = behind.length + flagsToday + live.servisOpen.length;
+  const pendingDecisions = getDecisions().filter(d => d.status === 'pending');
   const verdictEl = document.getElementById('dash-verdict');
   if (verdictEl) {
     verdictEl.className = 'dash-verdict ' + (issueCount === 0 ? 'ok' : 'warn');
-    verdictEl.innerHTML = issueCount === 0
+    const headline = issueCount === 0
       ? `<svg class="ic"><use href="#ic-check-circle"/></svg> Provoz pod kontrolou`
       : `<svg class="ic"><use href="#ic-warning"/></svg> Vyžaduje zásah — ${issueCount} ${issueCount === 1 ? 'položka' : 'položky'} k řešení`;
+    const sub = pendingDecisions.length
+      ? `<div class="dash-verdict-sub">${pendingDecisions.length} ${pendingDecisions.length === 1 ? 'rozhodnutí' : 'rozhodnutí'} čeká na vás v Action Feedu níže</div>`
+      : '';
+    verdictEl.innerHTML = `<div class="dash-verdict-head">${headline}</div>${sub}`;
   }
 
   // Regiony — kde je tým přetížený a kde je volná kapacita, ze stejných dat
@@ -2150,14 +2175,14 @@ let _decisionsGeneratedThisSession = false;
 function generateAndPersistCapacityDecisions() {
   if (_decisionsGeneratedThisSession) return getDecisions();
   _decisionsGeneratedThisSession = true;
-  const weeklyCounts = {};
+  const weeklyPosByTech = {};
   PosModel.PILOT_TECHNICIANS.forEach(name => {
-    weeklyCounts[name] = {};
+    weeklyPosByTech[name] = {};
     POS_WEEK_KEYS.forEach(w => {
-      weeklyCounts[name][w] = (FULL_POS_DATA[w] || []).filter(p => p.assignedTechnician === name).length;
+      weeklyPosByTech[name][w] = (FULL_POS_DATA[w] || []).filter(p => p.assignedTechnician === name);
     });
   });
-  const candidates = DecisionEngine.generateCapacityDecisions(weeklyCounts, CURRENT_OPS_WEEK);
+  const candidates = DecisionEngine.generateCapacityDecisions(weeklyPosByTech, CURRENT_OPS_WEEK);
   const existing = getDecisions();
   const alreadyExists = (c) => existing.some(d => d.type === c.type && d.technicianId === c.technicianId && d.week === c.week);
   const fresh = candidates.filter(c => !alreadyExists(c));
@@ -2178,6 +2203,32 @@ function generateAndPersistCapacityDecisions() {
   return existing;
 }
 
+// Schválení capacity_overload doporučení => reálný zápis přesunu POS na
+// cílového technika (evidence.suggestedPos/targetTechnician z DecisionEngine,
+// žádná smyšlená data). Drženo striktně uvnitř téhle approval cesty —
+// CLAUDE.md #11a: systém navrhuje, exekuce nastává jen po explicitním
+// schválení Velínem, nikdy automaticky.
+function executeApprovedReassignment(d) {
+  if (d.type !== 'capacity_overload') return;
+  const suggested = d.evidence && d.evidence.suggestedPos;
+  const targetTechnician = d.evidence && d.evidence.targetTechnician;
+  if (!suggested || !suggested.length || !targetTechnician) return;
+  const decidedBy = (getSession() && getSession().user && getSession().user.name) || 'Velín';
+  const reassignedAt = new Date().toISOString();
+  const records = getPosReassignments();
+  const arr = FULL_POS_DATA[d.week] || [];
+  suggested.forEach(sp => {
+    const p = arr.find(x => x.id === sp.id);
+    if (!p) return;
+    const from = p.assignedTechnician;
+    p.assignedTechnician = targetTechnician;
+    p.reassignedBy = { decisionId: d.id, at: reassignedAt, from };
+    records.push({ posId: sp.id, week: d.week, to: targetTechnician, from, decisionId: d.id, reassignedAt, decidedBy });
+  });
+  savePosReassignments(records);
+  refreshPosDataView();
+}
+
 function decideOnDecision(id, status) {
   const list = getDecisions();
   const d = list.find(x => x.id === id);
@@ -2190,8 +2241,20 @@ function decideOnDecision(id, status) {
   d.decidedBy = (getSession() && getSession().user && getSession().user.name) || 'Velín';
   d.decidedAt = new Date().toISOString();
   if (note) d.modifiedNote = note;
+  if (status === 'approved') executeApprovedReassignment(d);
   saveDecisions(list);
   renderDecisionFeed();
+  if (typeof renderAdminDashboard === 'function' && status === 'approved') renderAdminDashboard();
+}
+
+// Action Feed = inbox manažera, ne seznam upozornění. Každá karta odpovídá
+// na "jaké rozhodnutí musím udělat teď" — klik na kartu (mimo tlačítka)
+// otevře Decision Detail s důkazy (priorita 1+2 ze zadání).
+function decisionQuestion(d) {
+  if (d.type === 'capacity_overload' && d.evidence.targetTechnician) {
+    return `Přesunout ${d.evidence.suggestedPos.length} POS z ${d.technicianId} na ${d.evidence.targetTechnician}?`;
+  }
+  return `${d.technicianId} je v týdnu ${d.week} přetížený — zasáhnout?`;
 }
 
 function renderDecisionFeed() {
@@ -2203,16 +2266,82 @@ function renderDecisionFeed() {
     return;
   }
   el.innerHTML = pending.map(d => `
-    <div style="padding:14px;border-bottom:1px solid var(--bg)">
-      <div style="font-size:13px;font-weight:700">${d.recommendation}</div>
-      <div style="font-size:11px;color:var(--muted);margin-top:4px">Přínos: ${d.estimatedBenefit} · Jistota: ${d.confidence}</div>
-      <div style="display:flex;gap:6px;margin-top:10px">
+    <div style="padding:14px;border-bottom:1px solid var(--bg);cursor:pointer" onclick="openDecisionDetail('${d.id}')">
+      <div style="font-size:13px;font-weight:800">${decisionQuestion(d)}</div>
+      <div style="font-size:12px;color:var(--ink);margin-top:5px;line-height:1.4">${d.recommendation}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">Přínos: ${d.estimatedBenefit} · Jistota: ${d.confidence} · <span style="color:var(--teal);font-weight:700">Zobrazit důkazy →</span></div>
+      <div style="display:flex;gap:6px;margin-top:10px" onclick="event.stopPropagation()">
         <button onclick="decideOnDecision('${d.id}','approved')" style="flex:1;padding:8px;background:var(--gl);color:var(--green);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✓ Schválit</button>
         <button onclick="decideOnDecision('${d.id}','modified')" style="flex:1;padding:8px;background:var(--bg);color:var(--ink);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Upravit</button>
         <button onclick="decideOnDecision('${d.id}','deferred')" style="flex:1;padding:8px;background:var(--bg);color:var(--ink);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Odložit</button>
         <button onclick="decideOnDecision('${d.id}','rejected')" style="flex:1;padding:8px;background:var(--rl);color:var(--red);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✕ Zamítnout</button>
       </div>
     </div>`).join('');
+}
+
+// ── DECISION DETAIL — důkazy za doporučením (priorita 1). Manažer musí
+// rozhodovat na základě faktů, ne jen textu. Vše z evidence reálných dat
+// (DecisionEngine), nic vymyšleného.
+function trendBarsHtml(weeklyTrend, targetWeek) {
+  if (!weeklyTrend || !weeklyTrend.length) return '';
+  const max = Math.max(...weeklyTrend.map(t => t.count), 1);
+  return `<div style="display:flex;align-items:flex-end;gap:8px;height:90px;margin-top:8px">
+    ${weeklyTrend.map(t => {
+      const h = Math.round((t.count / max) * 70) + 14;
+      const isTarget = t.week === targetWeek;
+      return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+        <div style="font-size:11px;font-weight:800;color:${isTarget ? 'var(--red)' : 'var(--ink)'}">${t.count}</div>
+        <div style="width:100%;height:${h}px;border-radius:5px 5px 0 0;background:${isTarget ? 'var(--red)' : 'var(--border)'}"></div>
+        <div style="font-size:10px;color:var(--muted)">T${t.week}</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function decisionDetailBodyHtml(d) {
+  const ev = d.evidence || {};
+  const posRows = (ev.suggestedPos || []).map(p => `
+    <tr style="border-bottom:1px solid var(--bg)">
+      <td style="padding:6px 4px;font-size:12px;font-weight:700">${p.id}</td>
+      <td style="padding:6px 4px;font-size:12px">${p.name || ''}</td>
+      <td style="padding:6px 4px;font-size:11px;color:var(--muted)">${p.address || ''}</td>
+      <td style="padding:6px 4px;font-size:12px;text-align:right">${p.distanceKm} km</td>
+    </tr>`).join('');
+  return `
+    <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px">Důkazy</div>
+    <div style="font-size:13px;margin-top:6px">${d.recommendation}</div>
+    ${trendBarsHtml(ev.weeklyTrend, d.week)}
+    <div style="font-size:11px;color:var(--muted);margin-top:6px">Vývoj počtu POS po týdnech — týden ${d.week} (červeně) vs. historický průměr ${ev.historicalAvg}.</div>
+    ${posRows ? `
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:18px">Konkrétní POS k přesunu (nejblíž k ${ev.targetTechnician})</div>
+      <table style="width:100%;margin-top:6px;border-collapse:collapse">
+        <thead><tr style="border-bottom:1.5px solid var(--border)"><th style="text-align:left;font-size:10px;color:var(--muted);padding:4px">POS</th><th style="text-align:left;font-size:10px;color:var(--muted);padding:4px">Název</th><th style="text-align:left;font-size:10px;color:var(--muted);padding:4px">Adresa</th><th style="text-align:right;font-size:10px;color:var(--muted);padding:4px">Vzdál.</th></tr></thead>
+        <tbody>${posRows}</tbody>
+      </table>` : `<div style="font-size:12px;color:var(--muted);margin-top:12px">Bez GPS u dostupných POS nelze vybrat konkrétní přesun — chybí důkaz, doporučení čeká na master GPS data.</div>`}
+    <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:18px">Co se stane po schválení</div>
+    <div style="font-size:12px;margin-top:6px;line-height:1.5">
+      ${ev.suggestedPos && ev.suggestedPos.length
+        ? `${ev.suggestedPos.length} POS výše zmizí z plánu technika <b>${d.technicianId}</b> a okamžitě se objeví v plánu technika <b>${ev.targetTechnician}</b> pro týden ${d.week}. Změna je viditelná v jeho zobrazení hned po schválení, beze zpoždění.`
+        : `Rozhodnutí se uloží jako schválené, ale bez přiřazeného GPS u POS nelze vykonat automatický přesun — vyžaduje manuální zásah Velína.`}
+    </div>
+    <div style="display:flex;gap:6px;margin-top:18px">
+      <button onclick="decideOnDecision('${d.id}','approved');closeDecisionDetail()" style="flex:1;padding:10px;background:var(--gl);color:var(--green);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✓ Schválit</button>
+      <button onclick="decideOnDecision('${d.id}','modified');closeDecisionDetail()" style="flex:1;padding:10px;background:var(--bg);color:var(--ink);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Upravit</button>
+      <button onclick="decideOnDecision('${d.id}','deferred');closeDecisionDetail()" style="flex:1;padding:10px;background:var(--bg);color:var(--ink);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Odložit</button>
+      <button onclick="decideOnDecision('${d.id}','rejected');closeDecisionDetail()" style="flex:1;padding:10px;background:var(--rl);color:var(--red);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✕ Zamítnout</button>
+    </div>`;
+}
+
+function openDecisionDetail(id) {
+  const d = getDecisions().find(x => x.id === id);
+  if (!d) return;
+  document.getElementById('dd-title').textContent = decisionQuestion(d);
+  document.getElementById('dd-body').innerHTML = decisionDetailBodyHtml(d);
+  document.getElementById('decision-detail-modal').classList.add('open');
+}
+
+function closeDecisionDetail() {
+  document.getElementById('decision-detail-modal').classList.remove('open');
 }
 
 // ══════════════════════════════════════════════════════

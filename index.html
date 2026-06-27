@@ -626,6 +626,17 @@
   </div>
 </div>
 
+<!-- DECISION DETAIL MODAL -->
+<div class="edit-modal-ov" id="decision-detail-modal">
+  <div class="edit-modal" style="max-width:580px">
+    <div class="edit-modal-hdr">
+      <div class="edit-modal-title" id="dd-title">Detail rozhodnutí</div>
+      <button class="edit-modal-close" onclick="closeDecisionDetail()">✕</button>
+    </div>
+    <div class="edit-modal-body" id="dd-body"></div>
+  </div>
+</div>
+
 <!-- ══ ADMIN / VELÍN ══ -->
 <div id="admin-screen">
 
@@ -698,7 +709,7 @@
       <div class="dash-view" data-view="morning" id="dash-view-morning">
 
         <div class="dash-block">
-          <div class="dash-block-t"><svg class="ic"><use href="#ic-intel"/></svg> Návrhy k rozhodnutí</div>
+          <div class="dash-block-t"><svg class="ic"><use href="#ic-intel"/></svg> Action Feed — rozhodnutí, která čekají na vás</div>
           <div class="cw" id="dash-decisions"></div>
         </div>
 
