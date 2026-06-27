@@ -1100,9 +1100,9 @@ function trackedTaskItemHtml(t){
     <div style="display:flex;align-items:flex-start;gap:8px">
       <span class="pdot ${TASK_PRIORITY_DOT[t.priority]||'dot-yellow'}" style="margin-top:4px"></span>
       <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:700;color:var(--navy)">${t.title}</div>
+        <div style="font-size:13px;font-weight:700;color:var(--navy)">${t.title}${t.type==='work_order'?' <span style="font-size:10px;font-weight:700;color:var(--muted)">· ZAKÁZKA</span>':''}</div>
         ${t.description?`<div style="font-size:12px;color:var(--td);margin-top:2px">${t.description}</div>`:''}
-        <div style="margin-top:4px"><span class="approval-badge ${t.status==='done'||t.status==='verified'?'appr-ok':overdue?'appr-rej':'appr-wait'}">${TASK_STATUS_LABELS[t.status]}${overdue?' · po termínu':''}</span>${t.requiredTechnicians>1?` <span style="font-size:11px;color:var(--muted)">· potřeba ${t.requiredTechnicians} techniků</span>`:''}</div>
+        <div style="margin-top:4px"><span class="approval-badge ${t.status==='done'||t.status==='verified'?'appr-ok':overdue?'appr-rej':'appr-wait'}">${TASK_STATUS_LABELS[t.status]}${overdue?' · po termínu':''}</span>${t.requiredTechnicians>1?` <span style="font-size:11px;color:var(--muted)">· potřeba ${t.requiredTechnicians} techniků</span>`:''}${t.estimatedDurationMin?` <span style="font-size:11px;color:var(--muted)">· odhad ${(t.estimatedDurationMin/60).toFixed(1).replace(/\.0$/,'')} h</span>`:''}</div>
         ${t.window&&t.window.to?`<div style="font-size:11px;color:var(--muted);margin-top:2px">Termín do: ${new Date(t.window.to).toLocaleDateString('cs-CZ')}</div>`:''}
       </div>
     </div>
@@ -3525,11 +3525,14 @@ let taskPoolFilter = 'open'; // 'open' = vše kromě verified/cancelled
 let tpNewPosSel = null;
 let tpNewPriority = 'normal';
 let tpNewReqTech = 1;
+let tpNewType = 'adhoc';
+const TASK_TYPE_LABELS = { adhoc: 'Ad hoc úkol', work_order: 'Pracovní zakázka', campaign: 'Kampaň', service_request: 'Servisní zásah', external: 'Externí systém' };
 
 function openTaskCreateModal() {
   tpNewPosSel = null;
   tpNewPriority = 'normal';
   tpNewReqTech = 1;
+  tpNewType = 'adhoc';
   renderTaskCreateModalBody();
   document.getElementById('task-create-modal').classList.add('open');
 }
@@ -3546,6 +3549,16 @@ function renderTaskCreateModalBody() {
       </div>`).join('')}
     </div>
     <div id="tp-pos-selected" style="display:none;margin-top:6px;padding:8px 12px;background:var(--tl);border-radius:8px;font-size:13px;font-weight:700;color:var(--tm)"></div>
+
+    <label class="ef-label">Typ</label>
+    <div class="ef-chips" id="tp-type">
+      <div class="ef-chip on" onclick="tpSetType('adhoc',this)">Ad hoc úkol</div>
+      <div class="ef-chip" onclick="tpSetType('work_order',this)">Pracovní zakázka</div>
+    </div>
+    <div id="tp-duration-wrap" style="display:none">
+      <label class="ef-label">Odhadovaná doba (hodin)</label>
+      <input class="ef-input" id="tp-duration" type="number" min="0.5" step="0.5" placeholder="např. 3" />
+    </div>
 
     <label class="ef-label">Název úkolu</label>
     <input class="ef-input" id="tp-title" type="text" placeholder="Co je potřeba udělat…" />
@@ -3605,6 +3618,12 @@ function tpSelectPos(id, name, el) {
   sel.textContent = '✓ Vybráno: ' + id + ' · ' + name;
   sel.style.display = 'block';
 }
+function tpSetType(type, btn) {
+  tpNewType = type;
+  document.querySelectorAll('#tp-type .ef-chip').forEach(c => c.classList.remove('on'));
+  btn.classList.add('on');
+  document.getElementById('tp-duration-wrap').style.display = type === 'work_order' ? 'block' : 'none';
+}
 function tpSetPriority(p, btn) {
   tpNewPriority = p;
   document.querySelectorAll('#tp-priority .ef-chip').forEach(c => c.classList.remove('on'));
@@ -3621,13 +3640,16 @@ function saveNewTask() {
   if (!title) { alert('Zadej název úkolu.'); return; }
   const deadline = document.getElementById('tp-deadline').value;
   const technik = document.getElementById('tp-technik').value;
+  const durationH = tpNewType === 'work_order' ? parseFloat(document.getElementById('tp-duration').value) : null;
   const session = getSession();
   const task = createAdhocTask({
     posId: tpNewPosSel,
     title,
     description: document.getElementById('tp-desc').value.trim(),
+    type: tpNewType,
     priority: tpNewPriority,
     requiredTechnicians: tpNewReqTech,
+    estimatedDurationMin: durationH && !isNaN(durationH) ? Math.round(durationH * 60) : null,
     window: deadline ? { to: new Date(deadline + 'T23:59:59').toISOString() } : null,
   }, session && session.user ? session.user.name : 'velin');
   if (technik) assignTaskTechnicians(task.id, [technik], session && session.user ? session.user.name : 'velin');
@@ -3663,7 +3685,7 @@ function renderTaskPool() {
     return `<div class="task-feed-item" style="cursor:pointer" onclick="openTaskDetail('${t.id}')">
       <div class="tfi-icon"><span class="pdot ${TASK_PRIORITY_DOT[t.priority] || 'dot-yellow'}"></span></div>
       <div class="tfi-body">
-        <div class="tfi-title">${t.title}</div>
+        <div class="tfi-title">${t.title}${t.type === 'work_order' ? ' <span class="approval-badge appr-wait" style="font-size:10px">Zakázka' + (t.estimatedDurationMin ? ' · ' + (t.estimatedDurationMin / 60).toFixed(1).replace(/\.0$/, '') + ' h' : '') + '</span>' : ''}</div>
         <div class="tfi-sub">${posLabel} ${t.assignedTechnicianIds.length ? '· ' + t.assignedTechnicianIds.join(', ') : ''}</div>
         <div class="tfi-meta">
           <span style="font-size:10px;color:var(--muted)">${new Date(t.createdAt).toLocaleDateString('cs-CZ')}</span>
@@ -3689,9 +3711,9 @@ function taskDetailBodyHtml(t, p) {
   return `
     <div style="margin-bottom:14px">
       <div style="font-size:13px;color:var(--muted)">${p ? `${t.posId} · ${p.n} · ${p.a}` : t.posId}</div>
-      <div style="margin-top:6px"><span class="approval-badge appr-wait">${TASK_STATUS_LABELS[t.status]}</span> <span class="pdot ${TASK_PRIORITY_DOT[t.priority]}" style="display:inline-block;margin-left:8px"></span> ${t.priority}</div>
+      <div style="margin-top:6px"><span class="approval-badge appr-wait">${TASK_STATUS_LABELS[t.status]}</span> <span class="pdot ${TASK_PRIORITY_DOT[t.priority]}" style="display:inline-block;margin-left:8px"></span> ${t.priority}${t.type ? ` · ${TASK_TYPE_LABELS[t.type] || t.type}` : ''}</div>
       ${t.description ? `<div style="margin-top:8px;font-size:13px">${t.description}</div>` : ''}
-      <div style="margin-top:8px;font-size:12px;color:var(--muted)">Přiřazeno: ${t.assignedTechnicianIds.length ? t.assignedTechnicianIds.join(', ') : '—'} · Potřeba techniků: ${t.requiredTechnicians}</div>
+      <div style="margin-top:8px;font-size:12px;color:var(--muted)">Přiřazeno: ${t.assignedTechnicianIds.length ? t.assignedTechnicianIds.join(', ') : '—'} · Potřeba techniků: ${t.requiredTechnicians}${t.estimatedDurationMin ? ` · Odhad: ${(t.estimatedDurationMin / 60).toFixed(1).replace(/\.0$/, '')} h` : ''}</div>
       ${t.window && t.window.to ? `<div style="font-size:12px;color:var(--muted)">Termín do: ${new Date(t.window.to).toLocaleDateString('cs-CZ')}</div>` : ''}
     </div>
 
