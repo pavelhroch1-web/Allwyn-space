@@ -95,5 +95,52 @@ const DecisionEngine = (function(global){
     return decisions;
   }
 
-  return { generateCapacityDecisions, OVERLOAD_RATIO, MIN_DELTA_POS };
+  // Task pool sledování — stejný princip jako capacity_overload: čistá
+  // funkce nad reálnými task_pool daty (žádný odhad), Velín dál výhradně
+  // rozhoduje co s tím (#11a) — engine jen pojmenuje, co potřebuje pozornost.
+  const TASK_PENDING_THRESHOLD_MIN = { urgent: 120, high: 12 * 60, normal: 48 * 60 };
+
+  function minutesSince(iso, now){ return (now.getTime() - new Date(iso).getTime()) / 60000; }
+
+  // tasks: Task[] z TaskEngine (viz js/taskEngine.js) — pole z getTaskPool().
+  function generateTaskDecisions(tasks, now){
+    const decisions = [];
+    (tasks || []).forEach(t => {
+      if (t.status === 'cancelled' || t.status === 'verified') return;
+
+      // 1) po termínu a ještě nedokončený
+      if (t.window && t.window.to && t.status !== 'done' && new Date(t.window.to).getTime() < now.getTime()) {
+        decisions.push({
+          type: 'task_overdue',
+          taskId: t.id,
+          posId: t.posId,
+          evidence: { title: t.title, status: t.status, deadline: t.window.to, priority: t.priority, assignedTechnicianIds: t.assignedTechnicianIds },
+          recommendation: `Úkol "${t.title}" na POS ${t.posId} je po termínu (${new Date(t.window.to).toLocaleDateString('cs-CZ')}) a stále ve stavu "${t.status}".`,
+          estimatedBenefit: 'Zabránit dalšímu zpoždění servisního zásahu',
+          confidence: 'vysoká',
+        });
+        return;
+      }
+
+      // 2) nepřiřazený přes práh dané priority — riziko, že zapadne
+      if (t.status === 'pending') {
+        const threshold = TASK_PENDING_THRESHOLD_MIN[t.priority] || TASK_PENDING_THRESHOLD_MIN.normal;
+        const ageMin = minutesSince(t.createdAt, now);
+        if (ageMin >= threshold) {
+          decisions.push({
+            type: 'task_unassigned',
+            taskId: t.id,
+            posId: t.posId,
+            evidence: { title: t.title, priority: t.priority, ageHours: Math.round(ageMin / 60 * 10) / 10, createdAt: t.createdAt },
+            recommendation: `Úkol "${t.title}" (priorita ${t.priority}) na POS ${t.posId} čeká ${Math.round(ageMin / 60)} h na přiřazení technika.`,
+            estimatedBenefit: 'Rychlejší vyřízení úkolu, žádný zapadlý požadavek',
+            confidence: 'vysoká',
+          });
+        }
+      }
+    });
+    return decisions;
+  }
+
+  return { generateCapacityDecisions, generateTaskDecisions, OVERLOAD_RATIO, MIN_DELTA_POS, TASK_PENDING_THRESHOLD_MIN };
 })(typeof window !== 'undefined' ? window : (typeof global !== 'undefined' ? global : globalThis));

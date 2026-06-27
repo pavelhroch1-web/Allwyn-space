@@ -2250,20 +2250,16 @@ function saveDecisions(list) { lss('decisions', list); }
 // interval 5s) spustil znovu při každém tiku, zbytečně skenoval celý
 // FULL_POS_DATA pro každého technika a týden.
 let _decisionsGeneratedThisSession = false;
-function generateAndPersistCapacityDecisions() {
-  if (_decisionsGeneratedThisSession) return getDecisions();
-  _decisionsGeneratedThisSession = true;
-  const weeklyPosByTech = {};
-  PosModel.PILOT_TECHNICIANS.forEach(name => {
-    weeklyPosByTech[name] = {};
-    POS_WEEK_KEYS.forEach(w => {
-      weeklyPosByTech[name][w] = (FULL_POS_DATA[w] || []).filter(p => p.assignedTechnician === name);
-    });
-  });
-  const candidates = DecisionEngine.generateCapacityDecisions(weeklyPosByTech, CURRENT_OPS_WEEK);
-  const existing = getDecisions();
-  const alreadyExists = (c) => existing.some(d => d.type === c.type && d.technicianId === c.technicianId && d.week === c.week);
-  const fresh = candidates.filter(c => !alreadyExists(c));
+// Stejný dedupe princip pro oba typy zdrojů: capacity_overload je unikátní
+// přes (type, technicianId, week), task_* přes (type, taskId) — nikdy se
+// jednou rozhodnuté nenabízí znovu.
+function decisionAlreadyExists(existing, c) {
+  return existing.some(d => d.type === c.type && (
+    c.taskId ? d.taskId === c.taskId : (d.technicianId === c.technicianId && d.week === c.week)
+  ));
+}
+function persistFreshDecisions(existing, candidates) {
+  const fresh = candidates.filter(c => !decisionAlreadyExists(existing, c));
   if (fresh.length) {
     const now = new Date().toISOString();
     fresh.forEach(c => existing.push({
@@ -2278,6 +2274,30 @@ function generateAndPersistCapacityDecisions() {
     }));
     saveDecisions(existing);
   }
+  return fresh.length > 0;
+}
+function generateAndPersistCapacityDecisions() {
+  if (_decisionsGeneratedThisSession) return getDecisions();
+  _decisionsGeneratedThisSession = true;
+  const weeklyPosByTech = {};
+  PosModel.PILOT_TECHNICIANS.forEach(name => {
+    weeklyPosByTech[name] = {};
+    POS_WEEK_KEYS.forEach(w => {
+      weeklyPosByTech[name][w] = (FULL_POS_DATA[w] || []).filter(p => p.assignedTechnician === name);
+    });
+  });
+  const candidates = DecisionEngine.generateCapacityDecisions(weeklyPosByTech, CURRENT_OPS_WEEK);
+  const existing = getDecisions();
+  persistFreshDecisions(existing, candidates);
+  return existing;
+}
+// Task pool přehodnocen při každém otevření Action Feedu (ne jen jednou za
+// session jako capacity) — task_pool se mění v řádu minut (Velín/technik
+// editují přímo), na rozdíl od Tourplan importu, který je statický.
+function generateAndPersistTaskDecisions() {
+  const candidates = DecisionEngine.generateTaskDecisions(getTaskPool(), new Date());
+  const existing = getDecisions();
+  persistFreshDecisions(existing, candidates);
   return existing;
 }
 
@@ -2332,13 +2352,40 @@ function decisionQuestion(d) {
   if (d.type === 'capacity_overload' && d.evidence.targetTechnician) {
     return `Přesunout ${d.evidence.suggestedPos.length} POS z ${d.technicianId} na ${d.evidence.targetTechnician}?`;
   }
+  if (d.type === 'task_overdue') return `Úkol "${d.evidence.title}" na POS ${d.posId} je po termínu — zasáhnout?`;
+  if (d.type === 'task_unassigned') return `Úkol "${d.evidence.title}" na POS ${d.posId} čeká na přiřazení technika — zasáhnout?`;
   return `${d.technicianId} je v týdnu ${d.week} přetížený — zasáhnout?`;
+}
+
+// Otevře Task Pool přímo na konkrétním úkolu — Decision Feed jen upozorňuje,
+// reálnou akci (přiřadit technika / posunout stav / zrušit) dělá Velín přes
+// existující Task Detail (žádná duplicitní akční cesta).
+function navigateToTaskFromDecision(taskId) {
+  closeDecisionDetail();
+  const navBtn = document.querySelector("button[onclick=\"showAdmPage('redakce',this)\"]");
+  if (navBtn) showAdmPage('redakce', navBtn);
+  openTaskDetail(taskId);
+}
+
+function decisionActionsHtml(d) {
+  if (d.type === 'task_overdue' || d.type === 'task_unassigned') {
+    return `
+      <button onclick="navigateToTaskFromDecision('${d.taskId}')" style="flex:1;padding:8px;background:var(--gl);color:var(--green);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">→ Otevřít úkol</button>
+      <button onclick="decideOnDecision('${d.id}','deferred')" style="flex:1;padding:8px;background:var(--bg);color:var(--ink);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Odložit</button>
+      <button onclick="decideOnDecision('${d.id}','rejected')" style="flex:1;padding:8px;background:var(--rl);color:var(--red);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✕ Skrýt</button>`;
+  }
+  return `
+    <button onclick="decideOnDecision('${d.id}','approved')" style="flex:1;padding:8px;background:var(--gl);color:var(--green);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✓ Schválit</button>
+    <button onclick="decideOnDecision('${d.id}','modified')" style="flex:1;padding:8px;background:var(--bg);color:var(--ink);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Upravit</button>
+    <button onclick="decideOnDecision('${d.id}','deferred')" style="flex:1;padding:8px;background:var(--bg);color:var(--ink);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Odložit</button>
+    <button onclick="decideOnDecision('${d.id}','rejected')" style="flex:1;padding:8px;background:var(--rl);color:var(--red);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✕ Zamítnout</button>`;
 }
 
 function renderDecisionFeed() {
   const el = document.getElementById('dash-decisions');
   if (!el) return;
-  const pending = generateAndPersistCapacityDecisions().filter(d => d.status === 'pending');
+  generateAndPersistCapacityDecisions();
+  const pending = generateAndPersistTaskDecisions().filter(d => d.status === 'pending');
   if (!pending.length) {
     el.innerHTML = '<div class="empty"><div class="empty-i"><svg class="ic ic-xl"><use href="#ic-check-circle"/></svg></div><div class="empty-t">Žádné návrhy k rozhodnutí</div><div class="empty-s">Decision Engine nenašel přetížení nad rámec běžné zátěže.</div></div>';
     return;
@@ -2348,12 +2395,7 @@ function renderDecisionFeed() {
       <div style="font-size:13px;font-weight:800">${decisionQuestion(d)}</div>
       <div style="font-size:12px;color:var(--ink);margin-top:5px;line-height:1.4">${d.recommendation}</div>
       <div style="font-size:11px;color:var(--muted);margin-top:4px">Přínos: ${d.estimatedBenefit} · Jistota: ${d.confidence} · <span style="color:var(--teal);font-weight:700">Zobrazit důkazy →</span></div>
-      <div style="display:flex;gap:6px;margin-top:10px" onclick="event.stopPropagation()">
-        <button onclick="decideOnDecision('${d.id}','approved')" style="flex:1;padding:8px;background:var(--gl);color:var(--green);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✓ Schválit</button>
-        <button onclick="decideOnDecision('${d.id}','modified')" style="flex:1;padding:8px;background:var(--bg);color:var(--ink);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Upravit</button>
-        <button onclick="decideOnDecision('${d.id}','deferred')" style="flex:1;padding:8px;background:var(--bg);color:var(--ink);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Odložit</button>
-        <button onclick="decideOnDecision('${d.id}','rejected')" style="flex:1;padding:8px;background:var(--rl);color:var(--red);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✕ Zamítnout</button>
-      </div>
+      <div style="display:flex;gap:6px;margin-top:10px" onclick="event.stopPropagation()">${decisionActionsHtml(d)}</div>
     </div>`).join('');
 }
 
@@ -2376,7 +2418,28 @@ function trendBarsHtml(weeklyTrend, targetWeek) {
   </div>`;
 }
 
+function taskDecisionDetailBodyHtml(d) {
+  const ev = d.evidence || {};
+  return `
+    <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px">Důkazy</div>
+    <div style="font-size:13px;margin-top:6px">${d.recommendation}</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:10px">
+      POS: ${d.posId}<br>
+      Priorita: ${ev.priority || '—'}<br>
+      ${d.type === 'task_overdue' ? `Termín: ${ev.deadline ? new Date(ev.deadline).toLocaleDateString('cs-CZ') : '—'} · Stav: ${TASK_STATUS_LABELS[ev.status] || ev.status}<br>Přiřazení technici: ${(ev.assignedTechnicianIds || []).join(', ') || '— nikdo'}` : ''}
+      ${d.type === 'task_unassigned' ? `Vytvořeno: ${new Date(ev.createdAt).toLocaleString('cs-CZ')} · Čeká ${ev.ageHours} h na přiřazení` : ''}
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:18px">Co se stane po otevření</div>
+    <div style="font-size:12px;margin-top:6px;line-height:1.5">Otevře se Task Pool přímo na tomto úkolu — přiřazení technika, posun stavu nebo zrušení je akce, kterou děláš tam, ne tady.</div>
+    <div style="display:flex;gap:6px;margin-top:18px">
+      <button onclick="navigateToTaskFromDecision('${d.taskId}')" style="flex:1;padding:10px;background:var(--gl);color:var(--green);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">→ Otevřít úkol</button>
+      <button onclick="decideOnDecision('${d.id}','deferred');closeDecisionDetail()" style="flex:1;padding:10px;background:var(--bg);color:var(--ink);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Odložit</button>
+      <button onclick="decideOnDecision('${d.id}','rejected');closeDecisionDetail()" style="flex:1;padding:10px;background:var(--rl);color:var(--red);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✕ Skrýt</button>
+    </div>`;
+}
+
 function decisionDetailBodyHtml(d) {
+  if (d.type === 'task_overdue' || d.type === 'task_unassigned') return taskDecisionDetailBodyHtml(d);
   const ev = d.evidence || {};
   const posRows = (ev.suggestedPos || []).map(p => `
     <tr style="border-bottom:1px solid var(--bg)">
