@@ -1,7 +1,11 @@
+// "Aktuální" operační týden Velínu i technika — jediné místo, odkud se čte.
+// Bump tady při přechodu na nový týden, ať se to neprojeví jen na části obrazovek.
+const CURRENT_OPS_WEEK = '25';
+
 // ══════════════════════════════════════════════════════
 // STATE
 // ══════════════════════════════════════════════════════
-let cWeek='25', cDay=0, cIdx=null, pendingSlot=null, assigningId=null;
+let cWeek=CURRENT_OPS_WEEK, cDay=0, cIdx=null, pendingSlot=null, assigningId=null;
 let cView='list'; // 'list' | 'planning' | 'overdue' — perzistováno přes refresh (PART 6)
 let adminMap=null, adminMarkers=[], adminTechnicians=[];
 let activeRegion='all';
@@ -66,7 +70,7 @@ const POS_MASTER_MAP = DataProvider.getPosMasterMap();
 
 const POS_WEEK_KEYS = ['23','24','25','26','27','28'];
 const importedWeeks = DataProvider.getPosWeeks(POS_WEEK_KEYS, {
-  currentWeek: '25',
+  currentWeek: CURRENT_OPS_WEEK,
   todayIdx: getTodayDayIdx(),
 });
 // FULL_POS_DATA = POS všech 27 techniků (Velín: dashboard/POS síť/mapa/route
@@ -86,7 +90,7 @@ for(const w of POS_WEEK_KEYS){
 
 // Reálná jména techniků odvozená z Excel importu (FULL_POS_DATA), ne z
 // odpojeného demo souboru data.js — žádné paralelní fake datasety.
-const TECHNICIAN_NAMES = Array.from(new Set((FULL_POS_DATA['25']||[]).map(p=>p.assignedTechnician))).sort();
+const TECHNICIAN_NAMES = Array.from(new Set((FULL_POS_DATA[CURRENT_OPS_WEEK]||[]).map(p=>p.assignedTechnician))).sort();
 
 // Import summary log (PART 6 — "Show import summary" requirement).
 (function logImportSummary(){
@@ -100,10 +104,8 @@ const TECHNICIAN_NAMES = Array.from(new Set((FULL_POS_DATA['25']||[]).map(p=>p.a
 // ══════════════════════════════════════════════════════
 // TECHNICIANS — jediný zdroj pravdy pro Velín (RULE 1)
 // ══════════════════════════════════════════════════════
-// "Aktuální" operační týden Velínu — stejný týden, který Dashboard/Live/Map
-// odjakživa čte (posData['25']). Statistiky technika se VŽDY počítají z POS
-// tohoto týdne přes TechnicianModel — nic se neukládá na technika samotného.
-const CURRENT_OPS_WEEK = '25';
+// Statistiky technika se VŽDY počítají z POS aktuálního operačního týdne
+// (CURRENT_OPS_WEEK) přes TechnicianModel — nic se neukládá na technika samotného.
 function deriveAllTechnicians(){
   return TechnicianModel.deriveTechnicians(FULL_POS_DATA[CURRENT_OPS_WEEK] || [], { todayIdx: getTodayDayIdx() });
 }
@@ -1866,42 +1868,42 @@ function getLiveState() {
   return {
     technik: liveName,
     initials: TechnicianModel.initialsFromName(liveName),
-    week: '25',
+    week: CURRENT_OPS_WEEK,
     dayStart: lsg('daystart_' + today()),
     visitLog: lsg('vlog_' + today(), []),
     checkins: (() => {
-      const all = posData['25'] || [];
+      const all = posData[CURRENT_OPS_WEEK] || [];
       return all.map(p => ({ posId: p.id, posName: p.n, typ: p.typ, partner: p.partner, ci: lsg('ci_' + p.id) })).filter(x => x.ci);
     })(),
-    completedPos: (posData['25'] || []).filter(p => p.v),
-    totalPos: (posData['25'] || []).length,
+    completedPos: (posData[CURRENT_OPS_WEEK] || []).filter(p => p.v),
+    totalPos: (posData[CURRENT_OPS_WEEK] || []).length,
     photos: (() => {
-      const all = posData['25'] || [];
+      const all = posData[CURRENT_OPS_WEEK] || [];
       const photos = [];
       all.forEach(p => { p.photos.forEach((ph, i) => { if(ph) photos.push({ posName: p.n, posId: p.id, url: ph, slot: ['Příchod','Odchod','Detail'][i] || ('Foto '+(i+1)) }); }); });
       return photos;
     })(),
     supplies: (() => {
-      const all = posData['25'] || [];
+      const all = posData[CURRENT_OPS_WEEK] || [];
       return all.map(p => {
         const s = lsg('supply_' + p.id + '_' + today());
         return s && s.confirmed ? { posName: p.n, receiver: s.receiver, at: s.at, items: s.items } : null;
       }).filter(Boolean);
     })(),
     posCardNotes: (() => {
-      const all = posData['25'] || [];
+      const all = posData[CURRENT_OPS_WEEK] || [];
       const notes = [];
       all.forEach(p => { const n = lsg('poscard_' + p.id, []); if (n.length) notes.push({ posName: p.n, notes: n }); });
       return notes;
     })(),
-    servisOpen: (posData['25'] || []).filter(p => p.taskState.some(t => t.src === 'servis' && !t.done)),
+    servisOpen: (posData[CURRENT_OPS_WEEK] || []).filter(p => p.taskState.some(t => t.src === 'servis' && !t.done)),
     shortVisits: lsg('vlog_' + today(), []).filter(v => v.flag === 'short'),
   };
 }
 
 function getActiveTechPos() {
   // Which POS is technik currently on?
-  const all = posData['25'] || [];
+  const all = posData[CURRENT_OPS_WEEK] || [];
   return all.find(p => { const ci = lsg('ci_' + p.id); return ci && !ci.out; });
 }
 
@@ -1943,7 +1945,7 @@ function renderAdminDashboard() {
     if (m) m.dataset.inited = '1';
   }
   const live = getLiveState();
-  const pos = FULL_POS_DATA['25'] || [];
+  const pos = FULL_POS_DATA[CURRENT_OPS_WEEK] || [];
   const gpsFlags = lsg('gps_flags_' + today(), []);
   const gpsCritical = gpsFlags.filter(f => f.severity === 'critical' || f.severity === undefined);
   const gpsWarnings = gpsFlags.filter(f => f.severity === 'warning');
@@ -2754,9 +2756,9 @@ function renderAdminAlerts() {
   // reálně stalo (ci_<posId>.inTime) — žádný vymyšlený "plán".
   const todayDayIdx = getTodayDayIdx();
   if (todayDayIdx !== null) {
-    const dayPos = (posData['25'] || []).filter(p => p.d === todayDayIdx);
+    const dayPos = (posData[CURRENT_OPS_WEEK] || []).filter(p => p.d === todayDayIdx);
     if (dayPos.length) {
-      const ordered = applyStoredRouteOrder(dayPos, '25', todayDayIdx);
+      const ordered = applyStoredRouteOrder(dayPos, CURRENT_OPS_WEEK, todayDayIdx);
       const startLoc = getEffectiveStartLocation();
       const calc = RouteEngine.calculateRoute(ordered, startLoc);
       const delays = RouteEngine.checkDelays(ordered, calc, getStartTime(), live.checkins);
@@ -3042,7 +3044,7 @@ function renderEditModalBody(mode) {
   }
 
   if (mode === 'pos') {
-    const allPos = FULL_POS_DATA['25'] || [];
+    const allPos = FULL_POS_DATA[CURRENT_OPS_WEEK] || [];
     html += `<label class="ef-label">Vyhledat POS</label>
     <input class="ef-input" id="ef-pos-search" type="text" placeholder="Název nebo ID provozovny…" oninput="filterPosList(this.value)" />
     <div id="ef-pos-list" style="margin-top:8px;max-height:150px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px">
@@ -3152,7 +3154,7 @@ function updatePosCount() {
   el.textContent = count + ' POS';
 }
 function filterPosList(q) {
-  const all = FULL_POS_DATA['25'] || [];
+  const all = FULL_POS_DATA[CURRENT_OPS_WEEK] || [];
   // POS ID je hlavní identifikátor — shody podle ID se zobrazí dřív než shody podle názvu.
   let filtered;
   if (q) {
@@ -3422,7 +3424,7 @@ renderCheckin = function() {
 // AI BRIEFING (Claude API)
 // ══════════════════════════════════════════════════════════════════════════
 async function generateAIBriefing() {
-  const pos = posData['25'] || [];
+  const pos = posData[CURRENT_OPS_WEEK] || [];
   const done = pos.filter(p => p.v).length;
   const svc = pos.filter(p => p.taskState.some(t => t.src==='servis'&&!t.done));
   const adminMsg = lsg('editor_briefing') || '';
@@ -4745,7 +4747,7 @@ function setAdminMaterialStatus(posId, weekKey, section, itemId, status) {
 // ── Make admin live list rows clickable ────────────────────────────────────
 function showTechPOSList(techName) {
   // POS přiřazené KONKRÉTNÍMU technikovi (filtr přes Excel TECHNICIAN), ne celá firma.
-  const all = (FULL_POS_DATA['25'] || []).filter(p => p.assignedTechnician === techName);
+  const all = (FULL_POS_DATA[CURRENT_OPS_WEEK] || []).filter(p => p.assignedTechnician === techName);
   let html = `<div style="padding:20px 18px 32px">
     <div style="font-size:18px;font-weight:800;margin-bottom:4px">${techName}</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:16px">W25 · ${all.length} POS přiřazeno</div>`;
