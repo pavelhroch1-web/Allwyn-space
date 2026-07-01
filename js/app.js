@@ -126,9 +126,15 @@ const TECHNICIAN_NAMES = Array.from(new Set((FULL_POS_DATA[CURRENT_OPS_WEEK]||[]
 // ══════════════════════════════════════════════════════
 // Statistiky technika se VŽDY počítají z POS aktuálního operačního týdne
 // (CURRENT_OPS_WEEK) přes TechnicianModel — nic se neukládá na technika samotného.
+let _techCache = null, _techCacheTs = 0;
 function deriveAllTechnicians(){
-  return TechnicianModel.deriveTechnicians(FULL_POS_DATA[CURRENT_OPS_WEEK] || [], { todayIdx: getTodayDayIdx() });
+  const now = Date.now();
+  if (_techCache && now - _techCacheTs < 2000) return _techCache;
+  _techCache = TechnicianModel.deriveTechnicians(FULL_POS_DATA[CURRENT_OPS_WEEK] || [], { todayIdx: getTodayDayIdx() });
+  _techCacheTs = now;
+  return _techCache;
 }
+function invalidateTechCache(){ _techCache = null; }
 function techDisplayLatLng(t){
   if (t.currentPos && typeof t.currentPos.lat === 'number') return { lat: t.currentPos.lat, lng: t.currentPos.lng };
   if (t.pos && t.pos.length) {
@@ -513,7 +519,8 @@ function closeBriefing(){document.getElementById('briefing').classList.remove('o
 // ══════════════════════════════════════════════════════
 function updateHdrLabel(){
   const m=WEEKS_META[cWeek];
-  document.getElementById('hdr-week-label').textContent=`${m.l} · ${m.d} 2025 · Lán Tomáš`;
+  const techName = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
+  document.getElementById('hdr-week-label').textContent=`${m.l} · ${m.d} 2025 · ${techName}`;
 }
 function renderChips(){
   document.getElementById('week-chips').innerHTML=Object.entries(WEEKS_META).map(([w,m])=>{
@@ -2007,7 +2014,8 @@ function addPosCardNote(){
   const p=posData[cWeek][cIdx];
   const val=document.getElementById('pos-card-ta').value.trim();if(!val)return;
   const notes=lsg('poscard_'+p.id,[]);
-  notes.push({text:val,time:new Date().toLocaleDateString('cs-CZ',{day:'numeric',month:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}),author:'Lán Tomáš'});
+  const noteAuthor = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
+  notes.push({text:val,time:new Date().toLocaleDateString('cs-CZ',{day:'numeric',month:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}),author:noteAuthor});
   lss('poscard_'+p.id,notes);
   if (typeof VisitStore !== 'undefined') {
     const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
@@ -2453,6 +2461,11 @@ function renderAdminDashboard() {
 
   renderFleetRouteAnalytics();
   renderDecisionFeed();
+
+  const wt = document.getElementById('dash-week-title');
+  if (wt) wt.textContent = `Přehled výkonu — W${CURRENT_OPS_WEEK}`;
+  const mwt = document.getElementById('map-week-title');
+  if (mwt) mwt.textContent = `Technici v terénu — W${CURRENT_OPS_WEEK}`;
 }
 
 // ══════════════════════════════════════════════════════
@@ -2789,16 +2802,7 @@ function renderFleetRouteAnalytics() {
 // Rozhodnutí, ne statistika: "Změnou pořadí ušetříš X min/km → zobrazit nové
 // pořadí?" Rozbalením se ukáže přesné nové pořadí POS, žádná černá skříňka.
 function renderPerTechnicianSavings(fleet) {
-  let el = document.getElementById('dash-tech-savings');
-  if (!el) {
-    const block = document.createElement('div');
-    block.className = 'dash-block';
-    block.innerHTML = `<div class="dash-block-t"><svg class="ic"><use href="#ic-target"/></svg> Úspora podle technika — pomáháme, nekontrolujeme</div>
-      <div class="cw" id="dash-tech-savings"></div>`;
-    const anchor = document.getElementById('dash-route-kpis')?.closest('.dash-block');
-    if (anchor) anchor.after(block);
-    el = document.getElementById('dash-tech-savings');
-  }
+  const el = document.getElementById('dash-tech-savings');
   if (!el) return;
   const routes = buildAllDailyRoutes();
   const entries = Object.entries(fleet.perTechnician || {})
@@ -3073,6 +3077,8 @@ function renderAdminLive() {
   const done = adminTechnicians.reduce((s, t) => s + t.done, 0);
   const behind = adminTechnicians.filter(t => t.overdue).length;
   const active = adminTechnicians.filter(t => t.done > 0 && t.done < t.total).length;
+  const lwEl = document.getElementById('live-wlbl');
+  if (lwEl) lwEl.textContent = `Týden ${CURRENT_OPS_WEEK}`;
   document.getElementById('adm-active').textContent = active;
   document.getElementById('adm-done-n').textContent = done;
   document.getElementById('adm-behind').textContent = behind;
@@ -3280,11 +3286,12 @@ function renderAdminAlerts() {
     const st = p.taskState.find(t => t.src === 'servis' && !t.done);
     alerts.push({ t: 'red', i: 'ic-wrench', title: `Servis — ${p.n}`, sub: st.text + (st.note ? ' · ' + st.note : ''), tm: 'Live', posId: p.id });
   });
+  const liveTechName = live.technik;
   live.shortVisits.forEach(v => {
-    alerts.push({ t: 'orange', i: 'ic-clock', title: `Krátká návštěva — ${v.posName}`, sub: `Lán Tomáš · ${v.inTime}–${v.outTime} · ${v.dur} min · zkontroluj`, tm: 'Dnes', posId: v.posId });
+    alerts.push({ t: 'orange', i: 'ic-clock', title: `Krátká návštěva — ${v.posName}`, sub: `${liveTechName} · ${v.inTime}–${v.outTime} · ${v.dur} min · zkontroluj`, tm: 'Dnes', posId: v.posId });
   });
   if (live.supplies.length === 0 && live.visitLog.length > 2) {
-    alerts.push({ t: 'orange', i: 'ic-box', title: 'Zásobování bez podpisu', sub: 'Lán Tomáš · Žádné zásobování nebylo potvrzeno podpisem', tm: 'Dnes' });
+    alerts.push({ t: 'orange', i: 'ic-box', title: 'Zásobování bez podpisu', sub: `${liveTechName} · Žádné zásobování nebylo potvrzeno podpisem`, tm: 'Dnes' });
   }
 
   // Zpoždění — reálný check-in čas vs. plánovaný příjezd (RouteEngine).
@@ -3300,7 +3307,7 @@ function renderAdminAlerts() {
       const calc = RouteEngine.calculateRoute(ordered, startLoc);
       const delays = RouteEngine.checkDelays(ordered, calc, getStartTime(), live.checkins);
       delays.forEach(d => {
-        alerts.push({ t: 'orange', i: 'ic-clock', title: `Zpoždění — ${d.posName}`, sub: `Lán Tomáš · plán ${d.plannedArrival} · reálně ${d.actualArrival} · o ${d.deltaMin} min později`, tm: 'Live', posId: d.posId });
+        alerts.push({ t: 'orange', i: 'ic-clock', title: `Zpoždění — ${d.posName}`, sub: `${liveTechName} · plán ${d.plannedArrival} · reálně ${d.actualArrival} · o ${d.deltaMin} min později`, tm: 'Live', posId: d.posId });
       });
     }
   }
@@ -3317,7 +3324,7 @@ function renderAdminAlerts() {
 
   // Supplied confirmed — positive alert
   live.supplies.forEach(s => {
-    alerts.push({ t: 'green', i: 'ic-edit', title: `Zásobování potvrzeno — ${s.posName}`, sub: `Podepsal: ${s.receiver} · ${s.at} · Lán Tomáš`, tm: 'Dnes' });
+    alerts.push({ t: 'green', i: 'ic-edit', title: `Zásobování potvrzeno — ${s.posName}`, sub: `Podepsal: ${s.receiver} · ${s.at} · ${liveTechName}`, tm: 'Dnes' });
   });
 
   // Akce přímo z alertu — otevře POS detail bez nutnosti hledat stejný
@@ -3337,6 +3344,8 @@ function renderAdminAlerts() {
 // ══════════════════════════════════════════════════════
 function renderAdminCasy() {
   const live = getLiveState();
+  const titleEl = document.getElementById('casy-tech-title');
+  if (titleEl) titleEl.textContent = live.technik + ' — dnešní přehled check-inů';
   // Reálný check-in log technika (Lán Tomáš) — žádný demo/mock fallback.
   // Pokud dnes ještě nemá check-iny, zobrazí se prázdný stav, ne vymyšlená data.
   const log = live.visitLog.slice(0, 12);
@@ -4695,8 +4704,9 @@ async function generateAIBriefing() {
   const adminMsg = lsg('editor_briefing') || '';
   const customAlert = lsg('editor_alert') || '';
 
-  const prompt = `Jsi asistent pro field techniky v loteriové společnosti Allwyn. 
-Napiš krátký ranní briefing pro technika Lán Tomáš.
+  const briefingTechName = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
+  const prompt = `Jsi asistent pro field techniky v loteriové společnosti Allwyn.
+Napiš krátký ranní briefing pro technika ${briefingTechName}.
 
 Fakta o jeho týdnu:
 - Týden W25, ${pos.length} POS celkem
@@ -5081,7 +5091,7 @@ function recordVisit(posId, posName, weekKey, dayIdx) {
     dur: ci ? ci.dur : null,
     week: weekKey,
     day: dayIdx,
-    technik: 'Lán Tomáš',
+    technik: currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN,
     gpsOk: ci ? (ci.gpsDist === null || ci.gpsDist < 1) : null,
   });
   lss(key, history.slice(0, 20)); // keep last 20

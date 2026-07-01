@@ -503,8 +503,6 @@
       <div class="sec-lbl">Úkoly od Velínu</div>
       <div id="tracked-tasks-list"></div>
     </div>
-    <input type="file" id="task-photo-input" accept="image/*" capture="environment" onchange="handleTaskPhoto(event)" style="display:none"/>
-
     <!-- TASKS — detailní úkoly, technik je otevře až ve chvíli kdy reálně začíná pracovat -->
     <div class="sec-lbl">Úkoly na místě</div>
     <div class="tsec" id="tasks-list"></div>
@@ -726,7 +724,7 @@
 
     <!-- EXECUTIVE DASHBOARD -->
     <div class="adm-page active" id="adm-dashboard">
-      <div class="adm-sh"><div class="adm-st">Přehled výkonu — W25</div><div class="adm-sc" id="dash-updated">Dnes</div></div>
+      <div class="adm-sh"><div class="adm-st" id="dash-week-title">Přehled výkonu — W25</div><div class="adm-sc" id="dash-updated">Dnes</div></div>
 
       <div class="dash-status-strip" id="dash-status-strip">
         <div class="dss-item"><span class="dss-val" id="dss-active">—</span><span class="dss-lbl">vyjelo</span></div>
@@ -759,6 +757,7 @@
           <div class="dash-block-t"><svg class="ic"><use href="#ic-intel"/></svg> Route Intelligence — co upravit tento týden</div>
           <div class="kpi-grid" id="dash-hero-kpis"></div>
           <div class="kpi-grid" id="dash-route-kpis"></div>
+          <div class="cw" id="dash-tech-savings"></div>
         </div>
 
         <div class="dash-block">
@@ -790,7 +789,7 @@
           </div>
           <div class="map-box">
             <div class="map-hdr">
-              <div class="map-hdr-t">Technici v terénu — W25</div>
+              <div class="map-hdr-t" id="map-week-title">Technici v terénu — W25</div>
               <div class="live-badge"><div class="live-dot"></div>LIVE</div>
             </div>
             <div id="admin-map" style="height:260px"></div>
@@ -824,7 +823,7 @@
             <div class="scard g"><div class="sv" id="adm-avg-visit">—</div><div class="sl">Avg. návštěva — dnes</div></div>
             <div class="scard r"><div class="sv" id="adm-shorts">0</div><div class="sl">Krátké &lt;10m</div></div>
           </div>
-          <div class="adm-sh"><div class="adm-st">Lán Tomáš — dnešní přehled</div></div>
+          <div class="adm-sh"><div class="adm-st" id="casy-tech-title">Dnešní přehled check-inů</div></div>
           <div class="cw" id="adm-casy-list"></div>
         </div>
 
