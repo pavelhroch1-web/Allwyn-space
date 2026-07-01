@@ -1091,6 +1091,7 @@ function toggleTask(ti){
   const p=posData[cWeek][cIdx];if(p.v)return;
   const task=p.taskState[ti];
   if(task.answerType==='foto'&&!task.done)return startTaskPhoto(ti);
+  if(task.broadcastTaskId)return toggleBroadcastTask(task.broadcastTaskId);
   task.done=!task.done;
   if(!task.done)task.photo=null;
   saveVisitState(p,cWeek);
@@ -1491,7 +1492,9 @@ function confirmServisModal(){
   const p=posData[cWeek][cIdx];
   saveServisAnswers(p.id,servisModal.answers);
   if(servisModal.ti!=null&&p.taskState[servisModal.ti]){
-    p.taskState[servisModal.ti].done=true;
+    const task=p.taskState[servisModal.ti];
+    task.done=true;
+    if(task.broadcastTaskId)advanceBroadcastTaskToDone(task.broadcastTaskId,currentTechnicianName());
     saveVisitState(p,cWeek);
   }
   closeServisModal();
@@ -3623,42 +3626,12 @@ function saveAdminMaterialOverride(posId, section, itemId, status) {
 }
 
 // ══════════════════════════════════════════════════════
-// ADMIN TASK STORAGE
+// ADMIN TASK STORAGE (legacy) — čteno jen pro jednorázovou migraci do
+// task_pool (viz migrateAdminTasksToTaskPool níže). Rozesílání úkolů
+// (skupina/technik/POS) se dnes realizuje jako bulk-create v task_pool
+// (docs/VELIN_ARCHITECTURE.md, sekce 2.1) — žádný nový zápis do admin_tasks.
 // ══════════════════════════════════════════════════════
 function getAdminTasks() { return lsg('admin_tasks', []); }
-function saveAdminTask(task) {
-  const tasks = getAdminTasks();
-  tasks.unshift({ ...task, id: 'AT_' + Date.now(), createdAt: new Date().toLocaleString('cs-CZ'), status: 'active' });
-  lss('admin_tasks', tasks);
-  // Inject into posData for technik to see
-  injectAdminTasksIntoPosData();
-}
-function injectAdminTasksIntoPosData() {
-  const tasks = getAdminTasks().filter(t => t.status === 'active');
-  tasks.forEach(task => {
-    // Find matching POS — napříč všemi techniky (Velín zadává úkoly pro celou
-    // firmu, ne jen pro přihlášeného technika), proto FULL_POS_DATA, ne posData.
-    Object.values(FULL_POS_DATA).forEach(weekList => {
-      weekList.forEach(p => {
-        const match = taskMatchesPos(task, p);
-        if (!match) return;
-        // Don't duplicate
-        const exists = p.taskState.find(t => t.adminTaskId === task.id);
-        if (exists) return;
-        p.taskState.push({
-          text: task.text,
-          src: task.priority === 'servis' ? 'servis' : 'on_top',
-          done: false,
-          adminTaskId: task.id,
-          note: task.deadline ? `Deadline: ${task.deadline}` : undefined,
-          priority: task.priority,
-          deadline: task.deadline || undefined,
-        });
-        if (task.priority === 'servis' && task.servisOnly) p.servisOnly = true;
-      });
-    });
-  });
-}
 function taskMatchesPos(task, p) {
   if (task.target === 'group') {
     if (task.groups.includes('all')) return true;
@@ -3671,6 +3644,141 @@ function taskMatchesPos(task, p) {
   if (task.target === 'technik') return task.technikName === p.assignedTechnician;
   if (task.target === 'pos') return p.id === task.posId;
   return false;
+}
+
+// ══════════════════════════════════════════════════════
+// BROADCAST TASKS — rozeslání úkolu skupině/technikovi/POS jako bulk-create
+// v task_pool (docs/VELIN_ARCHITECTURE.md, sekce 2.1). Technik dál vidí
+// stejnou checkbox položku v checklistu (taskState) jako dřív u admin_tasks
+// — toggleBroadcastTask níže jen navíc protáhne i stavový automat
+// TaskEngine, takže evidence/historie funguje i pro rozeslané úkoly.
+// ══════════════════════════════════════════════════════
+const BROADCAST_PRIORITY_MAP = { servis: 'urgent', high: 'high', normal: 'normal' };
+
+function broadcastTargetLabel(task) {
+  if (task.target === 'group') return `Skupina: ${task.groups.join(', ')}${task.region && task.region !== 'all' ? ' · ' + task.region : ''}`;
+  if (task.target === 'technik') return `Technik: ${task.technikName}`;
+  return `POS: ${task.posId}`;
+}
+
+// createBroadcastTasks(task, actor) -> broadcastId. task = {text, deadline,
+// note, priority, target, groups, region, technikName, posId, servisOnly}
+// (stejný tvar jako dřív ukládal saveAdminTask). Vytvoří jeden task_pool
+// záznam per matching POS, se společným source.broadcastId.
+function createBroadcastTasks(task, actor) {
+  const broadcastId = 'BT_' + Date.now() + '_' + Math.floor(Math.random() * 1e4).toString(36);
+  const targetLabel = broadcastTargetLabel(task);
+  const matchingPos = (FULL_POS_DATA[CURRENT_OPS_WEEK] || []).filter(p => taskMatchesPos(task, p));
+  const window = task.deadline ? { to: new Date(task.deadline + 'T23:59:59').toISOString() } : null;
+  matchingPos.forEach(p => {
+    const created = createAdhocTask({
+      posId: p.id,
+      title: task.text,
+      description: task.note || '',
+      type: 'adhoc',
+      priority: BROADCAST_PRIORITY_MAP[task.priority] || 'normal',
+      window,
+      source: { kind: 'broadcast', broadcastId, createdBy: actor, targetLabel, deadline: task.deadline || null, servisOnly: !!task.servisOnly, originalPriority: task.priority },
+    }, actor);
+    if (p.assignedTechnician) assignTaskTechnicians(created.id, [p.assignedTechnician], actor);
+  });
+  injectBroadcastTasksIntoPosData();
+  return broadcastId;
+}
+
+// injectBroadcastTasksIntoPosData() — promítne aktivní broadcast úkoly z
+// task_pool do taskState každého POS (napříč všemi týdny, stejně jako dřív
+// injectAdminTasksIntoPosData) jako jednu projekční položku. Canonical data
+// a editace zůstávají v task_pool — tohle jen udržuje existující
+// checklist/gating logiku (renderCompleteBtn, priChip, classifyVisit...)
+// beze změny, protože ta čte přímo p.taskState.
+function injectBroadcastTasksIntoPosData() {
+  const pool = getTaskPool();
+  const activeByPos = {};
+  pool.forEach(t => {
+    if (!t.source || t.source.kind !== 'broadcast' || t.status === 'cancelled') return;
+    (activeByPos[t.posId] = activeByPos[t.posId] || []).push(t);
+  });
+  Object.values(FULL_POS_DATA).forEach(weekList => {
+    weekList.forEach(p => {
+      const tasks = activeByPos[p.id];
+      // Odstranit projekce úkolů, které už nejsou aktivní (zrušené Velínem).
+      p.taskState = p.taskState.filter(ts => !ts.broadcastTaskId || (tasks && tasks.some(t => t.id === ts.broadcastTaskId)));
+      if (!tasks) return;
+      tasks.forEach(t => {
+        const done = t.status === 'done' || t.status === 'verified';
+        const proj = p.taskState.find(ts => ts.broadcastTaskId === t.id);
+        if (proj) { proj.done = done; return; }
+        p.taskState.push({
+          text: t.title,
+          src: t.priority === 'urgent' ? 'servis' : 'on_top',
+          done,
+          broadcastTaskId: t.id,
+          note: t.window && t.window.to ? `Deadline: ${new Date(t.window.to).toLocaleDateString('cs-CZ')}` : undefined,
+          priority: t.source.originalPriority,
+          deadline: t.source.deadline || undefined,
+        });
+        if (t.source.servisOnly) p.servisOnly = true;
+      });
+    });
+  });
+}
+
+// advance/revert -> protáhne task_pool stav automatem, beze změny technikovy
+// checkbox UX (jeden tap = hotovo, druhý tap = vrátit). 'verified' je
+// terminální — Velín už úkol ověřil, technik ho zpátky neotevře.
+function advanceBroadcastTaskToDone(taskId, actor) {
+  let task = findTask(taskId);
+  if (!task || task.status === 'done' || task.status === 'verified') return task;
+  if (task.status === 'pending') task = assignTaskTechnicians(taskId, task.assignedTechnicianIds.length ? task.assignedTechnicianIds : [actor], actor);
+  if (task.status === 'assigned') task = setTaskStatus(taskId, 'in_progress', actor);
+  if (task.status === 'in_progress') task = setTaskStatus(taskId, 'done', actor);
+  return task;
+}
+function revertBroadcastTaskFromDone(taskId, actor) {
+  const task = findTask(taskId);
+  if (!task || task.status !== 'done') return task;
+  return setTaskStatus(taskId, 'in_progress', actor, 'Vráceno technikem');
+}
+function toggleBroadcastTask(taskId) {
+  const p = posData[cWeek][cIdx];
+  const actor = currentTechnicianName();
+  const task = findTask(taskId);
+  if (!task) return;
+  if (task.status === 'verified') return;
+  if (task.status === 'done') revertBroadcastTaskFromDone(taskId, actor);
+  else advanceBroadcastTaskToDone(taskId, actor);
+  injectBroadcastTasksIntoPosData();
+  saveVisitState(p, cWeek);
+  renderTasks();
+  renderCompleteBtn();
+}
+
+// deleteBroadcastTasks(broadcastId) — zruší všechny aktivní task_pool
+// záznamy daného rozeslání (přeskočí už hotové/ověřené, TaskEngine
+// 'done'/'verified' nemá přechod na 'cancelled' — dokončenou práci nemažeme).
+function deleteBroadcastTasks(broadcastId) {
+  const session = getSession();
+  const actor = session && session.user ? session.user.name : 'velin';
+  const pool = getTaskPool().map(t => {
+    if (t.source && t.source.kind === 'broadcast' && t.source.broadcastId === broadcastId && TaskEngine.canTransition(t, 'cancelled')) {
+      return TaskEngine.transitionStatus(t, 'cancelled', actor, 'Zrušeno Velínem');
+    }
+    return t;
+  });
+  saveTaskPool(pool);
+  injectBroadcastTasksIntoPosData();
+  renderTaskFeed();
+}
+
+// migrateAdminTasksToTaskPool() — jednorázová migrace starých admin_tasks
+// (před zavedením broadcastu v task_pool) na nový model. Stará data se
+// nemažou, jen se oznčí jako 'migrated', ať se neztratí historie.
+function migrateAdminTasksToTaskPool() {
+  if (lsg('admin_tasks_migrated')) return;
+  getAdminTasks().filter(t => t.status === 'active').forEach(t => createBroadcastTasks(t, 'migrace'));
+  lss('admin_tasks', getAdminTasks().map(t => t.status === 'active' ? { ...t, status: 'migrated' } : t));
+  lss('admin_tasks_migrated', true);
 }
 
 // ══════════════════════════════════════════════════════
@@ -3876,50 +3984,55 @@ function saveEditTask() {
     servisOnly: editPriority === 'servis' && !!document.getElementById('ef-servisonly')?.checked,
   };
   if (editModalMode === 'pos' && !editPosSel) { alert('Vyber konkrétní POS.'); return; }
-  saveAdminTask(task);
+  const session = getSession();
+  const actor = session && session.user ? session.user.name : 'velin';
+  createBroadcastTasks(task, actor);
   closeEditModal();
   renderTaskFeed();
+  renderTaskPool();
   // Show confirm
   const btn = document.querySelector('.ef-btn-save');
   if (btn) { btn.textContent = '✓ Uloženo!'; setTimeout(() => { btn.textContent = 'Uložit a rozeslat'; }, 2000); }
 }
 
 // ══════════════════════════════════════════════════════
-// TASK FEED
+// TASK FEED — rozeslané úkoly, jedna položka per broadcastId (skupina
+// task_pool záznamů se stejným source.broadcastId).
 // ══════════════════════════════════════════════════════
 function renderTaskFeed() {
-  const tasks = getAdminTasks();
+  const groups = {};
+  getTaskPool().forEach(t => {
+    if (!t.source || t.source.kind !== 'broadcast') return;
+    const bid = t.source.broadcastId;
+    (groups[bid] = groups[bid] || []).push(t);
+  });
+  const OPEN_STATUSES = new Set(['pending','assigned','in_progress','waiting_next_visit']);
+  const list = Object.values(groups).filter(g => g.some(t => OPEN_STATUSES.has(t.status)));
+  list.sort((a, b) => new Date(b[0].createdAt) - new Date(a[0].createdAt));
   const el = document.getElementById('task-feed'); if (!el) return;
-  if (!tasks.length) {
+  if (!list.length) {
     el.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">Žádné aktivní úkoly.<br>Klikni "+ Nový úkol" pro zadání.</div>';
     return;
   }
-  el.innerHTML = tasks.map(t => {
-    const priDot = t.priority === 'servis' ? 'dot-red' : t.priority === 'high' ? 'dot-orange' : 'dot-yellow';
-    const targetLabel = t.target === 'group' ? `Skupina: ${t.groups.join(', ')}${t.region !== 'all' ? ' · ' + t.region : ''}` : t.target === 'technik' ? `Technik: ${t.technikName}` : `POS: ${t.posId}`;
-    const dlLabel = t.deadline ? `· Deadline: ${t.deadline}` : '';
+  el.innerHTML = list.map(g => {
+    const active = g.filter(t => t.status !== 'cancelled');
+    const done = active.filter(t => t.status === 'done' || t.status === 'verified').length;
+    const src = active[0].source;
+    const priDot = src.originalPriority === 'servis' ? 'dot-red' : src.originalPriority === 'high' ? 'dot-orange' : 'dot-yellow';
+    const dlLabel = src.deadline ? `· Deadline: ${src.deadline}` : '';
     return `<div class="task-feed-item">
       <div class="tfi-icon"><span class="pdot ${priDot}"></span></div>
       <div class="tfi-body">
-        <div class="tfi-title">${t.text}</div>
-        <div class="tfi-sub">${targetLabel} ${dlLabel}</div>
+        <div class="tfi-title">${active[0].title}</div>
+        <div class="tfi-sub">${src.targetLabel} ${dlLabel}</div>
         <div class="tfi-meta">
-          <span style="font-size:10px;color:var(--muted)">${t.createdAt}</span>
-          <span class="approval-badge appr-ok">✓ Aktivní</span>
+          <span style="font-size:10px;color:var(--muted)">${new Date(active[0].createdAt).toLocaleString('cs-CZ')}</span>
+          <span class="approval-badge ${done === active.length ? 'appr-ok' : 'appr-wait'}">${done}/${active.length} hotovo</span>
         </div>
       </div>
-      <button onclick="deleteAdminTask('${t.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:4px;flex-shrink:0">✕</button>
+      <button onclick="deleteBroadcastTasks('${src.broadcastId}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:4px;flex-shrink:0">✕</button>
     </div>`;
   }).join('');
-}
-function deleteAdminTask(id) {
-  const tasks = getAdminTasks().map(t => t.id === id ? { ...t, status: 'deleted' } : t);
-  lss('admin_tasks', tasks);
-  // Remove from posData
-  Object.values(posData).forEach(weekList => {
-    weekList.forEach(p => { p.taskState = p.taskState.filter(t => t.adminTaskId !== id); });
-  });
-  renderTaskFeed();
 }
 
 // ══════════════════════════════════════════════════════
@@ -4391,13 +4504,14 @@ function approveVisit(posId, decision) {
 const __origShowAdmPage2 = showAdmPage;
 showAdmPage = function(p, btn) {
   __origShowAdmPage2(p, btn);
-  if (p === 'redakce') { renderTaskFeed(); injectAdminTasksIntoPosData(); renderTaskPool(); }
+  if (p === 'redakce') { renderTaskFeed(); injectBroadcastTasksIntoPosData(); renderTaskPool(); }
 };
 
 // ══════════════════════════════════════════════════════
-// INIT — inject saved tasks on load
+// INIT — migrace starých admin_tasks + promítnutí broadcast úkolů na load
 // ══════════════════════════════════════════════════════
-injectAdminTasksIntoPosData();
+migrateAdminTasksToTaskPool();
+injectBroadcastTasksIntoPosData();
 
 
 // ══════════════════════════════════════════════════════════════════════════
