@@ -425,7 +425,53 @@ function showAdmPage(p,btn){
   }
   if(p==='editor'){ initEditor(); showEditorSection('texty',document.querySelector('.ed-subnav')); }
   if(p==='import'){ renderImportSourceLabel(); renderPosMasterSourceLabel(); }
+  if(p==='pristupy') renderVelinPristupy();
   pushRoute();
+}
+
+// ══════════════════════════════════════════════════════
+// PŘÍSTUPY — Velín user management (Fáze 2 auth)
+// ══════════════════════════════════════════════════════
+async function renderVelinPristupy(){
+  const offlineBanner = document.getElementById('pristupy-offline-banner');
+  const listEl = document.getElementById('pristupy-list');
+  const statusEl = document.getElementById('pristupy-status');
+  const listWrap = document.getElementById('pristupy-list-wrap');
+
+  const isSync = typeof syncEnabled === 'function' && syncEnabled();
+  if (offlineBanner) offlineBanner.style.display = isSync ? 'none' : '';
+  if (listWrap) listWrap.style.display = isSync ? '' : 'none';
+  if (statusEl) statusEl.textContent = isSync ? 'Načítám…' : 'Offline';
+  if (!isSync || !listEl) return;
+
+  const profiles = typeof loadProfilesForVelin === 'function' ? await loadProfilesForVelin() : null;
+  if (!profiles) {
+    listEl.innerHTML = '<div style="padding:14px;color:var(--muted);font-size:13px">Nepodařilo se načíst profily. Ověř připojení na Supabase.</div>';
+    if (statusEl) statusEl.textContent = 'Chyba';
+    return;
+  }
+  if (profiles.length === 0) {
+    listEl.innerHTML = '<div style="padding:14px;color:var(--muted);font-size:13px">Žádné profily. Vytvoř první účet podle instrukce níže.</div>';
+    if (statusEl) statusEl.textContent = '0 profilů';
+    return;
+  }
+
+  const ROLE_LABEL = { velin: 'Velín', technician: 'Technik' };
+  const ROLE_COLOR = { velin: 'var(--teal)', technician: 'var(--navy)' };
+  listEl.innerHTML = profiles.map(p => `
+    <div style="display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid var(--bg)">
+      <div style="width:34px;height:34px;border-radius:50%;background:${ROLE_COLOR[p.role]||'var(--muted)'};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;flex-shrink:0">
+        ${(p.name||'?').split(' ').map(x=>x[0]).join('').slice(0,2).toUpperCase()}
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700;color:var(--fg)">${p.name||'—'}</div>
+        <div style="font-size:11px;color:var(--muted)">${p.region||'—'}</div>
+      </div>
+      <div style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:${ROLE_COLOR[p.role]||'var(--bg)'};color:#fff;white-space:nowrap">
+        ${ROLE_LABEL[p.role]||p.role}
+      </div>
+    </div>`).join('');
+  if (statusEl) statusEl.textContent = `${profiles.length} ${profiles.length===1?'profil':'profilů'}`;
 }
 
 // ══════════════════════════════════════════════════════

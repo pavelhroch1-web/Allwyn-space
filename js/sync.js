@@ -228,3 +228,13 @@ async function getSupabaseUser() {
   const { data: { user } } = await client.auth.getUser();
   return user;
 }
+
+// Načte všechny profily pro Velín user management UI.
+// Vyžaduje auth (profiles RLS neumožňuje anon přístup pro SELECT to authenticated).
+async function loadProfilesForVelin() {
+  const client = getSyncClient();
+  if (!client) return null;
+  const { data, error } = await client.from('profiles').select('id,name,role,region').order('role').order('name');
+  if (error) { console.warn('[auth] loadProfiles failed', error.message); return null; }
+  return data || [];
+}

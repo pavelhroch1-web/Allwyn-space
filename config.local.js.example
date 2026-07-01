@@ -1,0 +1,17 @@
+// LOKÁLNÍ DEV KONFIGURACE — Supabase credentials
+//
+// Jak použít:
+// 1. Zkopíruj tento soubor jako "config.local.js" (gitignored — nikdy necommitovat)
+// 2. Vyplň URL a anon key z Supabase dashboard → Project Settings → API
+// 3. Přidej do lokální kopie index.html PŘED closing </head> tag:
+//       <script src="config.local.js"></script>
+//    (tento řádek necommitovat — je jen pro lokální testování)
+//
+// Bez tohoto souboru (nebo bez vyplněných hodnot) běží appka čistě
+// v localStorage/offline módu — přesně jako dřív.
+//
+// Na produkci (GitHub Pages) se credentials injektují automaticky
+// z GitHub Secrets přes .github/workflows/deploy.yml.
+
+window.ALLWYN_SUPABASE_URL = 'https://xxxxxxxxxxxxxxxxxxxx.supabase.co';
+window.ALLWYN_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxxxxx';

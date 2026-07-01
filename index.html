@@ -60,6 +60,7 @@
 <symbol id="ic-bulb" viewBox="0 0 24 24"><path d="M9 18.5h6M10 21h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M12 3.5a5.8 5.8 0 0 0-3 10.8c.6.4 1 1 1 1.7v.5h4v-.5c0-.7.4-1.3 1-1.7A5.8 5.8 0 0 0 12 3.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
 <symbol id="ic-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.6"/><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="12" y1="2.5" x2="12" y2="4.8"/><line x1="12" y1="19.2" x2="12" y2="21.5"/><line x1="2.5" y1="12" x2="4.8" y2="12"/><line x1="19.2" y1="12" x2="21.5" y2="12"/><line x1="5.1" y1="5.1" x2="6.7" y2="6.7"/><line x1="17.3" y1="17.3" x2="18.9" y2="18.9"/><line x1="5.1" y1="18.9" x2="6.7" y2="17.3"/><line x1="17.3" y1="6.7" x2="18.9" y2="5.1"/></g></symbol>
 <symbol id="ic-lock" viewBox="0 0 24 24"><rect x="5.5" y="11" width="13" height="9" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+<symbol id="ic-key" viewBox="0 0 24 24"><circle cx="9" cy="10" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M13 13.5l7.5 7M17.5 16.5l-1.5 1.5M20 15l-1.5 1.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 <symbol id="ic-image" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="9" cy="10" r="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M4 16.5l5-4.5 3.5 3 3-2.5 4.5 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></symbol>
 <symbol id="ic-signal" viewBox="0 0 24 24"><circle cx="12" cy="17" r="1.5" fill="currentColor"/><path d="M8.5 14a5 5 0 0 1 7 0M5.5 11a9 9 0 0 1 13 0M2.8 8a13 13 0 0 1 18.4 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
 <symbol id="ic-check-badge" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 12.3l2.6 2.6 5.4-5.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -734,6 +735,7 @@
       <button class="adm-btn" onclick="showAdmPage('redakce',this)"><svg class="ic ic-sm"><use href="#ic-edit"/></svg> Úkoly</button>
       <button class="adm-btn" onclick="showAdmPage('ai',this)"><svg class="ic ic-sm"><use href="#ic-intel"/></svg> Intelligence</button>
       <button class="adm-btn" onclick="showAdmPage('editor',this)"><svg class="ic ic-sm"><use href="#ic-edit"/></svg> Editor</button>
+      <button class="adm-btn" onclick="showAdmPage('pristupy',this)"><svg class="ic ic-sm"><use href="#ic-key"/></svg> Přístupy</button>
     </div>
     <div style="position:relative;flex-shrink:0">
       <input type="text" id="global-pos-search" placeholder="POS ID, název, adresa…"
@@ -1281,6 +1283,64 @@
         </div>
         <div style="background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden">
           <div id="aktivita-channels"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PŘÍSTUPY — správa účtů techniků (Fáze 2 auth) -->
+    <div class="adm-page" id="adm-pristupy">
+      <div class="adm-sh"><div class="adm-st">Přístupy — správa účtů</div><div class="adm-sc" id="pristupy-status">—</div></div>
+
+      <!-- Stav připojení na Supabase -->
+      <div id="pristupy-offline-banner" style="display:none;background:#fff3cd;border:1px solid #ffc107;border-radius:10px;padding:14px 16px;margin-bottom:16px;font-size:13px;color:#664d03">
+        <b>Sync není nakonfigurovaný</b> — přístupy jsou spravované přes Supabase Auth a jsou dostupné jen když je Supabase nakonfigurovaný.<br>
+        Na produkci: nastav GitHub Secrets <code>SUPABASE_URL</code> a <code>SUPABASE_ANON_KEY</code>. Lokálně: viz <code>config.local.js.example</code>.
+      </div>
+
+      <!-- Tabulka aktivních profilů -->
+      <div id="pristupy-list-wrap">
+        <div class="adm-sh" style="margin-bottom:8px"><div class="adm-st" style="font-size:14px">Aktivní profily</div></div>
+        <div style="background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;margin-bottom:18px">
+          <div id="pristupy-list" style="padding:8px 0">
+            <div style="padding:16px;color:var(--muted);font-size:13px;text-align:center">Načítám profily…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Instrukce jak přidat nový účet -->
+      <div class="adm-sh" style="margin-bottom:8px"><div class="adm-st" style="font-size:14px">Jak přidat technika</div></div>
+      <div style="background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);padding:16px;margin-bottom:18px;font-size:13px;line-height:1.7">
+        <ol style="margin:0;padding-left:20px;color:var(--fg)">
+          <li>Otevři <b>Supabase dashboard → Authentication → Users → Add user</b></li>
+          <li>Zadej e-mail a heslo nového technika a klikni <b>Create user</b></li>
+          <li>Zkopíruj UUID nového uživatele (sloupec <i>id</i> v tabulce Users)</li>
+          <li>V Supabase SQL editoru vlož profil:<br>
+            <code style="display:block;background:var(--bg);border-radius:6px;padding:8px 10px;margin:6px 0;font-size:11px;white-space:pre-wrap">INSERT INTO public.profiles (id, name, role, region)
+VALUES ('&lt;uuid&gt;', 'Novák Jan', 'technician', 'RSA');</code>
+          </li>
+          <li>Dej technikovi jeho e-mail a heslo — přihlásí se na landing stránce</li>
+        </ol>
+      </div>
+
+      <!-- Instrukce jak přidat Velína -->
+      <div class="adm-sh" style="margin-bottom:8px"><div class="adm-st" style="font-size:14px">Jak přidat Velín</div></div>
+      <div style="background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);padding:16px;margin-bottom:18px;font-size:13px;line-height:1.7">
+        <p style="margin:0 0 8px">Stejný postup jako technik, ale v INSERT použij <code>role = 'velin'</code>:<br>
+          <code style="display:block;background:var(--bg);border-radius:6px;padding:8px 10px;margin:6px 0;font-size:11px;white-space:pre-wrap">INSERT INTO public.profiles (id, name, role)
+VALUES ('&lt;uuid&gt;', 'Pavel Hroch', 'velin');</code>
+        </p>
+        <p style="margin:0;color:var(--muted)">Velín vidí data všech techniků a má přístup k celému admin dashboardu.</p>
+      </div>
+
+      <!-- RLS stav -->
+      <div class="adm-sh" style="margin-bottom:8px"><div class="adm-st" style="font-size:14px">Zabezpečení dat (RLS)</div></div>
+      <div style="background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);padding:16px;font-size:13px;line-height:1.7">
+        <div id="pristupy-rls-status">
+          <div style="display:flex;align-items:center;gap:8px;color:var(--muted)">
+            <svg class="ic ic-sm"><use href="#ic-warning"/></svg>
+            <span><b>Pilotní RLS</b> — anon full access aktivní. Bezpečné pro pilotní skupinu.<br>
+            Spusť <code>supabase/rls_auth.sql</code> v Supabase SQL editoru pro přechod na auth-based RLS.</span>
+          </div>
         </div>
       </div>
     </div>
