@@ -18,28 +18,15 @@
 // nahrazená auth-based politikou před nasazením nad rámec tohoto pilotu —
 // viz komentář tamtéž.
 
-const SYNC_CONFIG = {
-  url: window.ALLWYN_SUPABASE_URL || '',
-  anonKey: window.ALLWYN_SUPABASE_ANON_KEY || '',
-};
-
 // Per-technika klíče (prefix match) — viz docs/CLAUDE.md "Klíče v localStorage".
 const SYNC_PER_TECH_PREFIXES = ['ci_','vlog_','daystart_','supply_','merch_','poscard_','visits_','assign_','gps_flags_','approval_','visitnote_'];
 // Globální klíče editované Velínem — musí být vidět na všech zařízeních.
 const SYNC_GLOBAL_KEYS = ['admin_tasks','admin_tasks_migrated','editor_briefing','editor_alert','editor_idt','editor_ka','editor_campaigns','inv_catalog','editor_task_templates','editor_merch_items','editor_checklist_templates','editor_refs','tourplanImportOverride','posMasterDataOverride','decisions','task_pool'];
 
-let _syncClient = null;
 let _syncChannel = null;
 
-function syncEnabled(){
-  return !!(SYNC_CONFIG.url && SYNC_CONFIG.anonKey && window.supabase);
-}
-
-function getSyncClient(){
-  if (!syncEnabled()) return null;
-  if (!_syncClient) _syncClient = window.supabase.createClient(SYNC_CONFIG.url, SYNC_CONFIG.anonKey);
-  return _syncClient;
-}
+function syncEnabled(){ return AllwynSupabase.isConfigured(); }
+function getSyncClient(){ return AllwynSupabase.getClient(); }
 
 function syncKeyScope(key, technicianHint){
   if (SYNC_GLOBAL_KEYS.includes(key)) return '_global';

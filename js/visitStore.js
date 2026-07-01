@@ -17,18 +17,8 @@
 // Historie jednotlivých návštěv/akcí je v sync_events.
 
 const VisitStore = (function(){
-  const CONFIG = {
-    url: window.ALLWYN_SUPABASE_URL || '',
-    anonKey: window.ALLWYN_SUPABASE_ANON_KEY || '',
-  };
-
-  let client = null;
-  function enabled(){ return !!(CONFIG.url && CONFIG.anonKey && window.supabase); }
-  function getClient(){
-    if (!enabled()) return null;
-    if (!client) client = window.supabase.createClient(CONFIG.url, CONFIG.anonKey);
-    return client;
-  }
+  function enabled(){ return AllwynSupabase.isConfigured(); }
+  function getClient(){ return AllwynSupabase.getClient(); }
 
   // technician_id / pos_id = reálné stringy (jméno z Tourplan, POS Master ID)
   // — žádné vymyšlené UUID, viz supabase/schema.sql.
