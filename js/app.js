@@ -5755,8 +5755,9 @@ function autoSetCurrentDay() {
 // ══════════════════════════════════════════════════════════════════════════
 // ADMIN — POS DETAIL DRAWER
 // ══════════════════════════════════════════════════════════════════════════
-function showAdminPOSDetail(posId) {
-  // Find POS across all weeks
+function showAdminPOSDetail(posId, activeTab) {
+  activeTab = activeTab || 'prehled';
+
   let foundPos = null;
   let foundWeek = null;
   for (const [w, list] of Object.entries(FULL_POS_DATA)) {
@@ -5767,33 +5768,77 @@ function showAdminPOSDetail(posId) {
 
   const p = foundPos;
   const history = getVisitHistory(posId);
-  const ci = lsg('ci_' + posId);
   const supply = lsg('supply_' + posId + '_' + today());
   const posNotes = lsg('poscard_' + posId, []);
   const lastVisit = history[0];
+  const isOverdueNow = getOverduePOS(foundWeek, FULL_POS_DATA).some(op => op.id === p.id);
+  const posModel = PosModel.toPosModel(p, { history, isOverdue: isOverdueNow });
 
-  let html = `<div style="padding:20px 18px 32px">
-    <div style="background:var(--navy);border-radius:12px;padding:14px 16px;margin-bottom:16px;color:white">
-      <div style="font-size:10px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px">${p.id} · ${p.typ}</div>
-      <div style="font-size:18px;font-weight:800">${p.n}</div>
-      <div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:4px">${p.a}</div>
-      ${p.partner ? `<div style="margin-top:8px"><span style="font-size:11px;font-weight:700;background:rgba(46,205,192,.2);color:var(--teal);padding:3px 9px;border-radius:20px">★ ${p.partner}</span></div>` : ''}
-      <div style="margin-top:8px;font-size:12px;font-weight:700">${(() => { const s = getOpeningStatusInfo(p); const color = s.cls==='dh-open'?'var(--teal)':s.cls==='dh-closed'?'#ffb84d':'rgba(255,255,255,.45)'; return `<span style="color:${color}">${s.text}</span>`; })()}</div>
+  // "Jak dlouho jsme tam nebyli" — prominentní badge
+  let lastVisitBadge;
+  if (posModel.daysSinceLastVisit === null) {
+    lastVisitBadge = `<span style="background:var(--rl);color:var(--red);font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px">Nikdy nenavštíveno</span>`;
+  } else {
+    const d = posModel.daysSinceLastVisit;
+    const [bg, fg] = d <= 7 ? ['rgba(46,205,192,.2)', 'var(--teal)']
+                   : d <= 21 ? ['rgba(255,168,56,.2)', '#ffb84d']
+                   : ['var(--rl)', 'var(--red)'];
+    lastVisitBadge = `<span style="background:${bg};color:${fg};font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px">${d === 0 ? 'Dnes' : d + ' dní zpět'}</span>`;
+  }
+
+  const tabs = [
+    { id: 'prehled', label: 'Přehled' },
+    { id: 'ukoly', label: 'Úkoly' },
+    { id: 'materialy', label: 'Materiály' },
+    { id: 'historie', label: 'Historie' },
+  ];
+
+  const tabNav = `<div style="display:flex;gap:2px;margin-bottom:16px;background:var(--bg);border-radius:10px;padding:3px">
+    ${tabs.map(t => `<button onclick="showAdminPOSDetail('${posId}','${t.id}')"
+      style="flex:1;padding:8px 4px;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;
+      background:${activeTab===t.id?'white':'transparent'};
+      color:${activeTab===t.id?'var(--navy)':'var(--muted)'};
+      box-shadow:${activeTab===t.id?'0 1px 3px rgba(0,0,0,.1)':'none'}">${t.label}</button>`).join('')}
+  </div>`;
+
+  // ── Header (always visible) ──────────────────────────────────────────────
+  const openingStatus = (() => {
+    const s = getOpeningStatusInfo(p);
+    const color = s.cls==='dh-open'?'var(--teal)':s.cls==='dh-closed'?'#ffb84d':'rgba(255,255,255,.45)';
+    return `<span style="color:${color}">${s.text}</span>`;
+  })();
+
+  const header = `<div style="background:var(--navy);border-radius:12px;padding:14px 16px;margin-bottom:12px;color:white">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px">${p.id} · ${p.typ}</div>
+        <div style="font-size:18px;font-weight:800">${p.n}</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:3px">${p.a}</div>
+      </div>
+      <div style="flex-shrink:0;padding-top:2px">${lastVisitBadge}</div>
     </div>
+    ${p.partner ? `<div style="margin-top:8px"><span style="font-size:11px;font-weight:700;background:rgba(46,205,192,.2);color:var(--teal);padding:3px 9px;border-radius:20px">★ ${p.partner}</span></div>` : ''}
+    <div style="margin-top:8px;font-size:12px;font-weight:700">${openingStatus}</div>
+  </div>`;
 
-    <!-- Terminály -->
-    ${(p.terminals||[]).length ? `<div style="background:white;border-radius:10px;padding:13px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.06)">
-      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Terminály (${p.terminals.length})</div>
-      ${p.terminals.map(t => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--bg)">
-        <svg class="ic ic-sm" style="color:var(--muted)"><use href="#ic-monitor"/></svg>
-        <div style="flex:1;font-size:13px;font-weight:700">${t.id}</div>
-        <div style="font-size:11px;color:var(--muted)">${t.type||'—'}</div>
-        <span style="font-size:10px;font-weight:700;color:${t.status==='active'?'var(--green)':'var(--muted)'}">${t.status==='active'?'Aktivní':t.status||'—'}</span>
-      </div>`).join('')}
-    </div>` : ''}
+  // ── Tab content ──────────────────────────────────────────────────────────
+  let tabContent = '';
 
-    <!-- Last visit summary -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+  if (activeTab === 'prehled') {
+    // Terminály
+    const termHtml = (p.terminals||[]).length
+      ? `<div style="background:white;border-radius:10px;padding:13px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.06)">
+          <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Terminály (${p.terminals.length})</div>
+          ${p.terminals.map(t => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--bg)">
+            <svg class="ic ic-sm" style="color:var(--muted)"><use href="#ic-monitor"/></svg>
+            <div style="flex:1;font-size:13px;font-weight:700">${t.id}</div>
+            <div style="font-size:11px;color:var(--muted)">${t.type||'—'}</div>
+            <span style="font-size:10px;font-weight:700;color:${t.status==='active'?'var(--green)':'var(--muted)'}">${t.status==='active'?'Aktivní':t.status||'—'}</span>
+          </div>`).join('')}
+        </div>` : '';
+
+    // KPI: poslední návštěva + celkem
+    const kpiRow = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
       <div style="background:white;border-radius:10px;padding:13px;box-shadow:0 1px 3px rgba(0,0,0,.06)">
         <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Poslední návštěva</div>
         <div style="font-size:15px;font-weight:800;margin-top:4px;color:var(--navy)">${lastVisit ? lastVisit.date : '—'}</div>
@@ -5806,112 +5851,155 @@ function showAdminPOSDetail(posId) {
       </div>
     </div>`;
 
-  // Frekvence návštěv — odvozeno z reálných dat, ne vymyšlené
-  const isOverdueNow = getOverduePOS(foundWeek, FULL_POS_DATA).some(op => op.id === p.id);
-  const posModel = PosModel.toPosModel(p, { history, isOverdue: isOverdueNow });
+    // Frekvence
+    let freqHtml = '';
+    if (posModel.daysSinceLastVisit !== null) {
+      const freqColors = { 'on-track': 'var(--green)', 'due-soon': 'var(--orange)', overdue: 'var(--red)' };
+      const freqBg = { 'on-track': 'var(--gl)', 'due-soon': 'var(--ol)', overdue: 'var(--rl)' };
+      let msg = `Bez návštěvy ${posModel.daysSinceLastVisit} dní.`;
+      if (posModel.frequencyCompliance === 'overdue') msg += ' Prioritizovat co nejdříve.';
+      else if (posModel.frequencyCompliance === 'due-soon') msg += ' Prioritizovat příští týden.';
+      freqHtml = `<div style="background:${freqBg[posModel.frequencyCompliance]||'var(--bg)'};border-radius:10px;padding:11px 13px;margin-bottom:14px;font-size:12px;color:${freqColors[posModel.frequencyCompliance]||'var(--muted)'};font-weight:600">${msg}</div>`;
+    } else {
+      freqHtml = `<div style="background:var(--rl);border-radius:10px;padding:11px 13px;margin-bottom:14px;font-size:12px;color:var(--red);font-weight:600">POS ještě nebyla navštívena.</div>`;
+    }
 
-  // Kampaně — stejné aktivní kampaně jako vidí technik na této POS
-  const editorCamps = lsg('editor_campaigns') || [];
-  const isCorn = p.typ === 'CORN' || p.kat === '9' || p.k === '9';
-  html += `<div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Kampaně</div>
-  <div style="background:white;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:14px">
-  ${editorCamps.length ? editorCamps.map(c => `<div style="padding:10px 14px;border-bottom:1px solid var(--bg)">
-    <div style="display:flex;align-items:center;gap:8px">
-      <span style="font-size:10px;font-weight:700;color:var(--teal);text-transform:uppercase">${c.type||''}</span>
-      <div style="flex:1;font-size:13px;font-weight:700">${c.name||''}</div>
-    </div>
-    <div style="font-size:11px;color:var(--muted);margin-top:2px">${c.dates||''}${c.deadline?' · deadline: '+c.deadline.split('-').reverse().join('. '):''}</div>
-  </div>`).join('') : `<div style="padding:14px;font-size:12px;color:var(--muted)">Žádné aktivní kampaně.</div>`}
-  ${isCorn ? `<div style="padding:10px 14px;border-top:1px solid var(--bg);font-size:11px;color:var(--orange);font-weight:600">Corn — zvláštní kanál: plánogram dle konkrétní lokace, viz složka aktuálních plánogramů.</div>` : ''}
-  </div>
-
-  <!-- Tržby a prioritní skóre — honest empty state, žádná vymyšlená čísla -->
-  <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Tržby a prioritní skóre</div>
-  <div style="background:var(--bg);border-radius:10px;padding:13px;margin-bottom:14px;font-size:12px;color:var(--muted)">
-    ${posModel.salesValue === null ? 'Data o tržbách nejsou dostupná — chybí zdroj (SAP/reporting).' : posModel.salesValue}
-    <br>${posModel.priorityScore === null ? 'Prioritní skóre nelze vypočítat — chybí vstupní data.' : posModel.priorityScore}
-  </div>`;
-
-  if (posModel.daysSinceLastVisit !== null) {
-    const freqColors = { 'on-track': 'var(--green)', 'due-soon': 'var(--orange)', overdue: 'var(--red)' };
-    const freqBg = { 'on-track': 'var(--gl)', 'due-soon': 'var(--ol)', overdue: 'var(--rl)' };
-    let msg = `Tato POS nebyla navštívena ${posModel.daysSinceLastVisit} dní.`;
-    if (posModel.frequencyCompliance === 'overdue') msg += ' Měla by být prioritizována co nejdříve.';
-    else if (posModel.frequencyCompliance === 'due-soon') msg += ' Měla by být prioritizována příští týden.';
-    html += `<div style="background:${freqBg[posModel.frequencyCompliance]||'var(--bg)'};border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:${freqColors[posModel.frequencyCompliance]||'var(--muted)'};font-weight:600">${msg}</div>`;
-  } else {
-    html += `<div style="background:var(--rl);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:var(--red);font-weight:600">Tato POS ještě nebyla nikdy navštívena.</div>`;
-  }
-
-  // Visit history
-  if (history.length) {
-    const byWeek = {};
-    history.forEach(h => { byWeek[h.week] = (byWeek[h.week] || 0) + 1; });
-    const weekChart = Object.entries(byWeek).sort((a, b) => Number(a[0]) - Number(b[0])).map(([w, count]) => ({ label: 'T' + w, value: count }));
-    html += `<div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Návštěvy po týdnech</div>
-    <div style="background:white;border-radius:10px;padding:13px 13px 6px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:14px">${barChartHtml(weekChart)}</div>
-
-    <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Historie návštěv</div>
+    // Kampaně
+    const editorCamps = lsg('editor_campaigns') || [];
+    const isCorn = p.typ === 'CORN' || p.kat === '9' || p.k === '9';
+    const campHtml = `<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Kampaně</div>
     <div style="background:white;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:14px">
-    ${history.map(h => `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--bg)">
-      <div style="font-size:13px;font-weight:700;min-width:70px">${h.date}</div>
-      <div style="flex:1;font-size:12px;color:var(--muted)">${h.technik} · W${h.week} · ${h.time||''}${h.dur?' · '+h.dur+'min':''}</div>
-      <div style="font-size:14px">${h.gpsOk===false?'<svg class="ic ic-sm" style="color:var(--red)"><use href="#ic-flag"/></svg>':h.gpsOk===true?'✓':''}</div>
-    </div>`).join('')}
-    </div>`;
-  }
-
-  // POS card notes
-  if (posNotes.length) {
-    html += `<div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Záznamy z karty POS</div>
-    <div style="background:white;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:14px">
-    ${posNotes.slice().reverse().map(n=>`<div style="padding:10px 14px;border-bottom:1px solid var(--bg)">
-      <div style="font-size:10px;font-weight:700;color:var(--muted)">${n.time} · ${n.author}</div>
-      <div style="font-size:13px;margin-top:3px">${n.text}</div>
-    </div>`).join('')}
-    </div>`;
-  }
-
-  // Supply confirmed
-  if (supply && supply.confirmed) {
-    html += `<div style="background:var(--gl);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:var(--green);display:flex;align-items:center;gap:6px">
-      <svg class="ic ic-sm"><use href="#ic-edit"/></svg> Zásobování potvrzeno · ${supply.at} · Přijal: ${supply.receiver}
-    </div>`;
-  }
-
-  // Materiál (dlouhodobý majetek — Inventory) — struktura: SAP kód, množství,
-  // datum instalace, stav. Bez SAP integrace, jen příprava na ni.
-  const materials = posModel.materials;
-  if (materials.length) {
-    const matStatusColor = { ok: 'var(--green)', miss: 'var(--orange)', damaged: 'var(--red)', needs_replacement: 'var(--red)' };
-    html += `<div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Materiál (dlouhodobý majetek)</div>
-    <div style="background:white;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:14px">
-    ${materials.map(m => `<div style="padding:10px 14px;border-bottom:1px solid var(--bg)">
+    ${editorCamps.length ? editorCamps.map(c => `<div style="padding:10px 14px;border-bottom:1px solid var(--bg)">
       <div style="display:flex;align-items:center;gap:8px">
-        <div style="flex:1;font-size:13px;font-weight:700">${m.name}</div>
-        <span style="font-size:10px;font-weight:700;color:${matStatusColor[m.status]||'var(--muted)'}">${m.status?materialStatusCz(m.status):'Nezkontrolováno'}</span>
+        <span style="font-size:10px;font-weight:700;color:var(--teal);text-transform:uppercase">${c.type||''}</span>
+        <div style="flex:1;font-size:13px;font-weight:700">${c.name||''}</div>
       </div>
-      <div style="font-size:11px;color:var(--muted);margin-top:2px">${m.location} · ${m.sapCode||'bez SAP kódu'} · ks: ${m.quantity}${m.installationDate?' · instalováno: '+m.installationDate:''}</div>
-      <div style="display:flex;gap:6px;margin-top:6px">
-        <button onclick="setAdminMaterialStatus('${posId}','${foundWeek}','${m.location==='vnitřní'?'vnitrni':'venkovni'}','${m.id}','damaged')" style="font-size:10px;font-weight:700;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:${m.status==='damaged'?'var(--rl)':'transparent'};color:var(--red);cursor:pointer">⚠ Poškozeno</button>
-        <button onclick="setAdminMaterialStatus('${posId}','${foundWeek}','${m.location==='vnitřní'?'vnitrni':'venkovni'}','${m.id}','needs_replacement')" style="font-size:10px;font-weight:700;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:${m.status==='needs_replacement'?'var(--rl)':'transparent'};color:var(--red);cursor:pointer">⟳ Nutná výměna</button>
-      </div>
-    </div>`).join('')}
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">${c.dates||''}${c.deadline?' · deadline: '+c.deadline.split('-').reverse().join('. '):''}</div>
+    </div>`).join('') : `<div style="padding:14px;font-size:12px;color:var(--muted)">Žádné aktivní kampaně.</div>`}
+    ${isCorn ? `<div style="padding:10px 14px;border-top:1px solid var(--bg);font-size:11px;color:var(--orange);font-weight:600">Corn — plánogram dle lokace.</div>` : ''}
     </div>`;
+
+    // Tržby
+    const salesHtml = `<div style="background:var(--bg);border-radius:10px;padding:12px 13px;margin-bottom:14px;font-size:12px;color:var(--muted)">
+      ${posModel.salesValue === null ? 'Tržby nedostupné — chybí zdroj (SAP/reporting).' : posModel.salesValue}
+    </div>`;
+
+    // Supply
+    const supplyHtml = supply && supply.confirmed
+      ? `<div style="background:var(--gl);border-radius:10px;padding:11px 13px;margin-bottom:14px;font-size:12px;color:var(--green);display:flex;align-items:center;gap:6px">
+          <svg class="ic ic-sm"><use href="#ic-edit"/></svg> Zásobování potvrzeno · ${supply.at} · Přijal: ${supply.receiver}
+        </div>` : '';
+
+    tabContent = termHtml + kpiRow + freqHtml + campHtml + salesHtml + supplyHtml;
+
+  } else if (activeTab === 'ukoly') {
+    const posTasks = getTasksForPos(posId);
+    const OPEN = new Set(['pending','assigned','in_progress','waiting_next_visit']);
+    const statusLabel = { pending:'Čeká', assigned:'Přiděleno', in_progress:'Probíhá', waiting_next_visit:'Příští návštěva', done:'Hotovo', verified:'Ověřeno', cancelled:'Zrušeno' };
+    const statusColor = { pending:'var(--muted)', assigned:'var(--td)', in_progress:'var(--orange)', waiting_next_visit:'var(--orange)', done:'var(--green)', verified:'var(--teal)', cancelled:'var(--muted)' };
+    const priorityBadge = { urgent:`<span style="font-size:10px;font-weight:700;color:var(--red);margin-left:4px">SERVIS</span>`, high:`<span style="font-size:10px;font-weight:700;color:var(--orange);margin-left:4px">VYSOKÁ</span>`, normal:'' };
+
+    const openTasks = posTasks.filter(t => OPEN.has(t.status));
+    const closedTasks = posTasks.filter(t => !OPEN.has(t.status));
+
+    let tasksHtml = '';
+    if (!posTasks.length) {
+      tasksHtml = `<div class="empty"><div class="empty-t">Žádné úkoly pro tuto POS</div></div>`;
+    } else {
+      const renderTaskRows = (list) => list.map(t => `
+        <div style="padding:11px 14px;border-bottom:1px solid var(--bg)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="flex:1;font-size:13px;font-weight:700">${t.title}${priorityBadge[t.priority]||''}</div>
+            <span style="font-size:10px;font-weight:700;color:${statusColor[t.status]||'var(--muted)'};white-space:nowrap">${statusLabel[t.status]||t.status}</span>
+          </div>
+          ${t.description ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">${t.description}</div>` : ''}
+          <div style="font-size:10px;color:var(--muted);margin-top:3px">${t.source&&t.source.kind?t.source.kind:'manuální'}${t.window&&t.window.to?' · do '+new Date(t.window.to).toLocaleDateString('cs-CZ'):''}</div>
+        </div>`).join('');
+
+      if (openTasks.length) {
+        tasksHtml += `<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Otevřené (${openTasks.length})</div>
+        <div style="background:white;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:14px">${renderTaskRows(openTasks)}</div>`;
+      }
+      if (closedTasks.length) {
+        tasksHtml += `<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Uzavřené (${closedTasks.length})</div>
+        <div style="background:white;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:14px;opacity:.7">${renderTaskRows(closedTasks)}</div>`;
+      }
+    }
+
+    // Add task form
+    const addForm = `<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Přidat úkol</div>
+    <div style="background:white;border-radius:10px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:14px">
+      <input type="text" id="admin-pos-task-input" placeholder="Popis úkolu pro tuto POS…"
+        style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;font-size:14px;font-family:inherit;outline:none;margin-bottom:8px;box-sizing:border-box"/>
+      <select id="admin-pos-task-priority" style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:inherit;outline:none;margin-bottom:8px;box-sizing:border-box">
+        <option value="normal">Priorita: Normální</option>
+        <option value="high">Priorita: Vysoká</option>
+        <option value="servis">Priorita: Servis (blokuje checkout)</option>
+      </select>
+      <button onclick="addAdminPosTask('${posId}','${foundWeek}')"
+        style="width:100%;padding:11px;background:var(--navy);color:var(--teal);border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">
+        Přidat úkol ✓
+      </button>
+    </div>`;
+
+    tabContent = tasksHtml + addForm;
+
+  } else if (activeTab === 'materialy') {
+    const materials = posModel.materials;
+    if (!materials.length) {
+      tabContent = `<div class="empty"><div class="empty-t">Žádný materiál evidován pro tuto POS</div></div>`;
+    } else {
+      const matStatusColor = { ok: 'var(--green)', miss: 'var(--orange)', damaged: 'var(--red)', needs_replacement: 'var(--red)' };
+      tabContent = `<div style="background:white;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:14px">
+      ${materials.map(m => `<div style="padding:11px 14px;border-bottom:1px solid var(--bg)">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="flex:1;font-size:13px;font-weight:700">${m.name}</div>
+          <span style="font-size:10px;font-weight:700;color:${matStatusColor[m.status]||'var(--muted)'}">${m.status?materialStatusCz(m.status):'Nezkontrolováno'}</span>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${m.location} · ${m.sapCode||'bez SAP kódu'} · ks: ${m.quantity}${m.installationDate?' · instalováno: '+m.installationDate:''}</div>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <button onclick="setAdminMaterialStatus('${posId}','${foundWeek}','${m.location==='vnitřní'?'vnitrni':'venkovni'}','${m.id}','damaged')"
+            style="font-size:10px;font-weight:700;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:${m.status==='damaged'?'var(--rl)':'transparent'};color:var(--red);cursor:pointer">⚠ Poškozeno</button>
+          <button onclick="setAdminMaterialStatus('${posId}','${foundWeek}','${m.location==='vnitřní'?'vnitrni':'venkovni'}','${m.id}','needs_replacement')"
+            style="font-size:10px;font-weight:700;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:${m.status==='needs_replacement'?'var(--rl)':'transparent'};color:var(--red);cursor:pointer">⟳ Nutná výměna</button>
+        </div>
+      </div>`).join('')}
+      </div>`;
+    }
+
+  } else if (activeTab === 'historie') {
+    if (!history.length) {
+      tabContent = `<div class="empty"><div class="empty-t">Žádné záznamy o návštěvách</div></div>`;
+    } else {
+      const byWeek = {};
+      history.forEach(h => { byWeek[h.week] = (byWeek[h.week] || 0) + 1; });
+      const weekChart = Object.entries(byWeek).sort((a,b) => Number(a[0])-Number(b[0])).map(([w,count]) => ({ label:'T'+w, value:count }));
+      tabContent = `<div style="background:white;border-radius:10px;padding:13px 13px 6px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:14px">${barChartHtml(weekChart)}</div>
+      <div style="background:white;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:14px">
+      ${history.map(h => `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--bg)">
+        <div style="font-size:13px;font-weight:700;min-width:70px">${h.date}</div>
+        <div style="flex:1;font-size:12px;color:var(--muted)">${h.technik} · W${h.week}${h.time?' · '+h.time:''}${h.dur?' · '+h.dur+'min':''}</div>
+        <div style="font-size:14px">${h.gpsOk===false?'<svg class="ic ic-sm" style="color:var(--red)"><use href="#ic-flag"/></svg>':h.gpsOk===true?'✓':''}</div>
+      </div>`).join('')}
+      </div>`;
+    }
+
+    if (posNotes.length) {
+      tabContent += `<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Záznamy z karty POS</div>
+      <div style="background:white;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:14px">
+      ${posNotes.slice().reverse().map(n=>`<div style="padding:10px 14px;border-bottom:1px solid var(--bg)">
+        <div style="font-size:10px;font-weight:700;color:var(--muted)">${n.time} · ${n.author}</div>
+        <div style="font-size:13px;margin-top:3px">${n.text}</div>
+      </div>`).join('')}
+      </div>`;
+    }
   }
 
-  // Admin edit section
-  html += `<div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Admin — přidat úkol</div>
-  <div style="background:white;border-radius:10px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:14px">
-    <input type="text" id="admin-pos-task-input" placeholder="Zadej on-top úkol pro tuto POS…"
-      style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;font-size:14px;font-family:inherit;outline:none;margin-bottom:8px"/>
-    <button onclick="addAdminPosTask('${posId}','${foundWeek}')"
-      style="width:100%;padding:11px;background:var(--navy);color:var(--teal);border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">
-      Přidat úkol technikovi ✓
-    </button>
-  </div>
-
-  <button onclick="closeAdminPOSDrawer()" style="width:100%;padding:13px;border:1.5px solid var(--border);border-radius:10px;background:transparent;font-size:14px;cursor:pointer;color:var(--muted)">Zavřít</button>
+  const html = `<div style="padding:16px 16px 32px">
+    ${header}
+    ${tabNav}
+    ${tabContent}
+    <button onclick="closeAdminPOSDrawer()" style="width:100%;padding:13px;border:1.5px solid var(--border);border-radius:10px;background:transparent;font-size:14px;cursor:pointer;color:var(--muted);margin-top:4px">Zavřít</button>
   </div>`;
 
   let drawer = document.getElementById('admin-pos-drawer');
@@ -5919,11 +6007,11 @@ function showAdminPOSDetail(posId) {
     drawer = document.createElement('div');
     drawer.id = 'admin-pos-drawer';
     drawer.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:700;display:flex;align-items:flex-end;justify-content:center';
-    drawer.innerHTML = `<div id="admin-pos-sheet" style="background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:430px;max-height:88vh;overflow-y:auto"><div style="width:40px;height:4px;background:var(--border);border-radius:2px;margin:16px auto 0"></div></div>`;
+    drawer.innerHTML = `<div id="admin-pos-sheet" style="background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:430px;max-height:88vh;overflow-y:auto"></div>`;
     document.body.appendChild(drawer);
     drawer.onclick = e => { if (e.target === drawer) closeAdminPOSDrawer(); };
   }
-  document.getElementById('admin-pos-sheet').innerHTML = `<div style="width:40px;height:4px;background:var(--border);border-radius:2px;margin:16px auto 0"></div>` + html;
+  document.getElementById('admin-pos-sheet').innerHTML = `<div style="width:40px;height:4px;background:var(--border);border-radius:2px;margin:16px auto 8px"></div>` + html;
   drawer.style.display = 'flex';
 }
 
@@ -5934,14 +6022,13 @@ function closeAdminPOSDrawer() {
 
 function addAdminPosTask(posId, weekKey) {
   const val = document.getElementById('admin-pos-task-input')?.value.trim();
+  const priority = document.getElementById('admin-pos-task-priority')?.value || 'normal';
   if (!val) return;
-  const p = (FULL_POS_DATA[weekKey]||[]).find(x=>x.id===posId);
-  if (!p) return;
-  p.taskState.push({text:val, src:'on_top', done:false, note:'Přidáno adminem'});
-  saveAdminPosTaskForPos(posId, val);
-  const btn = document.querySelector('#admin-pos-sheet button[onclick^="addAdmin"]');
-  if (btn) { btn.textContent='✓ Přidáno!'; setTimeout(()=>btn.textContent='Přidat úkol technikovi ✓',2000); }
-  document.getElementById('admin-pos-task-input').value = '';
+  const session = getSession();
+  const actor = session && session.user ? session.user.name : 'velin';
+  createBroadcastTasks({ text: val, target: 'pos', posId, priority, note: 'Přidáno z POS detailu' }, actor);
+  const btn = document.querySelector('#admin-pos-sheet button[onclick^="addAdminPosTask"]');
+  if (btn) { btn.textContent = '✓ Přidáno!'; setTimeout(() => showAdminPOSDetail(posId, 'ukoly'), 900); }
 }
 
 function setAdminMaterialStatus(posId, weekKey, section, itemId, status) {
@@ -5951,7 +6038,7 @@ function setAdminMaterialStatus(posId, weekKey, section, itemId, status) {
   if (!item) return;
   item.s = item.s === status ? null : status;
   saveAdminMaterialOverride(posId, section, itemId, item.s);
-  showAdminPOSDetail(posId);
+  showAdminPOSDetail(posId, 'materialy');
 }
 
 // ── Make admin live list rows clickable ────────────────────────────────────
