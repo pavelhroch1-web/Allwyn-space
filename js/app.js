@@ -341,6 +341,8 @@ function renderUserMenus(){
 // ══════════════════════════════════════════════════════
 function enterRole(role,opts){
   opts=opts||{};
+  autoSetCurrentDay();
+  applyAssignments();
   document.getElementById('role-screen').style.display='none';
   if(role==='technik'){
     document.getElementById('technik-screen').classList.add('active');
@@ -353,6 +355,7 @@ function enterRole(role,opts){
     document.getElementById('admin-screen').classList.add('active');
     renderAdminDashboard();renderAdminLive();renderAdminAlerts();renderAdminCasy();renderAdminFoto();
     setTimeout(initAdminMap,300);
+    startAdminRefresh();
   }
   pushRoute();
 }
@@ -497,6 +500,11 @@ function showBriefing(){
   items.push({c:'inf',i:ic('ic-edit'),t:'U zásobování vždy vyžádej podpis přijímajícího'});
   document.getElementById('bf-items').innerHTML=items.map(x=>`<div class="bf-item ${x.c}"><div class="bf-ico">${x.i}</div><div class="bf-txt">${x.t}</div></div>`).join('');
   document.getElementById('briefing').classList.add('open');
+  const bfEl = document.getElementById('bf-msg');
+  if (bfEl) {
+    bfEl.innerHTML = '<span>Generuji personalizovaný briefing…</span><span class="ai-badge ai-badge-static">…</span>';
+    setTimeout(() => generateAIBriefing(), 800);
+  }
 }
 function closeBriefing(){document.getElementById('briefing').classList.remove('open');}
 
@@ -560,26 +568,71 @@ function selDay(d){
 // POS LIST
 // ══════════════════════════════════════════════════════
 function renderList(){
-  const wrap=document.getElementById('pos-list-wrap');
-  wrap.innerHTML='';
-  const all=posData[cWeek]||[];
-  if(!all.length){wrap.innerHTML='<div class="empty"><div class="empty-i"><svg class="ic ic-xl"><use href="#ic-notes"/></svg></div><div class="empty-t">Žádné POS tento týden</div></div>';return;}
-  const unpl=all.filter(p=>p.d===null&&!p.v);
-  if(unpl.length){
-    const b=document.createElement('div');b.className='upbanner';b.onclick=showUnplanned;
-    b.innerHTML=`<div class="upb-ico"><svg class="ic ic-lg"><use href="#ic-pin"/></svg></div><div><div class="upb-t">${unpl.length} POS bez přiřazeného dne</div><div class="upb-s">Klikni pro naplánování</div></div><div style="color:var(--orange);font-size:18px;margin-left:auto">›</div>`;
+  cView = 'list'; saveTechUIState();
+  const wrap = document.getElementById('pos-list-wrap');
+  wrap.innerHTML = '';
+  const all = posData[cWeek] || [];
+  if (!all.length) {
+    wrap.innerHTML = '<div class="empty"><div class="empty-i"><svg class="ic ic-xl"><use href="#ic-notes"/></svg></div><div class="empty-t">Žádné POS tento týden</div></div>';
+    return;
+  }
+  const todayIdx = getTodayDayIdx();
+  const isCurrentWeek = cWeek === CURRENT_OPS_WEEK;
+  const overdue = isCurrentWeek ? getOverduePOS(cWeek) : [];
+  const unpl = all.filter(p => (p.d === null || p.d === undefined) && !p.v);
+  const todayPos = applyStoredRouteOrder(all.filter(p => p.d === cDay), cWeek, cDay);
+  const meta = WEEKS_META[cWeek];
+  const dayDate = meta ? meta.dd[cDay] : '';
+  const isTodaySelected = isCurrentWeek && cDay === todayIdx;
+  if (isTodaySelected && todayPos.length > 0) {
+    wrap.appendChild(buildMorningBriefCard(todayPos, cWeek, cDay));
+  }
+  if (isTodaySelected && overdue.length > 0) {
+    const banner = document.createElement('div');
+    banner.style.cssText = 'margin:8px 12px 0;padding:10px 14px;background:var(--rl);border:1.5px solid var(--red);border-radius:10px;cursor:pointer';
+    banner.onclick = () => showOverdue();
+    banner.innerHTML = `<div style="font-size:13px;font-weight:700;color:var(--red)"><svg class="ic ic-sm"><use href="#ic-clock"/></svg> ${overdue.length} nesplněných POS z minulých dní</div>
+      <div style="font-size:11px;color:var(--red);opacity:.8;margin-top:2px">Klikni pro zobrazení — přidej je na dnes nebo zpracuj</div>`;
+    wrap.appendChild(banner);
+  }
+  if (unpl.length > 0) {
+    const b = document.createElement('div');
+    b.className = 'upbanner';
+    b.onclick = showUnplanned;
+    b.innerHTML = `<div class="upb-ico"><svg class="ic ic-lg"><use href="#ic-pin"/></svg></div><div><div class="upb-t">${unpl.length} POS bez přiřazeného dne</div><div class="upb-s">Klikni pro naplánování</div></div><div style="color:var(--orange);font-size:18px;margin-left:auto">›</div>`;
     wrap.appendChild(b);
   }
-  const dp=all.filter(p=>p.d===cDay);
-  if(!dp.length){
-    const e=document.createElement('div');e.className='empty';
-    e.innerHTML=`<div class="empty-i"><svg class="ic ic-xl"><use href="#ic-calendar"/></svg></div><div class="empty-t">Nic naplánováno</div><div class="empty-s">Přiřaď POS z neplánovaných výše.</div>`;
-    wrap.appendChild(e);return;
-  }
-  const lbl=document.createElement('div');lbl.className='sec-lbl';
-  lbl.textContent=`${DAYS[cDay]} ${WEEKS_META[cWeek].dd[cDay]} — ${dp.length} POS`;
+  const planBtn = document.createElement('div');
+  planBtn.style.cssText = 'padding:8px 12px 0';
+  planBtn.innerHTML = `<button onclick="showPlanningView()" style="width:100%;padding:11px;background:var(--navy);color:var(--teal);border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"><svg class="ic"><use href="#ic-notes"/></svg> Naplánovat POS na týden</button>`;
+  wrap.appendChild(planBtn);
+  const lbl = document.createElement('div');
+  lbl.className = 'sec-lbl';
+  lbl.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding-right:18px';
+  const dayLabel = isTodaySelected ? `${DAYS[cDay]} ${dayDate} — DNES` : `${DAYS[cDay]} ${dayDate}`;
+  lbl.innerHTML = `<span>${dayLabel} · ${todayPos.length} POS</span>`;
   wrap.appendChild(lbl);
-  dp.forEach(p=>{wrap.appendChild(makePosCard(p,all.indexOf(p),false));});
+  const routeCard = buildRouteSummaryCard(todayPos, cWeek, cDay);
+  if (routeCard) wrap.appendChild(routeCard);
+  if (!todayPos.length) {
+    const canPlan = isCurrentWeek && (isTodaySelected || isFuture(cDay));
+    if (canPlan && unpl.length > 0) {
+      wrap.appendChild(buildDayProposalCard(unpl));
+      return;
+    }
+    const e = document.createElement('div');
+    e.className = 'empty';
+    e.innerHTML = `<div class="empty-i"><svg class="ic ic-xl"><use href="#ic-calendar"/></svg></div>
+      <div class="empty-t">Nic naplánováno</div>
+      <div class="empty-s">${canPlan ? 'Přiřaď POS z neplánovaných výše.' : 'Minulý den — pouze pro přehled.'}</div>`;
+    wrap.appendChild(e);
+    return;
+  }
+  todayPos.forEach(p => {
+    const ri = all.indexOf(p);
+    const locked = isCurrentWeek && isPast(cDay) && !p.v;
+    wrap.appendChild(makePosCard(p, ri, false, locked));
+  });
 }
 function showUnplanned(){
   const wrap=document.getElementById('pos-list-wrap');wrap.innerHTML='';
@@ -651,7 +704,7 @@ function priChip(p){
   if(invItems.some(i=>i.s==='miss'))return`<span class="tag" style="background:var(--ol);color:var(--orange)"><svg class="ic ic-sm"><use href="#ic-box"/></svg> Chybí</span>`;
   return'';
 }
-function makePosCard(p,ri,showAssign){
+function makePosCard(p,ri,showAssign,locked){
   const done=p.taskState.filter(t=>t.done).length;
   const hasSvc=p.taskState.some(t=>t.src==='servis'&&!t.done);
   const dotCls=p.v?'pd-done':hasSvc?'pd-svc':'pd-pend';
@@ -664,6 +717,15 @@ function makePosCard(p,ri,showAssign){
   const cta=showAssign?'':`<div class="pos-cta ${p.v?'done':''}">${p.v?'✓ Hotovo':'Zahájit návštěvu →'}</div>`;
   card.innerHTML=`${p.v?'<div class="vs"></div>':''}<div class="pci"><div class="pdot ${dotCls}"></div><div class="pinfo"><div class="pname">${p.n} <span style="font-weight:600;color:var(--muted);font-size:11px">#${p.id}</span></div><div class="paddr">${p.a}</div><div class="pmeta">${tags}</div></div>${right}</div>${cta}`;
   card.onclick=()=>openDetail(ri);
+  if(locked){
+    const inner=card.querySelector('.pci');
+    if(inner){
+      const badge=document.createElement('span');
+      badge.style.cssText='font-size:10px;font-weight:700;background:var(--ol);color:var(--orange);padding:2px 6px;border-radius:10px;flex-shrink:0';
+      badge.textContent='Nesplněno';
+      inner.appendChild(badge);
+    }
+  }
   return card;
 }
 
@@ -748,6 +810,7 @@ function openDetail(ri){
   document.getElementById('t-detail').style.display='block';
   window.scrollTo(0,0);
   pushRoute();
+  renderAdminAlertBanner(p);
 }
 
 // ══════════════════════════════════════════════════════
@@ -780,6 +843,15 @@ function renderCheckin(){
     btn.textContent='Check-in';btn.className='ci-btn pending';btn.onclick=doCheckin;
   }
   renderCiPhotoPending(p);
+  if(ci&&ci.gpsDist!==undefined&&ci.gpsDist!==null){
+    const el=document.getElementById('gps-status');
+    if(el){
+      const dist=ci.gpsDist;
+      const cls=dist<0.3?'gps-ok':dist<1?'gps-warn':'gps-err';
+      const icon=dist<0.3?'✓':dist<1?'<svg class="ic ic-sm"><use href="#ic-warning"/></svg>':'<svg class="ic ic-sm"><use href="#ic-flag"/></svg>';
+      el.innerHTML=`<span class="gps-badge ${cls}">${icon} ${dist<1?Math.round(dist*1000)+'m':dist.toFixed(1)+'km'} od POS · ${ci.inTime}</span>`;
+    }
+  }
 }
 function renderCiPhotoPending(p){
   const el=document.getElementById('ci-photo-pending');
@@ -800,16 +872,35 @@ function startDepartureCheckout(){
 }
 function doCheckin(){
   const p=posData[cWeek][cIdx];
-  const now=new Date();
-  const timeStr=now.toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'});
-  lss('ci_'+p.id,{inTs:now.getTime(),inTime:timeStr,out:false});
-  if(!lsg('daystart_'+today())) lss('daystart_'+today(),{ts:now.getTime(),time:timeStr,posId:p.id,posName:p.n});
-  if (typeof VisitStore !== 'undefined') {
-    const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
-    VisitStore.setVisitField(tech, p.id, p.n, p.a, null, { status: 'in_progress', started_at: now.toISOString() });
-    VisitStore.logEvent(tech, 'checkin:' + p.id);
-  }
-  renderCheckin();
+  const posLat=p.lat||null;
+  const posLng=p.lng||null;
+  verifyGPS(posLat,posLng,(lat,lng,dist)=>{
+    const now=new Date();
+    const timeStr=now.toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'});
+    // Anti-fraud tvrdý blok: >1km od POS = check-in se nezapíše
+    if(dist!==null&&dist>1){
+      const flags=lsg('gps_flags_'+today(),[]);
+      flags.push({posId:p.id,posName:p.n,time:timeStr,dist,lat,lng,severity:'critical',blocked:true,action:'checkin'});
+      lss('gps_flags_'+today(),flags);
+      const el=document.getElementById('gps-status');
+      if(el) el.innerHTML=`<span class="gps-badge gps-err"><svg class="ic ic-sm"><use href="#ic-flag"/></svg> ${dist.toFixed(1)}km od POS — check-in zablokován, musíš být na místě</span>`;
+      return;
+    }
+    const gpsFlag=dist!==null&&dist>=0.3;
+    lss('ci_'+p.id,{inTs:now.getTime(),inTime:timeStr,out:false,gpsLat:lat,gpsLng:lng,gpsDist:dist,gpsFlag});
+    if(!lsg('daystart_'+today())) lss('daystart_'+today(),{ts:now.getTime(),time:timeStr,posId:p.id,posName:p.n});
+    if(gpsFlag){
+      const flags=lsg('gps_flags_'+today(),[]);
+      flags.push({posId:p.id,posName:p.n,time:timeStr,dist,lat,lng,severity:'warning'});
+      lss('gps_flags_'+today(),flags);
+    }
+    if(typeof VisitStore!=='undefined'){
+      const tech=currentViewTechnician||PosModel.SOLE_REAL_TECHNICIAN;
+      VisitStore.setVisitField(tech,p.id,p.n,p.a,null,{status:'in_progress',started_at:now.toISOString()});
+      VisitStore.logEvent(tech,'checkin:'+p.id+(gpsFlag?':gps_warn:'+dist.toFixed(2)+'km':''));
+    }
+    renderCheckin();
+  });
 }
 // Anti-fraud: check-out dřív než MIN_VISIT_MIN minut po check-inu se
 // neprovede — bránilo by to okamžitému "odfajfkování" bez reálné práce.
@@ -850,6 +941,28 @@ function startCiTimer(inTs,el){
 // CAMPAIGNS
 // ══════════════════════════════════════════════════════
 function renderCampaigns(){
+  const editorCamps=lsg('editor_campaigns');
+  if(editorCamps&&editorCamps.length){
+    const wrap=document.getElementById('camp-wrap');
+    if(!wrap) return;
+    const typeColors={'Losy':'camp-losy','Loterie':'camp-lot','Rebranding':'camp-rebranding'};
+    const typeLabels={'Losy':'Losy','Loterie':'Loterie','Rebranding':'Rebranding','ORLEN':'ORLEN','Corn':'Corn'};
+    wrap.innerHTML=editorCamps.map(c=>{
+      const cls=typeColors[c.type]||'camp-losy';
+      const lbl=typeLabels[c.type]||c.type;
+      const items=(c.items||'').split('\n').filter(Boolean);
+      let daysLeft='';
+      if(c.deadline){const dl=new Date(c.deadline);const days=Math.ceil((dl-new Date())/86400000);daysLeft=days<=0?'Dnes!':days===1?'Zítra':days+' dní';}
+      return `<div class="camp-card ${cls}"><div class="camp-inner">
+        <div class="camp-type">${lbl}</div>
+        <div class="camp-name">${c.name}</div>
+        ${c.dates?`<div class="camp-dates"><svg class="ic ic-sm"><use href="#ic-calendar"/></svg> ${c.dates}</div>`:''}
+        <div class="camp-items">${items.map(it=>`<div class="camp-item"><div class="camp-dot"></div>${it}</div>`).join('')}</div>
+        ${c.deadline?`<div class="camp-dl"><svg class="ic ic-sm"><use href="#ic-clock"/></svg> Deadline: ${c.deadline.split('-').reverse().join('. ')} · ${daysLeft}</div>`:''}
+      </div></div>`;
+    }).join('');
+    return;
+  }
   const wrap=document.getElementById('camp-wrap');
   const p=posData[cWeek]?.[cIdx];
   const isCorn=p&&(p.typ==='CORN'||p.kat==='9'||p.k==='9');
@@ -1958,6 +2071,7 @@ function renderCompleteBtn(){
 }
 function markVisited(){
   const p=posData[cWeek][cIdx];
+  if(!p) return;
   if(p.v){
     p.v=false;
     // Reopen znamená novou práci na místě — staré foto odchodu už není
@@ -1975,12 +2089,15 @@ function markVisited(){
   }
   if(!p.taskState.every(t=>t.done))return;
   if(!allPhotosOk(p)){showMissingPhotosPrompt();return;}
+  recordVisit(p.id, p.n, cWeek, cDay);
   p.v=true;saveVisitState(p,cWeek);renderCompleteBtn();updateSummary();renderChips();renderDayTabs();
   if (typeof VisitStore !== 'undefined') {
     const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
     VisitStore.setVisitField(tech, p.id, p.n, p.a, null, { status: 'completed', completed_at: new Date().toISOString() });
     VisitStore.logEvent(tech, 'visit_completed:' + p.id);
   }
+  const ci=lsg('ci_'+p.id);
+  if(ci&&!ci.out) doCheckout();
 }
 function goBack(){
   document.getElementById('t-detail').style.display='none';
@@ -2971,7 +3088,7 @@ function renderAdminLive() {
       : t.overdue ? '<span class="badge b-beh">⚠ Pozadu</span>'
       : t.done > 0 ? '<span class="badge b-act">● Aktivní</span>'
       : '<span class="badge b-wait">○ Nezačal</span>';
-    return `<div class="tr" onclick="showTechDetail('${t.name}')">
+    return `<div class="tr" onclick="showTechPOSList('${t.name}')">
       <div class="tav ${t.overdue ? 'ov' : ''}" style="${isLive ? 'background:var(--teal);color:var(--navy)' : ''}">${t.initials}</div>
       <div class="tinf">
         <div class="tn">${t.name}${isLive ? ' <span style="font-size:9px;background:var(--teal);color:var(--navy);padding:1px 5px;border-radius:10px;font-weight:800">LIVE</span>' : ''}</div>
@@ -3589,30 +3706,6 @@ function renderAdminAktivita() {
   const chChartEl = document.getElementById('aktivita-channels-chart');
   if (chChartEl) chChartEl.innerHTML = barChartHtml(chRows.map(([ch, s]) => ({ label: ch, value: s.tasksCompleted })));
 }
-
-// ══════════════════════════════════════════════════════
-// PATCH enterRole — start admin refresh
-// ══════════════════════════════════════════════════════
-const _origEnterRole = enterRole;
-enterRole = function(role, opts) {
-  _origEnterRole(role, opts);
-  if (role === 'admin') startAdminRefresh();
-};
-
-// ══════════════════════════════════════════════════════
-// PATCH markVisited — notify admin live
-// ══════════════════════════════════════════════════════
-const _origMarkVisited = markVisited;
-markVisited = function() {
-  _origMarkVisited();
-  // Auto-checkout if checked in
-  const p = posData[cWeek][cIdx];
-  if (p && p.v) {
-    const ci = lsg('ci_' + p.id);
-    if (ci && !ci.out) doCheckout();
-  }
-};
-
 
 
 // ══════════════════════════════════════════════════════
@@ -4591,68 +4684,6 @@ function verifyGPS(posLat, posLng, callback) {
   );
 }
 
-// ── Patch doCheckin with GPS ──────────────────────────────────────────────
-const _origDoCheckin = doCheckin;
-doCheckin = function() {
-  const p = posData[cWeek][cIdx];
-  const posLat = p.lat || null;
-  const posLng = p.lng || null;
-  verifyGPS(posLat, posLng, (lat, lng, dist) => {
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'});
-    // Anti-fraud tvrdý blok: >1km od POS = check-in se nezapíše. Pokus se ale
-    // zaloguje a uvidí ho Velín jako blokovaný pokus — ne jen tichá flag.
-    if (dist !== null && dist > 1) {
-      const flags = lsg('gps_flags_' + today(), []);
-      flags.push({posId: p.id, posName: p.n, time: timeStr, dist: dist, lat, lng, severity: 'critical', blocked: true, action: 'checkin'});
-      lss('gps_flags_' + today(), flags);
-      const el = document.getElementById('gps-status');
-      if (el) el.innerHTML = `<span class="gps-badge gps-err"><svg class="ic ic-sm"><use href="#ic-flag"/></svg> ${dist.toFixed(1)}km od POS — check-in zablokován, musíš být na místě</span>`;
-      return;
-    }
-    const gpsFlag = dist !== null && dist >= 0.3;
-    lss('ci_' + p.id, {
-      inTs: now.getTime(), inTime: timeStr, out: false,
-      gpsLat: lat, gpsLng: lng, gpsDist: dist,
-      gpsFlag: gpsFlag
-    });
-    if (!lsg('daystart_' + today())) {
-      lss('daystart_' + today(), {ts: now.getTime(), time: timeStr, posId: p.id, posName: p.n});
-    }
-    // Log GPS flag for admin — 300m-1km je varování (vidí ho i technik v UI),
-    // ale i to musí být vidět ve velínu, ať admin nemá falešný pocit krytí.
-    if (gpsFlag) {
-      const flags = lsg('gps_flags_' + today(), []);
-      flags.push({posId: p.id, posName: p.n, time: timeStr, dist: dist, lat, lng, severity: 'warning'});
-      lss('gps_flags_' + today(), flags);
-    }
-    // GPS patch nahradila celou doCheckin — bez tohohle se ztratí audit log
-    // (VisitStore) z původní funkce, technik by check-in udělal "potichu".
-    if (typeof VisitStore !== 'undefined') {
-      const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
-      VisitStore.setVisitField(tech, p.id, p.n, p.a, null, { status: 'in_progress', started_at: now.toISOString() });
-      VisitStore.logEvent(tech, 'checkin:' + p.id + (gpsFlag ? ':gps_warn:' + dist.toFixed(2) + 'km' : ''));
-    }
-    renderCheckin();
-  });
-};
-
-// ── Show GPS in check-in ──────────────────────────────────────────────────
-const _origRenderCheckin = renderCheckin;
-renderCheckin = function() {
-  _origRenderCheckin();
-  const p = posData[cWeek][cIdx];
-  const ci = lsg('ci_' + p.id);
-  if (ci && ci.gpsDist !== undefined && ci.gpsDist !== null) {
-    const el = document.getElementById('gps-status');
-    if (el) {
-      const dist = ci.gpsDist;
-      const cls = dist < 0.3 ? 'gps-ok' : dist < 1 ? 'gps-warn' : 'gps-err';
-      const icon = dist < 0.3 ? '✓' : dist < 1 ? '<svg class="ic ic-sm"><use href="#ic-warning"/></svg>' : '<svg class="ic ic-sm"><use href="#ic-flag"/></svg>';
-      el.innerHTML = `<span class="gps-badge ${cls}">${icon} ${dist < 1 ? Math.round(dist*1000)+'m' : dist.toFixed(1)+'km'} od POS · ${ci.inTime}</span>`;
-    }
-  }
-};
 
 // ══════════════════════════════════════════════════════════════════════════
 // AI BRIEFING (Claude API)
@@ -4948,27 +4979,6 @@ function renderAdminAlertBanner(p) {
 }
 
 
-// ── Patch openDetail with admin alert banner ───────────────────────────────
-const ___origOpenDetail = openDetail;
-openDetail = function(ri) {
-  ___origOpenDetail(ri);
-  const p = posData[cWeek][ri];
-  renderAdminAlertBanner(p);
-};
-
-// ── Patch showBriefing to use AI ──────────────────────────────────────────
-const _origShowBriefing = showBriefing;
-showBriefing = function() {
-  _origShowBriefing();
-  // Override static message with AI
-  // POZOR: _origShowBriefing() právě přepsal bf-msg.textContent, čímž zničil
-  // dítě #bf-typing z původního HTML markupu — nelze se na něj už spoléhat.
-  const el = document.getElementById('bf-msg');
-  if (el) {
-    el.innerHTML = '<span>Generuji personalizovaný briefing…</span><span class="ai-badge ai-badge-static">…</span>';
-    setTimeout(() => generateAIBriefing(), 800);
-  }
-};
 
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -5601,104 +5611,6 @@ function buildMorningBriefCard(todayPos, week, day){
   return el;
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-// PATCH renderList — show today's POS locked, future plannable, overdue flagged
-// ══════════════════════════════════════════════════════════════════════════
-const _origRenderList = renderList;
-renderList = function() {
-  cView = 'list'; saveTechUIState();
-  const wrap = document.getElementById('pos-list-wrap');
-  wrap.innerHTML = '';
-  const all = posData[cWeek] || [];
-  if (!all.length) {
-    wrap.innerHTML = '<div class="empty"><div class="empty-i"><svg class="ic ic-xl"><use href="#ic-notes"/></svg></div><div class="empty-t">Žádné POS tento týden</div></div>';
-    return;
-  }
-
-  const todayIdx = getTodayDayIdx();
-  const isCurrentWeek = cWeek === CURRENT_OPS_WEEK;
-
-  // Overdue POS (past days, not done) — show at top of today
-  const overdue = isCurrentWeek ? getOverduePOS(cWeek) : [];
-
-  // Unplanned for this week
-  const unpl = all.filter(p => (p.d === null || p.d === undefined) && !p.v);
-
-  // Today's POS (v uloženém pořadí trasy, pokud bylo optimalizováno)
-  const todayPos = applyStoredRouteOrder(all.filter(p => p.d === cDay), cWeek, cDay);
-
-  // Header: what day is selected
-  const meta = WEEKS_META[cWeek];
-  const dayDate = meta ? meta.dd[cDay] : '';
-  const isTodaySelected = isCurrentWeek && cDay === todayIdx;
-
-  // Ranní souhrn — jen na dnešním pohledu, jen pokud je co naplánováno
-  if (isTodaySelected && todayPos.length > 0) {
-    wrap.appendChild(buildMorningBriefCard(todayPos, cWeek, cDay));
-  }
-
-  // Overdue banner (only on today's view in current week)
-  if (isTodaySelected && overdue.length > 0) {
-    const banner = document.createElement('div');
-    banner.style.cssText = 'margin:8px 12px 0;padding:10px 14px;background:var(--rl);border:1.5px solid var(--red);border-radius:10px;cursor:pointer';
-    banner.onclick = () => showOverdue();
-    banner.innerHTML = `<div style="font-size:13px;font-weight:700;color:var(--red)"><svg class="ic ic-sm"><use href="#ic-clock"/></svg> ${overdue.length} nesplněných POS z minulých dní</div>
-      <div style="font-size:11px;color:var(--red);opacity:.8;margin-top:2px">Klikni pro zobrazení — přidej je na dnes nebo zpracuj</div>`;
-    wrap.appendChild(banner);
-  }
-
-  // Unplanned banner
-  if (unpl.length > 0) {
-    const b = document.createElement('div');
-    b.className = 'upbanner';
-    b.onclick = showUnplanned;
-    b.innerHTML = `<div class="upb-ico"><svg class="ic ic-lg"><use href="#ic-pin"/></svg></div><div><div class="upb-t">${unpl.length} POS bez přiřazeného dne</div><div class="upb-s">Klikni pro naplánování</div></div><div style="color:var(--orange);font-size:18px;margin-left:auto">›</div>`;
-    wrap.appendChild(b);
-  }
-
-  // Plan button
-  const planBtn = document.createElement('div');
-  planBtn.style.cssText = 'padding:8px 12px 0';
-  planBtn.innerHTML = `<button onclick="showPlanningView()" style="width:100%;padding:11px;background:var(--navy);color:var(--teal);border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"><svg class="ic"><use href="#ic-notes"/></svg> Naplánovat POS na týden</button>`;
-  wrap.appendChild(planBtn);
-
-  // Day label
-  const lbl = document.createElement('div');
-  lbl.className = 'sec-lbl';
-  lbl.style.display = 'flex';
-  lbl.style.alignItems = 'center';
-  lbl.style.justifyContent = 'space-between';
-  lbl.style.paddingRight = '18px';
-  const dayLabel = isTodaySelected ? `${DAYS[cDay]} ${dayDate} — DNES` : `${DAYS[cDay]} ${dayDate}`;
-  lbl.innerHTML = `<span>${dayLabel} · ${todayPos.length} POS</span>`;
-  wrap.appendChild(lbl);
-
-  const routeCard = buildRouteSummaryCard(todayPos, cWeek, cDay);
-  if (routeCard) wrap.appendChild(routeCard);
-
-  if (!todayPos.length) {
-    // Can they add POS from unplanned?
-    const canPlan = isCurrentWeek && (isTodaySelected || isFuture(cDay));
-    if (canPlan && unpl.length > 0) {
-      wrap.appendChild(buildDayProposalCard(unpl));
-      return;
-    }
-    const e = document.createElement('div');
-    e.className = 'empty';
-    e.innerHTML = `<div class="empty-i"><svg class="ic ic-xl"><use href="#ic-calendar"/></svg></div>
-      <div class="empty-t">Nic naplánováno</div>
-      <div class="empty-s">${canPlan ? 'Přiřaď POS z neplánovaných výše.' : 'Minulý den — pouze pro přehled.'}</div>`;
-    wrap.appendChild(e);
-    return;
-  }
-
-  todayPos.forEach(p => {
-    const ri = all.indexOf(p);
-    // Lock past days - can view but not check-in/complete
-    const locked = isCurrentWeek && isPast(cDay) && !p.v;
-    wrap.appendChild(makePosCard(p, ri, false, locked));
-  });
-};
 
 // ── Show overdue POS ───────────────────────────────────────────────────────
 function showOverdue() {
@@ -5726,34 +5638,7 @@ function showOverdue() {
   });
 }
 
-// ── Update makePosCard to support locked state ────────────────────────────
-const _origMakePosCard = makePosCard;
-makePosCard = function(p, ri, showAssign, locked) {
-  const card = _origMakePosCard(p, ri, showAssign);
-  if (locked) {
-    // Add "nesplněno" overlay badge
-    const inner = card.querySelector('.pci');
-    if (inner) {
-      const badge = document.createElement('span');
-      badge.style.cssText = 'font-size:10px;font-weight:700;background:var(--ol);color:var(--orange);padding:2px 6px;border-radius:10px;flex-shrink:0';
-      badge.textContent = 'Nesplněno';
-      inner.appendChild(badge);
-    }
-  }
-  return card;
-};
 
-// ── Patch markVisited to record visit history ─────────────────────────────
-const _origMarkVisited2 = markVisited;
-markVisited = function() {
-  const p = posData[cWeek][cIdx];
-  if (!p) return;
-  if (p.v) { _origMarkVisited2(); return; } // reopen path — žádný nový visit record
-  if (!p.taskState.every(t => t.done)) return;
-  if (!allPhotosOk(p)) { showMissingPhotosPrompt(); return; }
-  recordVisit(p.id, p.n, cWeek, cDay);
-  _origMarkVisited2();
-};
 
 // ── Auto-set today's week and day on init ────────────────────────────────
 function autoSetCurrentDay() {
@@ -6095,24 +5980,6 @@ function showTechPOSList(techName) {
   drawer.style.display = 'flex';
 }
 
-// ── Patch admin live list to open POS list on click ────────────────────────
-const _origRenderAdminLive2 = renderAdminLive;
-renderAdminLive = function() {
-  _origRenderAdminLive2();
-  // Re-wire click handlers to show POS list
-  document.querySelectorAll('#adm-live-list .tr').forEach(row => {
-    const name = row.querySelector('.tn')?.textContent?.replace(' LIVE','').trim();
-    if (name) row.onclick = () => showTechPOSList(name);
-  });
-};
-
-// ── Auto init day/week on role enter ──────────────────────────────────────
-const _origEnterRole2 = enterRole;
-enterRole = function(role, opts) {
-  autoSetCurrentDay();
-  applyAssignments();
-  _origEnterRole2(role, opts);
-};
 
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -7028,37 +6895,6 @@ function renderEdChecklistPreview() {
   el.innerHTML = ChecklistEngine.renderChecklistHtml(tpl, edChecklistPreviewAnswers);
 }
 
-// ── Patch renderCampaigns to use editor campaigns ──────────────────────────
-const _origRenderCampaigns = renderCampaigns;
-renderCampaigns = function() {
-  const editorCamps = lsg('editor_campaigns');
-  if (!editorCamps || !editorCamps.length) {
-    _origRenderCampaigns();
-    return;
-  }
-  const wrap = document.getElementById('camp-wrap');
-  if (!wrap) return;
-  const typeColors = {'Losy':'camp-losy','Loterie':'camp-lot','Rebranding':'camp-rebranding'};
-  const typeLabels = {'Losy':'Losy','Loterie':'Loterie','Rebranding':'Rebranding','ORLEN':'ORLEN','Corn':'Corn'};
-  wrap.innerHTML = editorCamps.map(c => {
-    const cls = typeColors[c.type] || 'camp-losy';
-    const lbl = typeLabels[c.type] || c.type;
-    const items = (c.items||'').split('\n').filter(Boolean);
-    let daysLeft = '';
-    if (c.deadline) {
-      const dl = new Date(c.deadline);
-      const days = Math.ceil((dl - new Date())/86400000);
-      daysLeft = days<=0?'Dnes!':days===1?'Zítra':days+' dní';
-    }
-    return `<div class="camp-card ${cls}"><div class="camp-inner">
-      <div class="camp-type">${lbl}</div>
-      <div class="camp-name">${c.name}</div>
-      ${c.dates?`<div class="camp-dates"><svg class="ic ic-sm"><use href="#ic-calendar"/></svg> ${c.dates}</div>`:''}
-      <div class="camp-items">${items.map(it=>`<div class="camp-item"><div class="camp-dot"></div>${it}</div>`).join('')}</div>
-      ${c.deadline?`<div class="camp-dl"><svg class="ic ic-sm"><use href="#ic-clock"/></svg> Deadline: ${c.deadline.split('-').reverse().join('. ')} · ${daysLeft}</div>`:''}
-    </div></div>`;
-  }).join('');
-};
 
 
 // ══════════════════════════════════════════════════════
