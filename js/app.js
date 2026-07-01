@@ -372,6 +372,15 @@ function showAdmPage(p,btn){
   if(p==='foto') renderAdminFoto();
   if(p==='alerts'){ renderAdminAlerts(); renderSchvaleni(); }
   if(p==='provoz'){ renderAdminOdpis(); renderAdminAktivita(); }
+  if(p==='redakce'){ renderTaskFeed(); injectBroadcastTasksIntoPosData(); renderTaskPool(); }
+  if(p==='ai'){
+    const bw=document.getElementById('mgr-briefing-wrap');
+    if(bw&&!bw.innerHTML.trim()) bw.innerHTML='<div class="empty"><div class="empty-i"><svg class="ic ic-xl"><use href="#ic-calendar"/></svg></div><div class="empty-t">Daily Executive Briefing</div><div class="empty-s">Klikni výše a AI sestaví executive summary z dnešních dat.</div></div>';
+    const aw=document.getElementById('ai-report-wrap');
+    if(aw&&!aw.innerHTML.trim()) aw.innerHTML='<div class="empty"><div class="empty-i"><svg class="ic ic-xl"><use href="#ic-intel"/></svg></div><div class="empty-t">Team Performance Analysis</div><div class="empty-s">Klikni na tlačítko pro spuštění AI analýzy celého týmu.</div></div>';
+  }
+  if(p==='editor'){ initEditor(); showEditorSection('texty',document.querySelector('.ed-subnav')); }
+  if(p==='import'){ renderImportSourceLabel(); renderPosMasterSourceLabel(); }
   pushRoute();
 }
 
@@ -4527,14 +4536,6 @@ function approveVisit(posId, decision) {
   renderSchvaleni();
 }
 
-// ══════════════════════════════════════════════════════
-// PATCH showAdmPage — render new pages
-// ══════════════════════════════════════════════════════
-const __origShowAdmPage2 = showAdmPage;
-showAdmPage = function(p, btn) {
-  __origShowAdmPage2(p, btn);
-  if (p === 'redakce') { renderTaskFeed(); injectBroadcastTasksIntoPosData(); renderTaskPool(); }
-};
 
 // ══════════════════════════════════════════════════════
 // INIT — migrace starých admin_tasks + promítnutí broadcast úkolů na load
@@ -4946,22 +4947,6 @@ function renderAdminAlertBanner(p) {
     </div>`).join('');
 }
 
-// ── Patch showAdmPage for editor + AI ─────────────────────────────────────
-const __origShowAdmPage3 = showAdmPage;
-showAdmPage = function(p, btn) {
-  __origShowAdmPage3(p, btn);
-  // initEditor() pro editor stránku se volá v pozdějším patchu showAdmPage
-  // (řádek ~4304), který navíc nastavuje výchozí sekci — duplicitní volání
-  // odstraněno, ať se editor neinicializuje 2x při každém vstupu.
-  if (p === 'ai') {
-    if (!document.getElementById('mgr-briefing-wrap').innerHTML.trim()) {
-      document.getElementById('mgr-briefing-wrap').innerHTML = '<div class="empty"><div class="empty-i"><svg class="ic ic-xl"><use href="#ic-calendar"/></svg></div><div class="empty-t">Daily Executive Briefing</div><div class="empty-s">Klikni výše a AI sestaví executive summary z dnešních dat.</div></div>';
-    }
-    if (!document.getElementById('ai-report-wrap').innerHTML.trim()) {
-      document.getElementById('ai-report-wrap').innerHTML = '<div class="empty"><div class="empty-i"><svg class="ic ic-xl"><use href="#ic-intel"/></svg></div><div class="empty-t">Team Performance Analysis</div><div class="empty-s">Klikni na tlačítko pro spuštění AI analýzy celého týmu.</div></div>';
-    }
-  }
-};
 
 // ── Patch openDetail with admin alert banner ───────────────────────────────
 const ___origOpenDetail = openDetail;
@@ -7075,16 +7060,6 @@ renderCampaigns = function() {
   }).join('');
 };
 
-// ── Patch showAdmPage for editor sections ──────────────────────────────────
-const _____origShowAdmPage = showAdmPage;
-showAdmPage = function(p, btn) {
-  _____origShowAdmPage(p, btn);
-  if (p === 'editor') {
-    initEditor();
-    showEditorSection('texty', document.querySelector('.ed-subnav'));
-  }
-  if (p === 'import') { renderImportSourceLabel(); renderPosMasterSourceLabel(); }
-};
 
 // ══════════════════════════════════════════════════════
 // DATA IMPORT — Velín nahrání reálného Tourplan exportu (PART 2)
