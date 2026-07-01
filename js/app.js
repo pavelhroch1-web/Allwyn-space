@@ -754,7 +754,7 @@ function buildDayProposalCard(unpl){
   const el=document.createElement('div');
   el.style.cssText='margin:12px;padding:14px;background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:12px';
   if(!proposal.selected.length){
-    el.innerHTML=`<div class="empty-t" style="margin-bottom:6px">Nic naplánováno</div><div class="empty-s" style="margin-bottom:10px">Nepodařilo se najít vhodný návrh z neplánovaných POS.</div><button onclick="showUnplanned()" style="width:100%;padding:10px;background:var(--navy);color:var(--teal);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Naplánuji si sám</button>`;
+    el.innerHTML=`<div class="empty-t" style="margin-bottom:6px">Nic naplánováno</div><div class="empty-s" style="margin-bottom:10px">Nepodařilo se najít vhodný návrh z neplánovaných POS.</div><button onclick="showPlanningView()" style="width:100%;padding:10px;background:var(--navy);color:var(--teal);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Naplánuji si sám</button>`;
     return el;
   }
   const srcLabel = startLoc
@@ -771,7 +771,7 @@ function buildDayProposalCard(unpl){
     </div>
     <div style="display:flex;gap:8px">
       <button onclick="acceptDayProposal('${proposal.selectedIds.join(',')}')" style="flex:1;padding:10px;background:var(--teal);color:var(--navy);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Vzít návrh</button>
-      <button onclick="showUnplanned()" style="flex:1;padding:10px;background:none;color:var(--td);border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Naplánuji si sám</button>
+      <button onclick="showPlanningView()" style="flex:1;padding:10px;background:none;color:var(--td);border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Naplánuji si sám</button>
     </div>
   `;
   return el;
@@ -6275,14 +6275,35 @@ function showPlanningView() {
     lbl3.className = 'sec-lbl';
     lbl3.textContent = `Naplánované (${planned.length})`;
     wrap.appendChild(lbl3);
+    const startMin = RouteEngine.parseHM(getStartTime()) || 480;
     DAYS.forEach((dname, di) => {
-      const dayPos = planned.filter(p => p.d === di);
+      const dayPos = applyStoredRouteOrder(planned.filter(p => p.d === di), cWeek, di);
       if (!dayPos.length) return;
+      const calc = RouteEngine.calculateRoute(dayPos, getEffectiveStartLocation());
       const dlbl = document.createElement('div');
       dlbl.style.cssText = 'padding:6px 16px 2px;font-size:11px;font-weight:700;color:var(--td)';
-      dlbl.textContent = `${dname} ${WEEKS_META[cWeek].dd[di]}${di===todayIdx&&isCurrentWeek?' · DNES':''} (${dayPos.length})`;
+      const totalMin = calc.totalMin;
+      dlbl.textContent = `${dname} ${WEEKS_META[cWeek].dd[di]}${di===todayIdx&&isCurrentWeek?' · DNES':''} (${dayPos.length} POS · ~${RouteEngine.formatHM(totalMin)})`;
       wrap.appendChild(dlbl);
-      dayPos.forEach(p => wrap.appendChild(makePlanCard(p, all.indexOf(p), true)));
+      // Compute cumulative arrival times per stop
+      let clockMin = startMin;
+      const legsByTo = {};
+      calc.legs.forEach(l => { legsByTo[l.to] = l.travelTimeMin; });
+      dayPos.forEach(p => {
+        const travel = legsByTo[p.id] || 0;
+        clockMin += travel;
+        const arrTime = RouteEngine.formatClock ? RouteEngine.formatClock(clockMin) : null;
+        clockMin += RouteEngine.getVisitDurationMin(p);
+        const card = makePlanCard(p, all.indexOf(p), true);
+        if (arrTime) {
+          const timeBadge = document.createElement('span');
+          timeBadge.style.cssText = 'font-size:10px;font-weight:700;color:var(--muted);background:var(--bg);padding:2px 7px;border-radius:10px;margin-right:8px;flex-shrink:0';
+          timeBadge.textContent = `~${arrTime}`;
+          const metaRow = card.querySelector('[style*="display:flex;align-items:center;gap:8px;padding:0 14px"]');
+          if (metaRow) metaRow.insertBefore(timeBadge, metaRow.firstChild);
+        }
+        wrap.appendChild(card);
+      });
     });
   }
 }
