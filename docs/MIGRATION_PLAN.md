@@ -253,8 +253,20 @@ refresh → Velín vidí změnu".
   potvrzení zásobování, poznámka, dokončení) je v `sync_events`.
 - **RLS politika zůstává otevřená pro anon klíč** (`pilot test — anon full
   access`, viz `supabase/schema.sql`) — vědomé pilotní riziko pro 5 lidí na
-  kontrolovaných zařízeních, neřešeno v tomto kroku (samostatné rozhodnutí
-  o auth-based RLS, viz historie `/think` v repu).
+  kontrolovaných zařízeních. **Musí se uzavřít při Fázi 3** (auth-based RLS):
+  technik vidí jen svoje data, Velín vidí vše. Otevřená RLS je blokující
+  bezpečnostní dluh před nasazením mimo pilotní skupinu.
+
+- **Supabase credentials správa (2026-07-01):** Klíče jsou ODSTRANĚNY
+  z `index.html` a z repo kódu. Spravují se jako GitHub Secrets
+  (`SUPABASE_URL`, `SUPABASE_ANON_KEY`) a injektují se při deployi přes
+  `.github/workflows/deploy.yml`. Bez nastavených Secrets běží appka
+  v offline/localStorage módu (graceful degradation). Lokální vývoj:
+  vytvořit `config.local.js` (gitignored).
+  **⚠ POZOR:** Staré credentials jsou stále v git historii — při přechodu
+  z pilotu na produkci rotovat klíče v Supabase Project Settings → API Keys
+  (publishable key: `+ New publishable key`, starý smazat). Secret key
+  (service role) nebyl ve frontendu nikdy — ten rotovat není nutné.
 - **Testováno offline/bez síťového přístupu k Supabase** — Playwright ověřil,
   že appka běží beze změny chování a bez console errorů, když síť na
   Supabase není dostupná (`VisitStore.enabled() === false`). Skutečný
