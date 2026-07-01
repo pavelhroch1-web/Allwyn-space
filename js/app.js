@@ -206,10 +206,45 @@ function loginAsTechnician(name){
   enterRole('technik');
 }
 function logout(){
+  if (typeof supabaseLogout === 'function' && typeof syncEnabled === 'function' && syncEnabled()) {
+    supabaseLogout();
+  }
   clearSession();
   currentViewTechnician = null;
   closeAllUserMenus();
   goHome();
+}
+
+// ── Supabase auth UI ──────────────────────────────────────────────────────────
+async function doSupabaseLogin() {
+  const email = (document.getElementById('login-email')?.value || '').trim();
+  const password = document.getElementById('login-password')?.value || '';
+  const errEl = document.getElementById('login-error');
+  const btnEl = document.getElementById('login-btn');
+  if (!email || !password) { if (errEl) errEl.textContent = 'Zadej e-mail a heslo.'; return; }
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Přihlašuji…'; }
+  if (errEl) errEl.textContent = '';
+  const result = await supabaseLogin(email, password);
+  if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Přihlásit se'; }
+  if (result.error) { if (errEl) errEl.textContent = result.error; return; }
+  applyProfileLogin(result.profile);
+}
+
+function toggleDemoAccess() {
+  const el = document.getElementById('rs-demo-collapse');
+  const btn = document.getElementById('rs-demo-link-btn');
+  if (!el) return;
+  const open = el.style.display !== 'none';
+  el.style.display = open ? 'none' : '';
+  if (btn) btn.textContent = open ? 'Demo přístup bez přihlášení ↓' : 'Demo přístup bez přihlášení ↑';
+}
+
+function initAuthUI() {
+  const hasSupabase = typeof syncEnabled === 'function' && syncEnabled();
+  const loginSec = document.getElementById('rs-login-section');
+  const demoSec = document.getElementById('rs-demo-section');
+  if (loginSec) loginSec.style.display = hasSupabase ? '' : 'none';
+  if (demoSec) demoSec.style.display = hasSupabase ? 'none' : '';
 }
 // Velín náhled technika — "Zobrazit jako technik".
 function viewAsTechnician(name){
@@ -460,7 +495,14 @@ function applyRoute(){
   }
 }
 window.addEventListener('hashchange',applyRoute);
-window.addEventListener('DOMContentLoaded',()=>{
+window.addEventListener('DOMContentLoaded', async () => {
+  // Pokus o obnovení Supabase session (pokud jsou klíče nastaveny)
+  if (typeof restoreSupabaseSession === 'function') {
+    const restored = await restoreSupabaseSession();
+    if (restored) { renderUserMenus(); initAuthUI(); return; }
+  }
+
+  // Fallback: lokální session (demo mode nebo předchozí přihlášení)
   const s = getSession();
   if (s && s.role==='technician') setViewTechnician(s.user.name);
   if (s && s.role==='velin' && s.viewingAs) setViewTechnician(s.viewingAs);
@@ -472,6 +514,7 @@ window.addEventListener('DOMContentLoaded',()=>{
     enterRole('technik', {skipBriefing:true});
   }
   renderUserMenus();
+  initAuthUI();
 });
 
 // ══════════════════════════════════════════════════════

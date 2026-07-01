@@ -156,3 +156,75 @@ window.addEventListener('DOMContentLoaded', () => {
     syncSwitchVelinAll();
   }
 });
+
+// ═══════════════════════════════════════════════════════════════
+// AUTH LAYER — Supabase Auth (email + heslo), Fáze 2.
+// Vše zde je additivní — bez nakonfigurovaných klíčů se nespustí nic.
+// ═══════════════════════════════════════════════════════════════
+
+async function supabaseGetProfile(userId) {
+  const client = getSyncClient();
+  if (!client) return null;
+  const { data, error } = await client.from('profiles').select('*').eq('id', userId).single();
+  if (error && error.code !== 'PGRST116') console.warn('[auth] profile load failed', error.message);
+  return data || null;
+}
+
+async function supabaseLogin(email, password) {
+  const client = getSyncClient();
+  if (!client) return { error: 'Supabase není nakonfigurován.' };
+  const { data, error } = await client.auth.signInWithPassword({ email, password });
+  if (error) {
+    const msg = error.message.includes('Invalid login') ? 'Nesprávný e-mail nebo heslo.' : error.message;
+    return { error: msg };
+  }
+  const profile = await supabaseGetProfile(data.user.id);
+  if (!profile) return { error: 'Účet nemá přiřazený profil. Kontaktuj Velín.' };
+  // Spusť sync pro právě přihlášeného uživatele
+  if (profile.role === 'velin') {
+    syncSwitchVelinAll();
+  } else {
+    syncSwitchTechnician(profile.name);
+  }
+  return { profile };
+}
+
+async function supabaseLogout() {
+  const client = getSyncClient();
+  if (!client) return;
+  if (_syncChannel) { client.removeChannel(_syncChannel); _syncChannel = null; }
+  await client.auth.signOut();
+}
+
+// Obnoví existující Supabase session po F5 / návratu na stránku.
+// Pokud session existuje a profil je platný, přihlásí uživatele bez formuláře.
+async function restoreSupabaseSession() {
+  const client = getSyncClient();
+  if (!client) return false;
+  const { data: { session } } = await client.auth.getSession();
+  if (!session) return false;
+  const profile = await supabaseGetProfile(session.user.id);
+  if (!profile) return false;
+  applyProfileLogin(profile);
+  if (profile.role === 'velin') syncSwitchVelinAll();
+  else syncSwitchTechnician(profile.name);
+  return true;
+}
+
+// Vezme profil z DB a zavolá příslušný login flow v app.js
+function applyProfileLogin(profile) {
+  if (!profile) return;
+  if (profile.role === 'velin') {
+    if (typeof loginAsVelin === 'function') loginAsVelin();
+  } else {
+    if (typeof loginAsTechnician === 'function') loginAsTechnician(profile.name);
+  }
+}
+
+// Vrátí aktuálně přihlášeného Supabase uživatele (nebo null)
+async function getSupabaseUser() {
+  const client = getSyncClient();
+  if (!client) return null;
+  const { data: { user } } = await client.auth.getUser();
+  return user;
+}

@@ -143,3 +143,50 @@ create policy "pilot test — anon read visit-photos"
 create policy "pilot test — anon write visit-photos"
   on storage.objects for insert
   with check (bucket_id = 'visit-photos');
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- FÁZE 2 — Auth + Profiles (MIGRATION_PLAN.md §Fáze 2)
+-- Spusť v Supabase SQL editoru po vytvoření auth.users přes Supabase dashboard.
+-- Před spuštěním: v Authentication → Email musí být "Enable Email Signup" ON.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- Profil = vazba auth.users.id → jméno technika (z Tourplan) + role.
+-- Technici: name = přesně jejich jméno z TECHNICIAN sloupce Tourplanu (např. "Lán Tomáš").
+-- Velín: role = 'velin', name = jméno manažera.
+create table if not exists public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  name text not null,
+  role text not null default 'technician' check (role in ('technician', 'velin')),
+  region text,
+  technik_kod text,
+  created_at timestamptz not null default now()
+);
+
+alter table public.profiles enable row level security;
+
+-- Přihlášení uživatelé vidí všechny profily (Velín potřebuje vidět všechny techniky)
+create policy "auth_read_profiles"
+  on public.profiles for select to authenticated
+  using (true);
+
+-- Uživatel může upravovat jen svůj vlastní profil
+create policy "auth_own_profile"
+  on public.profiles for all to authenticated
+  using (auth.uid() = id)
+  with check (auth.uid() = id);
+
+-- POSTUP vytvoření účtů (manuálně v Supabase dashboard pro pilotní fázi):
+-- 1. Supabase dashboard → Authentication → Users → "Invite user" nebo "Add user"
+-- 2. Zadej email a heslo pro každého technika + Velín
+-- 3. Po vytvoření zkopíruj UUID uživatele z Authentication → Users
+-- 4. Vložte profil SQL příkazem:
+--    INSERT INTO public.profiles (id, name, role, region)
+--    VALUES ('<uuid>', 'Lán Tomáš', 'technician', 'RSA');
+--
+--    Pro Velín:
+--    INSERT INTO public.profiles (id, name, role)
+--    VALUES ('<uuid>', 'Pavel Hroch', 'velin');
+--
+-- Pilot technické kontakty (z PosModel.PILOT_TECHNICIANS) — přiřadit UUID po vytvoření účtů:
+-- Lán Tomáš    → region RSA
+-- (ostatní 4 technici z pilotu — doplnit dle seznamu)
