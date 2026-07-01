@@ -1272,7 +1272,7 @@ function confirmSupply(){
   if (typeof VisitStore !== 'undefined') {
     const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
     VisitStore.setVisitField(tech, p.id, p.n, p.a, null, { signature_data: sigCanvas.toDataURL(), notes: 'Zásobování přijal: ' + recv });
-    supplyItems.filter(x => x.qty > 0).forEach(x => VisitStore.setMaterial(p.id, p.n, p.a, null, x.n, x.qty));
+    supplyItems.filter(x => x.qty > 0).forEach(x => VisitStore.setMaterial(p.id, p.n, p.a, null, x.n, x.qty, tech));
     VisitStore.logEvent(tech, 'supply_confirmed:' + p.id);
   }
   renderSupplyItems();
@@ -1909,7 +1909,8 @@ function setMerch(i, done) {
   }
   lss('merch_' + p.id + '_' + today(), merchItems);
   if (typeof VisitStore !== 'undefined' && merchItems[i].done !== null) {
-    VisitStore.setMaterial(p.id, p.n, p.a, null, merchItems[i].n, merchItems[i].done ? 1 : 0);
+    const _mtech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
+    VisitStore.setMaterial(p.id, p.n, p.a, null, merchItems[i].n, merchItems[i].done ? 1 : 0, _mtech);
   }
   renderMerch(p);
   renderCompleteBtn();
@@ -1939,7 +1940,8 @@ function handleMerchPhoto(e) {
         merchItems[i].photo = stamped;
         lss('merch_' + p.id + '_' + today(), merchItems);
         if (typeof VisitStore !== 'undefined') {
-          VisitStore.setMaterial(p.id, p.n, p.a, null, merchItems[i].n, 1);
+          const _mtech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
+          VisitStore.setMaterial(p.id, p.n, p.a, null, merchItems[i].n, 1, _mtech);
         }
         pendingMerchIndex = null;
         e.target.value = '';

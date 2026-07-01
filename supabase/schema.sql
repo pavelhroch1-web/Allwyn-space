@@ -88,6 +88,7 @@ create table if not exists public.visit_tasks (
 create table if not exists public.materials (
   id uuid primary key default gen_random_uuid(),
   pos_id text not null references public.pos_locations(id),
+  technician_id text references public.technicians(id),
   item text not null,
   quantity numeric not null default 0,
   updated_at timestamptz not null default now(),

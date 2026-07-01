@@ -83,12 +83,12 @@ const VisitStore = (function(){
     });
   }
 
-  function setMaterial(posId, posName, posAddress, region, item, quantity){
+  function setMaterial(posId, posName, posAddress, region, item, quantity, technicianId){
     const c = getClient(); if (!c) return;
     ensurePosLocation(posId, posName, posAddress, region).then(() => {
-      c.from('materials').upsert({
-        pos_id: posId, item, quantity, updated_at: new Date().toISOString(),
-      }, { onConflict: 'pos_id,item' })
+      const row = { pos_id: posId, item, quantity, updated_at: new Date().toISOString() };
+      if (technicianId) row.technician_id = technicianId;
+      c.from('materials').upsert(row, { onConflict: 'pos_id,item' })
         .then(({ error }) => { if (error) console.warn('[visitStore] setMaterial failed', error.message); });
     });
   }
