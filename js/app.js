@@ -423,7 +423,7 @@ function showAdmPage(p,btn){
     const aw=document.getElementById('ai-report-wrap');
     if(aw&&!aw.innerHTML.trim()) aw.innerHTML='<div class="empty"><div class="empty-i"><svg class="ic ic-xl"><use href="#ic-intel"/></svg></div><div class="empty-t">Team Performance Analysis</div><div class="empty-s">Klikni na tlačítko pro spuštění AI analýzy celého týmu.</div></div>';
   }
-  if(p==='editor'){ initEditor(); showEditorSection('texty',document.querySelector('.ed-subnav')); }
+  if(p==='editor'){ initEditor(); showEditorSection('komunikace',document.querySelector('#adm-editor .ed-subnav')); }
   if(p==='import'){ renderImportSourceLabel(); renderPosMasterSourceLabel(); }
   if(p==='pristupy') renderVelinPristupy();
   pushRoute();
@@ -1272,7 +1272,7 @@ function confirmSupply(){
   if (typeof VisitStore !== 'undefined') {
     const tech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
     VisitStore.setVisitField(tech, p.id, p.n, p.a, null, { signature_data: sigCanvas.toDataURL(), notes: 'Zásobování přijal: ' + recv });
-    supplyItems.filter(x => x.qty > 0).forEach(x => VisitStore.setMaterial(p.id, p.n, p.a, null, x.n, x.qty));
+    supplyItems.filter(x => x.qty > 0).forEach(x => VisitStore.setMaterial(p.id, p.n, p.a, null, x.n, x.qty, tech));
     VisitStore.logEvent(tech, 'supply_confirmed:' + p.id);
   }
   renderSupplyItems();
@@ -1909,7 +1909,8 @@ function setMerch(i, done) {
   }
   lss('merch_' + p.id + '_' + today(), merchItems);
   if (typeof VisitStore !== 'undefined' && merchItems[i].done !== null) {
-    VisitStore.setMaterial(p.id, p.n, p.a, null, merchItems[i].n, merchItems[i].done ? 1 : 0);
+    const _mtech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
+    VisitStore.setMaterial(p.id, p.n, p.a, null, merchItems[i].n, merchItems[i].done ? 1 : 0, _mtech);
   }
   renderMerch(p);
   renderCompleteBtn();
@@ -1939,7 +1940,8 @@ function handleMerchPhoto(e) {
         merchItems[i].photo = stamped;
         lss('merch_' + p.id + '_' + today(), merchItems);
         if (typeof VisitStore !== 'undefined') {
-          VisitStore.setMaterial(p.id, p.n, p.a, null, merchItems[i].n, 1);
+          const _mtech = currentViewTechnician || PosModel.SOLE_REAL_TECHNICIAN;
+          VisitStore.setMaterial(p.id, p.n, p.a, null, merchItems[i].n, 1, _mtech);
         }
         pendingMerchIndex = null;
         e.target.value = '';
@@ -3056,19 +3058,29 @@ function buildPosNetRows() {
 
 function renderAdminPosNet() {
   const rows = buildPosNetRows();
-  const techs = [...new Set(rows.map(r => r.model.assignedTechnician))];
-  const regions = [...new Set(rows.map(r => r.model.region))];
-  const channels = [...new Set(rows.map(r => r.model.channel))];
 
-  const techRow = document.getElementById('posnet-tech-row');
-  if (techRow) techRow.innerHTML = ['all', ...techs].map(t =>
-    `<button class="rfb ${posNetFilters.tech===t?'active':''}" onclick="setPosNetFilter('tech','${t}')">${t==='all'?'Všichni':t}</button>`).join('');
+  if (!rows.length) {
+    document.getElementById('posnet-count').textContent = '0 POS';
+    ['posnet-region-row','posnet-channel-row','posnet-status-row'].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = ''; });
+    const sel = document.getElementById('posnet-tech-select'); if (sel) sel.innerHTML = '<option value="all">Všichni technici</option>';
+    const list = document.getElementById('adm-posnet-list');
+    if (list) list.innerHTML = '<div class="empty"><div class="empty-i"><svg class="ic ic-xl"><use href="#ic-pin"/></svg></div><div class="empty-t">Tourplan data nejsou k dispozici</div><div class="empty-s">Nahraj Tourplan export v kartě <strong>Import dat</strong>.</div></div>';
+    return;
+  }
+
+  const techs = [...new Set(rows.map(r => r.model.assignedTechnician))].sort();
+  const regions = [...new Set(rows.map(r => r.model.region))].sort();
+  const channels = [...new Set(rows.map(r => r.model.channel))].sort();
+
   const regionRow = document.getElementById('posnet-region-row');
   if (regionRow) regionRow.innerHTML = ['all', ...regions].map(r =>
     `<button class="rfb ${posNetFilters.region===r?'active':''}" onclick="setPosNetFilter('region','${r}')">${r==='all'?'Vše':r}</button>`).join('');
   const channelRow = document.getElementById('posnet-channel-row');
   if (channelRow) channelRow.innerHTML = ['all', ...channels].map(c =>
     `<button class="rfb ${posNetFilters.channel===c?'active':''}" onclick="setPosNetFilter('channel','${c}')">${c==='all'?'Vše':c}</button>`).join('');
+  const techSelect = document.getElementById('posnet-tech-select');
+  if (techSelect) techSelect.innerHTML = ['all', ...techs].map(t =>
+    `<option value="${t}" ${posNetFilters.tech===t?'selected':''}>${t==='all'?'Všichni technici':t}</option>`).join('');
   const statusRow = document.getElementById('posnet-status-row');
   const statusOpts = [
     ['all', 'Vše'], ['overdue', 'Po termínu'], ['notvisited30', `Nenavštíveno 30+ dní`],
@@ -5790,6 +5802,7 @@ function showAdminPOSDetail(posId, activeTab) {
     { id: 'prehled', label: 'Přehled' },
     { id: 'ukoly', label: 'Úkoly' },
     { id: 'materialy', label: 'Materiály' },
+    { id: 'zasobovani', label: 'Zásobování' },
     { id: 'historie', label: 'Historie' },
   ];
 
@@ -5966,6 +5979,66 @@ function showAdminPOSDetail(posId, activeTab) {
       </div>`).join('')}
       </div>`;
     }
+
+  } else if (activeTab === 'zasobovani') {
+    // Supply: scan all supply_{posId}_{YYYY-MM-DD} keys
+    const supplyPrefix = 'supply_' + posId + '_';
+    const supplyKey = Object.keys(localStorage).filter(k => k.startsWith(supplyPrefix)).sort().reverse()[0];
+    const latestSupply = supplyKey ? lsg(supplyKey) : null;
+    const supplyDate = supplyKey ? supplyKey.slice(supplyPrefix.length) : null;
+
+    // Merch: scan all merch_{posId}_{YYYY-MM-DD} keys
+    const merchPrefix = 'merch_' + posId + '_';
+    const merchKey = Object.keys(localStorage).filter(k => k.startsWith(merchPrefix)).sort().reverse()[0];
+    const latestMerch = merchKey ? lsg(merchKey) : null;
+    const merchDate = merchKey ? merchKey.slice(merchPrefix.length) : null;
+
+    let html = '';
+
+    // Supply section
+    html += `<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Zásobování${supplyDate ? ' · ' + supplyDate : ''}</div>`;
+    if (latestSupply) {
+      html += `<div style="background:white;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:14px">`;
+      if (latestSupply.confirmed) {
+        html += `<div style="padding:10px 14px;background:var(--gl);font-size:12px;color:var(--green);font-weight:700;display:flex;align-items:center;gap:6px"><svg class="ic ic-sm"><use href="#ic-check-circle"/></svg> Potvrzeno · ${latestSupply.at || ''} · Přijal: ${latestSupply.receiver || '—'}</div>`;
+      }
+      const delivered = (latestSupply.items || []).filter(x => x.qty > 0);
+      if (delivered.length) {
+        delivered.forEach(item => {
+          html += `<div style="padding:10px 14px;border-bottom:1px solid var(--bg);display:flex;align-items:center;gap:8px">
+            <div style="flex:1;font-size:13px;font-weight:700">${item.n}</div>
+            <div style="font-size:13px;font-weight:800;color:var(--navy)">${item.qty} ks</div>
+          </div>`;
+        });
+      } else {
+        html += `<div style="padding:12px 14px;font-size:12px;color:var(--muted)">Žádné položky doručeny.</div>`;
+      }
+      html += '</div>';
+    } else {
+      html += `<div style="background:var(--bg);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--muted);margin-bottom:14px">Zásobování pro tuto POS dosud neproběhlo.</div>`;
+    }
+
+    // Merch section
+    html += `<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Merch osazení${merchDate ? ' · ' + merchDate : ''}</div>`;
+    if (latestMerch && latestMerch.length) {
+      html += `<div style="background:white;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:14px">`;
+      latestMerch.forEach(item => {
+        const statusHtml = item.done === true
+          ? `<span style="font-size:11px;font-weight:700;color:var(--green)">✓ Osazeno</span>`
+          : item.done === false
+            ? `<span style="font-size:11px;font-weight:700;color:var(--red)">✗ Chybí</span>`
+            : `<span style="font-size:11px;color:var(--muted)">—</span>`;
+        html += `<div style="padding:10px 14px;border-bottom:1px solid var(--bg);display:flex;align-items:center;gap:8px">
+          <div style="flex:1;font-size:13px;font-weight:700">${item.n}</div>
+          ${statusHtml}
+        </div>`;
+      });
+      html += '</div>';
+    } else {
+      html += `<div style="background:var(--bg);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--muted);margin-bottom:14px">Merch osazení pro tuto POS dosud neproběhlo.</div>`;
+    }
+
+    tabContent = html;
 
   } else if (activeTab === 'historie') {
     if (!history.length) {
@@ -6254,18 +6327,14 @@ function makePlanCard(p, ri, selectable) {
 // EDITOR SECTIONS (texty / kampaně / inventory katalog)
 // ══════════════════════════════════════════════════════════════════════════
 function showEditorSection(sec, btn) {
-  ['texty','kampane','inventory','ukoly','checklist','merch','refs'].forEach(s => {
+  ['komunikace','produkty','procesy'].forEach(s => {
     const el = document.getElementById('ed-sec-' + s);
     if (el) el.style.display = s === sec ? 'block' : 'none';
   });
-  document.querySelectorAll('.ed-subnav').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#adm-editor .ed-subnav').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
-  if (sec === 'kampane') renderEditorCampaigns();
-  if (sec === 'inventory') renderEditorCatalog();
-  if (sec === 'ukoly') renderEditorTaskTemplates();
-  if (sec === 'checklist') renderEditorChecklistTemplates();
-  if (sec === 'merch') renderEditorMerchItems();
-  if (sec === 'refs') renderEditorRefs();
+  if (sec === 'produkty') { renderEditorCatalog(); renderEditorMerchItems(); renderEditorRefs(); }
+  if (sec === 'procesy') { renderEditorCampaigns(); renderEditorTaskTemplates(); renderEditorChecklistTemplates(); }
 }
 
 function showRedakceSection(sec, btn) {

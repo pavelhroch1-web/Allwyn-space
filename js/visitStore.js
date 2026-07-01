@@ -17,18 +17,8 @@
 // Historie jednotlivých návštěv/akcí je v sync_events.
 
 const VisitStore = (function(){
-  const CONFIG = {
-    url: window.ALLWYN_SUPABASE_URL || '',
-    anonKey: window.ALLWYN_SUPABASE_ANON_KEY || '',
-  };
-
-  let client = null;
-  function enabled(){ return !!(CONFIG.url && CONFIG.anonKey && window.supabase); }
-  function getClient(){
-    if (!enabled()) return null;
-    if (!client) client = window.supabase.createClient(CONFIG.url, CONFIG.anonKey);
-    return client;
-  }
+  function enabled(){ return AllwynSupabase.isConfigured(); }
+  function getClient(){ return AllwynSupabase.getClient(); }
 
   // technician_id / pos_id = reálné stringy (jméno z Tourplan, POS Master ID)
   // — žádné vymyšlené UUID, viz supabase/schema.sql.
@@ -93,12 +83,12 @@ const VisitStore = (function(){
     });
   }
 
-  function setMaterial(posId, posName, posAddress, region, item, quantity){
+  function setMaterial(posId, posName, posAddress, region, item, quantity, technicianId){
     const c = getClient(); if (!c) return;
     ensurePosLocation(posId, posName, posAddress, region).then(() => {
-      c.from('materials').upsert({
-        pos_id: posId, item, quantity, updated_at: new Date().toISOString(),
-      }, { onConflict: 'pos_id,item' })
+      const row = { pos_id: posId, item, quantity, updated_at: new Date().toISOString() };
+      if (technicianId) row.technician_id = technicianId;
+      c.from('materials').upsert(row, { onConflict: 'pos_id,item' })
         .then(({ error }) => { if (error) console.warn('[visitStore] setMaterial failed', error.message); });
     });
   }
