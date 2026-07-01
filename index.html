@@ -12,11 +12,14 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Cross-device sync (pilot test, viz js/sync.js) — bez vyplněných klíčů se
-     appka chová přesně jako dřív, čistě lokálně. Klíče sem vlož po založení
-     Supabase projektu (Project Settings → API). -->
+     appka chová přesně jako dřív, čistě lokálně.
+     Klíče se NIKDY nevkládají přímo sem. Nastavují se jako GitHub Secrets
+     (SUPABASE_URL, SUPABASE_ANON_KEY) a injektují při deployi — viz
+     .github/workflows/deploy.yml. Pro lokální vývoj vytvoř config.local.js
+     (gitignored) a vlož ho jako <script src="config.local.js"> do lokální kopie. -->
 <script>
-  window.ALLWYN_SUPABASE_URL = 'https://lpnorveltzcmgfouufx.supabase.co';
-  window.ALLWYN_SUPABASE_ANON_KEY = 'sb_publishable_Yk_JFXeWpSfqAtyMJqzlyw_xbo4i3D3';
+  window.ALLWYN_SUPABASE_URL = '';
+  window.ALLWYN_SUPABASE_ANON_KEY = '';
 </script>
 <link rel="stylesheet" href="css/styles.css?v=20260626k">
 </head>

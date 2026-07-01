@@ -1,0 +1,50 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Inject Supabase credentials from secrets
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_ANON_KEY" ]; then
+            sed -i \
+              "s|window.ALLWYN_SUPABASE_URL = '';|window.ALLWYN_SUPABASE_URL = '${SUPABASE_URL}';|" \
+              index.html
+            sed -i \
+              "s|window.ALLWYN_SUPABASE_ANON_KEY = '';|window.ALLWYN_SUPABASE_ANON_KEY = '${SUPABASE_ANON_KEY}';|" \
+              index.html
+            echo "Supabase credentials injected."
+          else
+            echo "SUPABASE_URL or SUPABASE_ANON_KEY secret not set — deploying in offline/localStorage-only mode."
+          fi
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,6 @@
+# Lokální konfigurace s credentials — NIKDY necommitovat
+config.local.js
+
+# OS
+.DS_Store
+Thumbs.db
