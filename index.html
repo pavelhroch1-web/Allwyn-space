@@ -734,7 +734,7 @@
       <button class="adm-btn" onclick="showAdmPage('provoz',this)"><svg class="ic ic-sm"><use href="#ic-upload"/></svg> Provoz</button>
       <button class="adm-btn" onclick="showAdmPage('redakce',this)"><svg class="ic ic-sm"><use href="#ic-edit"/></svg> Úkoly</button>
       <button class="adm-btn" onclick="showAdmPage('ai',this)"><svg class="ic ic-sm"><use href="#ic-intel"/></svg> Intelligence</button>
-      <button class="adm-btn" onclick="showAdmPage('editor',this)"><svg class="ic ic-sm"><use href="#ic-edit"/></svg> Editor</button>
+      <button class="adm-btn" onclick="showAdmPage('editor',this)"><svg class="ic ic-sm"><use href="#ic-edit"/></svg> Konfigurace</button>
       <button class="adm-btn" onclick="showAdmPage('pristupy',this)"><svg class="ic ic-sm"><use href="#ic-key"/></svg> Přístupy</button>
     </div>
     <div style="position:relative;flex-shrink:0">
@@ -875,16 +875,16 @@
         <input type="text" id="posnet-search" placeholder="Hledat POS ID, terminál, název nebo adresu…" oninput="setPosNetSearch(this.value)" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--bd);border-radius:10px;font-size:13px;font-family:inherit">
       </div>
       <div class="rf-wrap">
-        <div class="rf-lbl">Technik</div>
-        <div class="rf-row" id="posnet-tech-row"></div>
-      </div>
-      <div class="rf-wrap">
         <div class="rf-lbl">Region</div>
         <div class="rf-row" id="posnet-region-row"></div>
       </div>
       <div class="rf-wrap">
         <div class="rf-lbl">Kanál</div>
         <div class="rf-row" id="posnet-channel-row"></div>
+      </div>
+      <div class="rf-wrap">
+        <div class="rf-lbl">Technik</div>
+        <select id="posnet-tech-select" onchange="setPosNetFilter('tech',this.value)" style="width:100%;border:1px solid var(--bd);border-radius:8px;padding:9px 12px;font-size:13px;font-family:inherit;outline:none;background:white;color:var(--text)"></select>
       </div>
       <div class="rf-wrap">
         <div class="rf-lbl">Stav</div>
@@ -897,6 +897,18 @@
     <!-- DATA IMPORT — nahrání reálného Tourplan exportu (PART 2) -->
     <div class="adm-page" id="adm-import">
       <div class="adm-sh"><div class="adm-st">Import dat z Tourplan Excel</div><div class="adm-sc" id="import-source-label">—</div></div>
+      <div class="dash-block">
+        <div class="dash-block-t"><svg class="ic"><use href="#ic-download"/></svg> Vzorové soubory ke stažení</div>
+        <p style="font-size:13px;color:var(--muted);margin:0 0 10px">Stáhni vzor, vyplň reálná data a nahraj níže. Soubory jsou ve formátu CSV kompatibilním s Excel.</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <a href="samples/tourplan_vzor.csv" download style="display:inline-flex;align-items:center;gap:7px;padding:9px 14px;background:var(--navy);color:var(--teal);border-radius:8px;font-size:12px;font-weight:700;text-decoration:none">
+            <svg class="ic ic-sm"><use href="#ic-upload"/></svg> Tourplan export — vzor
+          </a>
+          <a href="samples/pos_master_vzor.csv" download style="display:inline-flex;align-items:center;gap:7px;padding:9px 14px;background:var(--bg);color:var(--navy);border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;text-decoration:none">
+            <svg class="ic ic-sm"><use href="#ic-pin"/></svg> POS Master data — vzor
+          </a>
+        </div>
+      </div>
       <div class="dash-block">
         <div class="dash-block-t"><svg class="ic"><use href="#ic-upload"/></svg> Nahrát export</div>
         <p style="font-size:13px;color:var(--muted);margin:0 0 12px">Nahraj Tourplan Excel export (.xlsx/.csv) se sloupci: Terminal ID, POS ID, Typ terminálu, Market, Kategorie, Kategorizace, Název, Ulice, Číslo, Město, Oblast, Technik, Týden.</p>
@@ -1058,19 +1070,15 @@
 
     <!-- EDITOR -->
     <div class="adm-page" id="adm-editor">
-      <!-- Editor sub-nav -->
+      <!-- Konfigurace sub-nav — 3 sekce -->
       <div style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto">
-        <button class="ed-subnav active" onclick="showEditorSection('texty',this)"><svg class="ic ic-sm"><use href="#ic-edit"/></svg> Texty</button>
-        <button class="ed-subnav" onclick="showEditorSection('kampane',this)"><svg class="ic ic-sm"><use href="#ic-target"/></svg> Kampaně</button>
-        <button class="ed-subnav" onclick="showEditorSection('inventory',this)"><svg class="ic ic-sm"><use href="#ic-box"/></svg> Inventory katalog</button>
-        <button class="ed-subnav" onclick="showEditorSection('ukoly',this)"><svg class="ic ic-sm"><use href="#ic-check-circle"/></svg> Úkoly na místě</button>
-        <button class="ed-subnav" onclick="showEditorSection('checklist',this)"><svg class="ic ic-sm"><use href="#ic-box"/></svg> Checklist šablony</button>
-        <button class="ed-subnav" onclick="showEditorSection('merch',this)"><svg class="ic ic-sm"><use href="#ic-check-circle"/></svg> Merch položky</button>
-        <button class="ed-subnav" onclick="showEditorSection('refs',this)"><svg class="ic ic-sm"><use href="#ic-image"/></svg> Reference</button>
+        <button class="ed-subnav active" onclick="showEditorSection('komunikace',this)"><svg class="ic ic-sm"><use href="#ic-edit"/></svg> Komunikace</button>
+        <button class="ed-subnav" onclick="showEditorSection('produkty',this)"><svg class="ic ic-sm"><use href="#ic-box"/></svg> Produkty</button>
+        <button class="ed-subnav" onclick="showEditorSection('procesy',this)"><svg class="ic ic-sm"><use href="#ic-check-circle"/></svg> Procesy</button>
       </div>
 
-      <!-- TEXTY -->
-      <div id="ed-sec-texty">
+      <!-- KOMUNIKACE — broadcast texty pro techniky -->
+      <div id="ed-sec-komunikace">
         <div class="editor-card">
           <div class="editor-item">
             <div class="editor-label">Ranní briefing — zpráva tohoto týdne</div>
@@ -1095,22 +1103,9 @@
         </div>
       </div>
 
-      <!-- KAMPANĚ -->
-      <div id="ed-sec-kampane" style="display:none">
-        <div class="adm-sh" style="margin-bottom:10px">
-          <div class="adm-st">Aktivní kampaně</div>
-          <button onclick="addCampaign()" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Kampaň</button>
-        </div>
-        <div id="ed-campaigns-list"></div>
-        <div style="padding:12px;background:var(--tl);border-radius:10px;font-size:12px;color:var(--tm);line-height:1.5;margin-top:8px;display:flex;gap:6px">
-          <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-bulb"/></svg>
-          <span>Kampaně se zobrazí technikům v detailu POS. Edituj přímo zde.</span>
-        </div>
-      </div>
-
-      <!-- INVENTORY KATALOG -->
-      <div id="ed-sec-inventory" style="display:none">
-        <div class="adm-sh" style="margin-bottom:10px"><div class="adm-st">Vnitřní vybavení</div>
+      <!-- PRODUKTY — inventory katalog, merch položky, reference -->
+      <div id="ed-sec-produkty" style="display:none">
+        <div class="adm-sh" style="margin-bottom:10px"><div class="adm-st">Inventory katalog — vnitřní vybavení</div>
           <button onclick="addCatalogItem('vnitrni')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Položka</button>
         </div>
         <div class="editor-card" id="ed-cat-vnitrni"></div>
@@ -1122,60 +1117,93 @@
           <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-bulb"/></svg>
           <span>Technici vybírají inventory POUZE z tohoto katalogu.</span>
         </div>
-      </div>
 
-      <!-- ÚKOLY NA MÍSTĚ — šablona checklistu per kanál -->
-      <div id="ed-sec-ukoly" style="display:none">
-        <div class="adm-sh" style="margin-bottom:10px"><div class="adm-st">IDT</div>
-          <button onclick="addTaskTemplateItem('IDT')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Úkol</button>
-        </div>
-        <div class="editor-card" id="ed-task-IDT"></div>
-        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">PETROL</div>
-          <button onclick="addTaskTemplateItem('PETROL')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Úkol</button>
-        </div>
-        <div class="editor-card" id="ed-task-PETROL"></div>
-        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">KA</div>
-          <button onclick="addTaskTemplateItem('KA')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Úkol</button>
-        </div>
-        <div class="editor-card" id="ed-task-KA"></div>
-        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">CORN</div>
-          <button onclick="addTaskTemplateItem('CORN')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Úkol</button>
-        </div>
-        <div class="editor-card" id="ed-task-CORN"></div>
-        <div style="padding:12px;background:var(--tl);border-radius:10px;font-size:12px;color:var(--tm);line-height:1.5;margin-top:8px;display:flex;gap:6px">
-          <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-bulb"/></svg>
-          <span>Úprava platí pro nově sestavená/naimportovaná POS. Už rozjeté POS s úkoly z dřívější šablony se nepřepisují zpětně.</span>
-        </div>
-      </div>
-
-      <!-- MERCH POLOŽKY — výběr, které položky vyžadují foto-důkaz při osazení -->
-      <div id="ed-sec-merch" style="display:none">
-        <div class="adm-sh" style="margin-bottom:10px"><div class="adm-st">IDT</div>
+        <div class="adm-sh" style="margin:20px 0 10px"><div class="adm-st">Merch položky</div></div>
+        <div class="adm-sh" style="margin-bottom:10px;margin-top:0"><div class="adm-st" style="font-size:13px">IDT</div>
           <button onclick="addMerchTemplateItem('IDT')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Položka</button>
         </div>
         <div class="editor-card" id="ed-merch-IDT"></div>
-        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">PETROL</div>
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st" style="font-size:13px">PETROL</div>
           <button onclick="addMerchTemplateItem('PETROL')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Položka</button>
         </div>
         <div class="editor-card" id="ed-merch-PETROL"></div>
-        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">KA</div>
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st" style="font-size:13px">KA</div>
           <button onclick="addMerchTemplateItem('KA')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Položka</button>
         </div>
         <div class="editor-card" id="ed-merch-KA"></div>
-        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">CORN</div>
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st" style="font-size:13px">CORN</div>
           <button onclick="addMerchTemplateItem('CORN')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Položka</button>
         </div>
         <div class="editor-card" id="ed-merch-CORN"></div>
         <div style="padding:12px;background:var(--tl);border-radius:10px;font-size:12px;color:var(--tm);line-height:1.5;margin-top:8px;display:flex;gap:6px">
           <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-bulb"/></svg>
-          <span>Foto-důkaz se u technika vyžaduje jen u položek se zaškrtnutým "Vyžaduje foto". Většina položek foto nepotřebuje — zapni jen tam, kde to dává smysl.</span>
+          <span>Foto-důkaz se u technika vyžaduje jen u položek se zaškrtnutým "Vyžaduje foto".</span>
+        </div>
+
+        <div class="adm-sh" style="margin:20px 0 10px"><div class="adm-st">Reference</div></div>
+        <div class="adm-sh" style="margin-bottom:10px;margin-top:0"><div class="adm-st" style="font-size:13px">IDT</div>
+          <button onclick="addRefCard('IDT')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Reference</button>
+        </div>
+        <div class="editor-card" id="ed-refs-IDT"></div>
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st" style="font-size:13px">PETROL</div>
+          <button onclick="addRefCard('PETROL')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Reference</button>
+        </div>
+        <div class="editor-card" id="ed-refs-PETROL"></div>
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st" style="font-size:13px">CORN</div>
+          <button onclick="addRefCard('CORN')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Reference</button>
+        </div>
+        <div class="editor-card" id="ed-refs-CORN"></div>
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st" style="font-size:13px">KA partner</div></div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Skupiny partnerů — víc partnerů může sdílet stejnou referenci, beze ztráty možnosti mít jednoho partnera zvlášť.</div>
+        <div id="ed-refs-ka-groups" style="margin-bottom:10px"></div>
+        <button onclick="addKaPartnerGroup()" style="background:var(--gl);color:var(--green);border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;margin-bottom:14px">+ Skupina partnerů</button>
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st" style="font-size:13px">Editovat referenci</div>
+          <button onclick="addRefCardKa()" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Reference</button>
+        </div>
+        <select id="ed-refs-ka-key" onchange="renderEditorRefsKa()" style="width:100%;margin-bottom:10px;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:13px;outline:none"></select>
+        <div class="editor-card" id="ed-refs-KA"></div>
+        <div style="padding:12px;background:var(--tl);border-radius:10px;font-size:12px;color:var(--tm);line-height:1.5;margin-top:8px;display:flex;gap:6px">
+          <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-bulb"/></svg>
+          <span>Reference se zobrazí technikovi v detailu POS. KA partner bez vlastní reference použije výchozí sadu.</span>
         </div>
       </div>
 
-      <!-- CHECKLIST ŠABLONY -->
-      <div id="ed-sec-checklist" style="display:none">
+      <!-- PROCESY — kampaně, šablony úkolů, checklist šablony -->
+      <div id="ed-sec-procesy" style="display:none">
         <div class="adm-sh" style="margin-bottom:10px">
-          <div class="adm-st">Šablona</div>
+          <div class="adm-st">Aktivní kampaně</div>
+          <button onclick="addCampaign()" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Kampaň</button>
+        </div>
+        <div id="ed-campaigns-list"></div>
+        <div style="padding:12px;background:var(--tl);border-radius:10px;font-size:12px;color:var(--tm);line-height:1.5;margin-top:8px;margin-bottom:20px;display:flex;gap:6px">
+          <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-bulb"/></svg>
+          <span>Kampaně se zobrazí technikům v detailu POS. Edituj přímo zde.</span>
+        </div>
+
+        <div class="adm-sh" style="margin-bottom:10px"><div class="adm-st">Úkoly na místě</div></div>
+        <div class="adm-sh" style="margin-bottom:10px;margin-top:0"><div class="adm-st" style="font-size:13px">IDT</div>
+          <button onclick="addTaskTemplateItem('IDT')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Úkol</button>
+        </div>
+        <div class="editor-card" id="ed-task-IDT"></div>
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st" style="font-size:13px">PETROL</div>
+          <button onclick="addTaskTemplateItem('PETROL')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Úkol</button>
+        </div>
+        <div class="editor-card" id="ed-task-PETROL"></div>
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st" style="font-size:13px">KA</div>
+          <button onclick="addTaskTemplateItem('KA')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Úkol</button>
+        </div>
+        <div class="editor-card" id="ed-task-KA"></div>
+        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st" style="font-size:13px">CORN</div>
+          <button onclick="addTaskTemplateItem('CORN')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Úkol</button>
+        </div>
+        <div class="editor-card" id="ed-task-CORN"></div>
+        <div style="padding:12px;background:var(--tl);border-radius:10px;font-size:12px;color:var(--tm);line-height:1.5;margin-top:8px;margin-bottom:20px;display:flex;gap:6px">
+          <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-bulb"/></svg>
+          <span>Úprava platí pro nově sestavená/naimportovaná POS. Rozjeté POS s úkoly se nepřepisují zpětně.</span>
+        </div>
+
+        <div class="adm-sh" style="margin-bottom:10px">
+          <div class="adm-st">Checklist šablony</div>
           <button onclick="addChecklistTemplate()" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Šablona</button>
         </div>
         <select class="ck-select" id="ck-tpl-picker" onchange="renderEditorChecklistTemplates()" style="margin-bottom:10px;width:100%"></select>
@@ -1183,55 +1211,18 @@
           <input id="ck-tpl-name" placeholder="Název šablony" oninput="renameChecklistTemplate(this.value)" style="flex:1;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:13px;outline:none"/>
           <button onclick="deleteChecklistTemplate()" style="background:var(--rl);color:var(--red);border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">Smazat šablonu</button>
         </div>
-
         <div class="adm-sh" style="margin-bottom:10px">
           <div class="adm-st">Otázky</div>
           <button onclick="addChecklistQuestion()" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Otázka</button>
         </div>
         <div class="editor-card" id="ed-checklist-questions"></div>
-
         <div class="adm-sh" style="margin:18px 0 10px"><div class="adm-st">Náhled</div></div>
         <div style="border:1.5px solid var(--border);border-radius:12px;padding:4px 0;background:#fff">
           <div id="ed-checklist-preview"></div>
         </div>
-
         <div style="padding:12px;background:var(--tl);border-radius:10px;font-size:12px;color:var(--tm);line-height:1.5;margin-top:8px;display:flex;gap:6px">
           <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-bulb"/></svg>
-          <span>"Závisí na" + "rovná se" určuje, kdy se otázka zobrazí (např. otázka se ukáže jen když předchozí Ano/Ne otázka byla "Ne"). Změny se ihned promítnou do náhledu v detailu POS u technika.</span>
-        </div>
-      </div>
-
-      <!-- REFERENCE — admin-editovatelné referenční materiály per kanál / KA partner -->
-      <div id="ed-sec-refs" style="display:none">
-        <div class="adm-sh" style="margin-bottom:10px"><div class="adm-st">IDT</div>
-          <button onclick="addRefCard('IDT')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Reference</button>
-        </div>
-        <div class="editor-card" id="ed-refs-IDT"></div>
-
-        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">PETROL</div>
-          <button onclick="addRefCard('PETROL')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Reference</button>
-        </div>
-        <div class="editor-card" id="ed-refs-PETROL"></div>
-
-        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">CORN</div>
-          <button onclick="addRefCard('CORN')" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Reference</button>
-        </div>
-        <div class="editor-card" id="ed-refs-CORN"></div>
-
-        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">KA partner</div></div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Skupiny partnerů — víc partnerů (např. Albert + Geco) může sdílet stejnou referenci, beze ztráty možnosti mít jednoho partnera zvlášť.</div>
-        <div id="ed-refs-ka-groups" style="margin-bottom:10px"></div>
-        <button onclick="addKaPartnerGroup()" style="background:var(--gl);color:var(--green);border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;margin-bottom:14px">+ Skupina partnerů</button>
-
-        <div class="adm-sh" style="margin:14px 0 10px"><div class="adm-st">Editovat referenci</div>
-          <button onclick="addRefCardKa()" style="background:var(--navy);color:var(--teal);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">+ Reference</button>
-        </div>
-        <select id="ed-refs-ka-key" onchange="renderEditorRefsKa()" style="width:100%;margin-bottom:10px;border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:13px;outline:none"></select>
-        <div class="editor-card" id="ed-refs-KA"></div>
-
-        <div style="padding:12px;background:var(--tl);border-radius:10px;font-size:12px;color:var(--tm);line-height:1.5;margin-top:8px;display:flex;gap:6px">
-          <svg class="ic ic-sm" style="flex-shrink:0;margin-top:2px"><use href="#ic-bulb"/></svg>
-          <span>Reference se zobrazí technikovi v detailu POS ("Reference — jak to má vypadat"). Klikni na obrázek a nahraj reálnou fotku. KA partner bez vlastní reference použije výchozí sadu.</span>
+          <span>"Závisí na" + "rovná se" určuje, kdy se otázka zobrazí. Změny se ihned promítnou do náhledu.</span>
         </div>
       </div>
     </div>

@@ -1,0 +1,7 @@
+Terminal ID,POS ID,Typ terminálu,Market,Kategorie,Kategorizace,Název,Ulice,Číslo,Město,Oblast,Technik,Týden
+T001,123456,IDT,Retail,1,1,Albert Dejvice,Jugoslávských partyzánů,1580,Praha 6,Praha,Novák Jan,25
+T002,123456,IDT,Retail,1,1,Albert Dejvice,Jugoslávských partyzánů,1580,Praha 6,Praha,Novák Jan,25
+T003,789012,PETROL,Petrol,5,5,Shell Letňany,Tupolevova,740,Praha 9,Praha,Novák Jan,25
+T004,345678,KA,KA,2,2,Albert Budějovická,Budějovická,1667,Praha 4,Praha,Novák Jan,25
+T005,901234,IDT,Retail,1,1,Tesco Zličín,Řevnická,121,Praha 13,Praha,Svoboda Petr,25
+T006,567890,CORN,Corn,9,9,Tabák Smíchov,Plzeňská,8,Praha 5,Praha,Svoboda Petr,25
