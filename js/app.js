@@ -2876,11 +2876,40 @@ function renderAdminPosNet() {
 
   document.getElementById('posnet-count').textContent = `${filtered.length} / ${rows.length} POS`;
 
+  // Operační summary strip — agregát přes filtrovaný výběr
+  const summaryEl = document.getElementById('posnet-summary');
+  if (summaryEl) {
+    const never = filtered.filter(r => r.model.daysSinceLastVisit === null).length;
+    const overdue30 = filtered.filter(r => r.model.daysSinceLastVisit !== null && r.model.daysSinceLastVisit > 30).length;
+    const overdueStatus = filtered.filter(r => r.model.visitStatus === 'overdue').length;
+    // Precompute urgent open tasks by posId — single pool read instead of N reads
+    const urgentOpenPosIds = new Set(
+      getTaskPool().filter(t => t.priority === 'urgent' && ['pending','assigned','in_progress'].includes(t.status)).map(t => t.posId)
+    );
+    const openServis = filtered.filter(r => urgentOpenPosIds.has(r.p.id)).length;
+    const parts = [];
+    if (never) parts.push(`<span style="color:var(--red);font-weight:700">${never} nikdy nenavštíveno</span>`);
+    if (overdue30) parts.push(`<span style="color:var(--red);font-weight:700">${overdue30} bez návštěvy 30+ dní</span>`);
+    if (overdueStatus) parts.push(`<span style="color:var(--orange);font-weight:700">${overdueStatus} po termínu (W)</span>`);
+    if (openServis) parts.push(`<span style="color:var(--red);font-weight:700">${openServis} s otevřeným servisem</span>`);
+    summaryEl.innerHTML = parts.length
+      ? `<div style="padding:8px 14px;font-size:11px;display:flex;flex-wrap:wrap;gap:10px;border-bottom:1px solid var(--border)">${parts.join('<span style="color:var(--muted)">·</span>')}</div>`
+      : '';
+  }
+
+  const lastVisitBadge = (model) => {
+    const d = model.daysSinceLastVisit;
+    if (d === null) return `<span style="font-size:10px;font-weight:700;color:var(--red);white-space:nowrap">Nikdy</span>`;
+    if (d === 0) return `<span style="font-size:10px;font-weight:700;color:var(--teal);white-space:nowrap">Dnes</span>`;
+    const [fg] = d <= 7 ? ['var(--teal)'] : d <= 21 ? ['var(--orange)'] : ['var(--red)'];
+    return `<span style="font-size:10px;font-weight:700;color:${fg};white-space:nowrap">${d}d</span>`;
+  };
+
   const statusBadge = {
-    visited: '<span class="tag t-done">✓ Hotovo</span>',
-    overdue: '<span class="tag" style="background:var(--rl);color:var(--red)">Po termínu</span>',
-    planned: '<span class="tag t-task">Naplánováno</span>',
-    unplanned: '<span class="tag" style="background:var(--bg);color:var(--muted)">Bez plánu</span>',
+    visited: '<span class="tag t-done">✓</span>',
+    overdue: '<span class="tag" style="background:var(--rl);color:var(--red)">!</span>',
+    planned: '<span class="tag t-task">→</span>',
+    unplanned: '',
   };
 
   const list = document.getElementById('adm-posnet-list');
@@ -2895,8 +2924,8 @@ function renderAdminPosNet() {
       <div style="flex:1;min-width:0;font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${model.address}</div>
       <div style="font-size:11px;font-weight:700;color:var(--td);flex-shrink:0">${model.channel}</div>
       <div style="font-size:11px;color:var(--muted);flex-shrink:0">${model.region}</div>
-      <div style="font-size:11px;color:var(--muted);flex-shrink:0">${model.assignedTechnician}</div>
-      <div style="font-size:11px;color:var(--muted);flex-shrink:0">${model.lastVisitDate ? model.daysSinceLastVisit + 'd zpět' : 'Nikdy'}</div>
+      <div style="font-size:11px;color:var(--muted);flex-shrink:0;max-width:90px;overflow:hidden;text-overflow:ellipsis">${model.assignedTechnician.split(' ')[0]}</div>
+      <div style="flex-shrink:0">${lastVisitBadge(model)}</div>
       <div style="flex-shrink:0">${statusBadge[model.visitStatus] || ''}</div>
     </div>`).join('');
 }
