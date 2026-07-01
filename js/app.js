@@ -1153,6 +1153,8 @@ function renderSupply(p){
   const saved=lsg('supply_'+p.id+'_'+today());
   supplyItems=saved?saved.items:defaults.map(x=>({...x}));
   supplyLocked=!!(saved&&saved.confirmed);
+  // Otevřít sekci automaticky dokud není potvrzeno — sbalit až po předání
+  if(saved&&saved.confirmed) sec.removeAttribute('open'); else sec.setAttribute('open','');
   const hdrBadge=document.getElementById('supply-badge-lbl');
   if(hdrBadge) hdrBadge.textContent=isCorn?'Corn — vyžaduje podpis':'Vyžaduje podpis';
   renderSupplyItems();
@@ -1178,7 +1180,7 @@ function renderSupplySummary(){
     el.textContent=`${changedCount} ${changedCount===1?'položka':'položky'}`;
     el.classList.add('has-changes');
   } else {
-    el.textContent='Beze změn';
+    el.textContent='Upravit množství';
     el.classList.remove('has-changes');
   }
 }
